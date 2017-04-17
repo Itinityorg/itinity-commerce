@@ -1,9 +1,7 @@
 name = adv_elements
 description = Lets users to unput data in nicer way and check time value for validity
 package = Interface
-hidden = TRUE
-version = 7.1
-package = ITK/System
+version = 1.0
 core = 7.x
 
 
