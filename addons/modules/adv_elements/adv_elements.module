@@ -1,0 +1,144 @@
+<?php
+/**
+ * Copyright 2013-2017 Itinity Ltd. (itinity.ru). All rights reserved.
+ * Licensed under the GNU General Public License, version 2 or later.
+ */
+
+/********************************************************************
+ * This adv_elements module does the customization of time input (timepicker) with the time value validation and 
+ * rendering it in UNIX time format (seconds from the 00:00 UTC-0 or GMT)
+ * The module also customizes select from adding checkboxes and allowing users to select/unselect with just a  
+ * click (not just Ctrl-click).
+ * The module also customizes the file upload interface by eliminating the address window and rendering only 
+ * shortened file name.
+ * @author - Igor Savinkin
+ * @date - 27.05.2013
+ * 
+ ********************************************************************/
+
+ // Set to true for enable texting pages (see more in adv_elements.test.inc)
+define('ADV_ELEMENTS_TEST_MODE', 0);
+ 
+if (ADV_ELEMENTS_TEST_MODE) {
+	module_load_include('inc', 'adv_elements', 'adv_elements.test');
+}
+
+
+
+/**
+  * Implements hook_element_info_alter()
+**/
+function adv_elements_element_info_alter(&$type) {
+  // Add own process in existing elements
+	$type['select']['#process'][] = '_adv_elements_process_select'; 
+  $type['file']['#process'][] = '_adv_elements_process_fileupload'; 
+}
+
+
+
+/** 
+ * Custom function that works to process select element mainly thru adding 
+ * a custom .js form handler: selectmultiple.js
+**/
+function _adv_elements_process_select($element) {
+	if  (!empty($element['#multiple']) && empty($element['#suppress_adv_elements'])) {
+	 
+		// we add a class to this form
+		$element['#attributes']['class'][]  =  'multiple';
+
+		// We attach here to the prosess the any .js and/or .css files from those in our custom library.
+		// The 'module name' and the 'library name' are being passed in array.
+		
+		// The custom 'JS' module attachment
+		$element['#attached']['js'][] =  drupal_get_path('module', 'adv_elements') . '/js/selectmultiple.js';
+		$element['#attached']['css'][] =  drupal_get_path('module', 'adv_elements') . '/css/adv_elements.css';
+		
+		
+		// IKW: Тип виджета выпадающий список - множественный выбор увеличить на 1 пункт по высоте, чтобы легче было выбирать значения. http://itinity.ru/node/424
+		// @see also selectmultiple.js
+		if (empty($element['#size']) && count($element['#options']) >= 9) {
+			$element['#size'] = 9;
+		}
+		utils_html_debug_element($element);
+		
+	}
+	return $element;
+}
+
+
+/** 
+* Custom function that works to process file upload form mainly thru adding 
+* a custom .js form handler: fileupload.js
+**/
+function _adv_elements_process_fileupload($element) {
+	static $upload_max_filesize_bytes;
+	$upload_max_filesize = ini_get('upload_max_filesize');
+	if (!isset($upload_max_filesize_bytes)) {
+		$upload_max_filesize_bytes = '2M';
+		$upload_max_filesize_bytes = ini_get('upload_max_filesize');
+		$last = strtolower($upload_max_filesize_bytes[strlen($upload_max_filesize_bytes)-1]);
+		switch($last) {
+			case 'g':
+				$upload_max_filesize_bytes *= 1024;
+			case 'm':
+				$upload_max_filesize_bytes *= 1024;
+			case 'k':
+				$upload_max_filesize_bytes *= 1024;
+		}
+	}
+	drupal_add_js(array(
+    'uploadMaxFilesize' => $upload_max_filesize_bytes, 
+    'uploadMaxFilesizeFormatted' => $upload_max_filesize,
+  ), 'setting');
+ 	$element['#attached']['js'][] = drupal_get_path('module', 'adv_elements') . '/js/fileupload.js';
+  $element['#attributes']['class'][] = 'element-invisible';
+  utils_html_debug_element($element);
+	return $element;
+}
+
+
+/** 
+* Custom function that works to validate timepicker value 
+* to match a decent 24-hours time format 
+* and adjusts a value according to the current time-zone
+**/
+function _adv_element_timepicker_validate($element, &$form_state, $form) {
+	if ($element['#value']) {	
+		// check the value with regex
+		if (!preg_match('/^\s*(2[0-3]|[0-1]?[0-9])\s*:\s*([0-5]?[0-9])$/', $element['#value'] , $matches) ) {
+			form_error($element, t('Field %name contains incorrect value. Time must be in 24-hours format (hh:mm). Midnight is 00:00.', array('%name' => $element['#title'])));
+		} else {
+			// now we transform the printed value into the UNIX time value (seconds passed from the 00:00)
+
+			$val = ($matches[1] * 3600) + ($matches[2] * 60);
+
+			// here we also adjust the value according to the current time zone
+			// by substructing the $tz_offset from our UNIX time value
+			// Thus we keep time value according the UTC-0 (GMT) time zone
+			$tz = timezone_open(drupal_get_user_timezone());
+			$tz_offset =  timezone_offset_get($tz, date_create("now" , $tz)); 
+
+			$val -= $tz_offset - ($val > $tz_offset ? 0 : 24 * 3600); 
+
+			form_set_value($element, $val, $form_state);
+					
+		}
+	}
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

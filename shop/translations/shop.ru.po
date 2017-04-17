@@ -1,0 +1,496 @@
+# $Id$
+#
+# Russian translation of Drupal (general)
+# Copyright YEAR NAME <EMAIL@ADDRESS>
+# Generated from files:
+#  , v 1.0 2011/06/24 10:30:24 ITKLD
+#  shop.settings.inc: n/a
+#  shop.module, v 1.0 2011/04/11 10:08:57 Ivan Demenkov
+#  shop.theme.inc, v 1.0 2011/06/23 15:57:26 ITKLD
+#  shop.info, v 1.0 2011/04/11 10:08:57 Ivan Demenkov
+#
+#, fuzzy
+msgid ""
+msgstr ""
+"Project-Id-Version: PROJECT VERSION\n"
+"POT-Creation-Date: 2012-01-26 18:25+0300\n"
+"PO-Revision-Date: 2012-01-26 18:25+0300\n"
+"Last-Translator: NAME <EMAIL@ADDRESS>\n"
+"Language-Team: Russian <EMAIL@ADDRESS>\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=utf-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=3; plural=((((n%10)==1)&&((n%100)!=11))?(0):(((((n%10)>=2)&&((n%10)<=4))&&(((n%100)<10)||((n%100)>=20)))?(1):2));\n"
+
+msgid "Entity types"
+msgstr "Типы объектов"
+
+msgid "Goods"
+msgstr "Товары"
+
+#: shop.forms.inc:20
+msgid "Shopping cart"
+msgstr "Корзина"
+
+#: shop.forms.inc:22
+msgid "!user's shopping cart"
+msgstr "Корзина пользователя !user"
+
+#: shop.forms.inc:70
+msgid "Quantity"
+msgstr "Количество"
+
+
+#: shop.forms.inc:122;264
+msgid "Cart is empty"
+msgstr "Корзина пуста"
+
+#: shop.forms.inc:145
+msgid "Your cart is empty. You can continue shopping."
+msgstr "Ваша корзина пуста. Вы можете продолжить покупки."
+
+#: shop.forms.inc:149
+msgid "Shopping cart has been updated"
+msgstr "Корзина была обновлена"
+
+#: shop.forms.inc:232 shop.theme.inc:92;121;149
+msgid "Total"
+msgstr "Итого"
+
+#: shop.forms.inc:251 shop.theme.inc:45
+msgid "Qty"
+msgstr "Кол-во"
+
+#: shop.forms.inc:255 shop.theme.inc:49
+msgid "Price"
+msgstr "Цена"
+
+#: shop.forms.inc:259 shop.theme.inc:53
+msgid "Sum"
+msgstr "Сумма"
+
+#: shop.forms.inc:299
+msgid "Transactions not found"
+msgstr "Транзакции не найдены"
+
+#: shop.forms.inc:303;401
+msgid "External ID"
+msgstr "Внешний ID"
+
+#: shop.forms.inc:304
+msgid "Reference"
+msgstr "Ссылка"
+
+#: shop.forms.inc:305;424
+msgid "Amount"
+msgstr "Общая сумма"
+
+#: shop.forms.inc:306
+msgid "Currency"
+msgstr "Валюта"
+
+
+#: shop.forms.inc:310
+msgid "Life time"
+msgstr "Время жизни"
+
+#: shop.forms.inc:353
+msgid "Permanent"
+msgstr "Постоянно"
+
+#: shop.forms.inc:394
+msgid "Transaction #"
+msgstr "Транзакция №"
+
+#: shop.forms.inc:405
+msgid "Optionally may be set by paiment interface"
+msgstr "Опционально может быть уставновлен интерфейсом оплаты"
+
+
+#: shop.forms.inc:420
+msgid "Wait"
+msgstr "Ожидание"
+
+#: shop.forms.inc:420
+msgid "Refused"
+msgstr "Отклонено"
+
+#: shop.forms.inc:420
+msgid "Accepted"
+msgstr "Принято"
+
+#: shop.forms.inc:445
+msgid "Date and time of last changes"
+msgstr "Дата и время последних изменений"
+
+#: shop.settings.inc:151
+msgid "Select entity types that be selling on this site."
+msgstr "Выберите типы объектов, которые будут продаваться на этом сайте."
+
+#: shop.settings.inc:157
+msgid "Keep track of balances"
+msgstr "Вести учёт остатков"
+
+msgid "Enable fractional quantity"
+msgstr "Включить поддержку дробного количества товаров"
+
+msgid "Enables in product editing form additional setting for adjustment granularity of quantity."
+msgstr "Включает в редактировании товара доп. опцию для настройки дискретности количества."
+
+#: shop.settings.inc:172
+msgid "Time write-off of goods"
+msgstr "Момент списания товара"
+
+#: shop.settings.inc:174
+msgid "Order is created"
+msgstr "Заказ создан"
+
+#: shop.settings.inc:175
+msgid "Order is paid"
+msgstr "Заказ оплачен"
+
+#: shop.settings.inc:176
+msgid "Order is completed"
+msgstr "Заказ исполнен"
+
+#: shop.settings.inc:205
+msgid "Action when you click \"buy\" button"
+msgstr "Действие при нажатии кнопки покупки"
+
+#: shop.settings.inc:208
+msgid "Go to shopping cart"
+msgstr "Перейти в корзину"
+
+#: shop.theme.inc:103
+msgid "Empty"
+msgstr "Пусто"
+
+
+msgid "1 product"
+msgid_plural "@count products"
+msgstr[0] "@count товар"
+msgstr[1] "@count товара"
+msgstr[2] "@count товаров"
+
+msgid "No purchases"
+msgstr "Нет покупок"
+
+#: shop.module:50
+msgid "Access to all shop carts and add orders manually"
+msgstr "Доступ ко всем корзинам и добавление заказов вручную"
+
+
+#: shop.module:510;560
+msgid "Cart"
+msgstr "Корзина"
+
+#: shop.module:1047
+msgid "+!summ to order"
+msgstr "+!summ к заказу"
+
+#: shop.module:1057
+msgid "Country, city"
+msgstr "Страна, город"
+
+#: shop.module:36
+msgid "I'm new here"
+msgstr "Я здесь первый раз"
+
+#: shop.module:37
+msgid "I've already bought in this shop"
+msgstr "Я уже покупал в этом магазине"
+
+#: shop.info:0;0
+msgid "Shop"
+msgstr "Магазин"
+
+msgid "Transactions"
+msgstr "Переводы"
+
+msgid "An item %title has been removed from shop cart."
+msgstr "Пункт %title был удален из корзины."
+
+msgid "Buy"
+msgstr "Купить"
+
+msgid "With qty text field"
+msgstr "С полем выбора кол-ва"
+
+msgid "Without qty text field"
+msgstr "Без поля выбора кол-ва"
+
+msgid "!count !pcs in stock"
+msgstr "!count !pcs в наличии"
+
+msgid "Data in this form deprecated, try to reload page."
+msgstr "Данные в этой форме устарели, перезагружаем страницу."
+
+#: shop.module:177
+msgid "Receive notifications about all of new orders"
+msgstr "Получать уведомления о всех новых заказах"
+
+msgid "Only in order"
+msgstr "Только в заказе"
+
+msgid "On step @num"
+msgstr "На шаге @num"
+
+msgid "The Shop module will disable the caching of pages that contain a buy buttons or cart."
+msgstr "Модуль магазина будет отключать кэширование на страницах, содержащих кнопки покупки или корзину."
+
+msgid "Add new product"
+msgstr "Добавление нового товара"
+
+msgid "agent"
+msgstr "агент"
+
+msgid "Button title"
+msgstr "Название кнопки"
+
+msgid "Information for customer"
+msgstr "Информация для покупателя"
+
+msgid "Payment method name"
+msgstr "Название способа оплаты"
+
+msgid "agent"
+msgstr "агент"
+
+msgid "storekeeper"
+msgstr "завскладом"
+
+msgid "courier"
+msgstr "курьер"
+
+msgid "bookkeeper"
+msgstr "бухгалтер"
+
+msgid "Goods"
+msgstr "Товары"
+
+msgid "Empty value"
+msgstr "Пустое значение"
+
+
+#: includes/forms.fields.inc:13;29;45;56;67;83;124
+msgctxt "cost"
+msgid "Free"
+msgstr "Бесплатно"
+
+msgid "The cost will be decided later"
+msgstr "Стоимость будет уточнена позже"
+
+msgid "From store"
+msgstr "Из магазина"
+
+msgid "Variant"
+msgstr "Вариант"
+
+msgid "In total"
+msgstr "Всего"
+
+msgid "Quantity and unit of measurement"
+msgstr "Кол-во и единица измерения"
+
+msgid "Products not in stock"
+msgstr "Товары с нулевым остатком"
+
+msgid "Accept bids for products with a zero balance"
+msgstr "Принимать заявки на товары с нулевым остатком"
+
+msgid "Purchases and payments"
+msgstr "Покупки и оплаты"
+
+msgid "Use zero where 1C don\'t present qty"
+msgstr "Обнулять остатки, если кол-во отсутствует в импорте из 1С"
+
+msgid "Payment for order #@num"
+msgstr "Оплата заказа №@num"
+
+msgid "Order paid"
+msgstr "Заказ оплачен"
+
+msgid "Payment canceled"
+msgstr "Платёж отменен"
+
+msgid "Analytics"
+msgstr "Аналитика"
+
+msgid "Payment methods"
+msgstr "Способы оплаты"
+
+msgid "Default currency"
+msgstr "Валюта по умолчанию"
+
+msgid "Default payment method"
+msgstr "Способ оплаты по умолчанию"
+
+msgid "Carts"
+msgstr "Корзины"
+
+msgid "Panel"
+msgstr "Панель"
+
+msgid "Graph"
+msgstr "График"
+
+msgid "Sales funnel"
+msgstr "Воронка продаж"
+
+msgid "Purchases dynamics"
+msgstr "Динамика покупок"
+
+msgid "Revenue dynamics"
+msgstr "Динамика продаж"
+
+msgid "Orders progress"
+msgstr "Исполнение заказов"
+
+msgid "Orders journal"
+msgstr "Журнал заказов"
+
+msgid "Product journal"
+msgstr "Журнал товаров"
+
+msgid "Yesterday"
+msgstr "Вчера"
+
+msgid "Payments"
+msgstr "Оплаты"
+
+msgid "No orders"
+msgstr "Нет заказов"
+
+msgid "Cancel payment"
+msgstr "Отменить оплату"
+
+msgid "Payment method"
+msgstr "Способ оплаты"
+
+msgid "Balances"
+msgstr "Остатки"
+
+msgid "Payment in cash"
+msgstr "Оплата наличными"
+
+msgid "Customer will be given information about location of the store from \"About Us\""
+msgstr "Покупатель получит информацию о местоположении магазина из \"О компании\""
+
+msgid "Submit orders"
+msgstr "Сохранять заказы"
+
+msgid "Shop settings"
+msgstr "Настройки магазина"
+
+msgid "Order without registration"
+msgstr "Заказ без регистрации"
+
+msgid "\"Submit orders\" permission for anonymous users"
+msgstr "Разрешение \"Сохранять заказы\" для анонимных пользователей"
+
+msgid "Display icon"
+msgstr "Отображать иконку"
+
+msgid "Caption"
+msgstr "Надпись"
+
+msgid "Shopping cart laoyut"
+msgstr "Шаблон корзины"
+
+msgid "Do you really want to cancel payment?"
+msgstr "Вы действительно хотите отменить оплату?"
+
+msgid "above this sum shipping will be free."
+msgstr "свыше этой суммы доставка будет бесплатной."
+
+msgid "Total to pay"
+msgstr "Всего к оплате"
+
+msgid "Motivational text"
+msgstr "Мотивирующий текст"
+
+msgid "Please login or register for 2 minutes to complete checkout."
+msgstr "Для завершения оформления заказа войдите в личный кабинет или зарегистрируйтесь за 2 минуты."
+
+msgid "Personal account provides extended capabilities for order management and saves your time."
+msgstr "Личный кабинет даст вам больше возможностей по управлению своим заказом и сэкономит ваше время."
+
+msgid "Also you can proceed to <a href='@shop-cart-order'>checkout without registration</a>."
+msgstr "Также вы можете <a href='@shop-cart-order'>оформить заказ без регистрации</a>."
+
+
+msgid "1 good on !sum"
+msgid_plural "@count goods on !sum"
+msgstr[0] "@count товар на сумму !sum"
+msgstr[1] "@count товара на сумму !sum"
+msgstr[2] "@count товаров на сумму !sum"
+
+
+msgid "1 good"
+msgid_plural "@count goods"
+msgstr[0] "@count товар"
+msgstr[1] "@count товара"
+msgstr[2] "@count товаров"
+
+msgid "Shopping cart displaying"
+msgstr "Отображение корзины"
+
+msgid "Without content"
+msgstr "Без содержимого"
+
+msgid "Total sum"
+msgstr "Итоговая сумма"
+
+msgid "List without prices"
+msgstr "Список без цен"
+
+msgid "Detailed list"
+msgstr "Подробный список"
+
+msgid "Editable list"
+msgstr "Редактируемый список"
+
+msgid "Proceed payment of all orders not older than 24 hours"
+msgstr "Автоматически проводить оплату всех заказов не старше 24 часов"
+
+msgid "Price rounding rule"
+msgstr "Правило округления цены"
+
+msgid "As is"
+msgstr "Оставить как есть"
+
+msgid "Floor value"
+msgstr "Округление в меньшую сторону"
+
+msgid "Ceil value"
+msgstr "Округление в большую сторону"
+
+msgid "Round value"
+msgstr "Математическое округление"
+
+msgid "Shop profit"
+msgstr "Выручка магазина"
+
+msgid "Supply time"
+msgstr "Срок поставки"
+
+msgid "Default product supply time. This value can be overwritten in product item form. This value will be summed to delivery time."
+msgstr "Это срок поставки товара на склад по умолчанию. В карточке товара можно указать индивидуальный срок поставки. При расчете сроков доставки указанное число плюсуется к срокам работы служб доставки."
+
+msgid "Product supply time"
+msgstr "Срок поставки товара"
+
+msgid "This value will be summed to delivery time."
+msgstr "При расчете сроков доставки указанное число плюсуется к срокам работы служб доставки."
+
+msgid "Sell goods on request"
+msgstr "Продавать товары под заказ"
+
+msgid "Available on request"
+msgstr "Под заказ"
+
+msgid "Time"
+msgstr "Время"
+
+msgid "Number of new carts"
+msgstr "Количество новых корзин"

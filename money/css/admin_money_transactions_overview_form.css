@@ -1,0 +1,46 @@
+.money-transactions-filter {
+  padding: 0;
+  vertical-align: top;
+}
+
+.money-transactions-filter .filter-group {
+  padding: 0;
+  margin: 0;
+  display: inline-block;
+  margin-right: 1em;
+  vertical-align: top;
+}
+
+.money-transactions-filter .filter-group .form-item {
+  margin: 0 !important;
+  padding: 0 !important;
+  display: inline-block;
+}
+
+.money-transaction-list td.neutral {
+  color: #888;
+}
+
+.money-transaction-list td.positive {
+  color: #080;
+}
+
+.money-transaction-list td.positive span.shop-price:before {
+  content: '+';
+}
+
+.money-transaction-list td.positive.balance:after {
+  content: '\2191 ';
+}
+
+.money-transaction-list td.negative {
+  color: #B00;
+}
+
+.money-transaction-list td.negative span.shop-price:before {
+  content: '-';
+}
+
+.money-transaction-list td.negative.balance:after {
+  content: '\2193 ';
+}

@@ -1,0 +1,9 @@
+name = Addons
+description = Library of additional form elements. Extensions for system form elements and drupal fields.
+dependencies[] = utils
+dependencies[] = adv_elements
+package = ITK/System
+version = "7.x-dev"
+core = 7.x
+project = addons
+

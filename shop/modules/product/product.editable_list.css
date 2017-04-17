@@ -1,0 +1,39 @@
+table#product-editable-list .changed {
+	border: 2px solid green;
+}
+
+/*temporary styles for table edit goods (#shop-edit-goods) - 28.05.13*/
+#product-editable-list .form-item.container-inline,
+#product-editable-list .form-item .form-item {
+	white-space: nowrap;
+}
+
+#product-editable-list .messages {
+	white-space: normal;
+	padding:.2em;
+	background-image:none;
+}
+#product-editable-list .spin-button {
+	display: none;
+}
+
+#product-editable-list .form-text {
+	width: 100%;
+	-webkit-box-sizing: border-box;
+	-moz-box-sizing: border-box;
+	box-sizing: border-box;
+}
+
+#product-editable-list .form-type-digit .form-text,
+#product-editable-list .container-inline.form-text,
+#product-editable-list .spinner-wrapper .form-text {
+	width: auto;
+}
+
+#product-editable-list th.title {
+	width: 30em;
+}
+
+#product-editable-list th.article {
+	width: 5em;
+}

@@ -1,0 +1,1521 @@
+<?php  //$Id: catalog.install, v 1.0 2011/02/02 15:53:12 admin Exp $
+
+
+
+/**
+* Implements hook_install()
+*/
+function catalog_install() {
+  db_add_field('taxonomy_entity_index', 'sort_breadcrumb', array(
+    'type' => 'varchar',
+    'description' => 'Other way for sorting terms in tree. Added by catalog module.',
+    'length' => 255,
+    'not null' => FALSE,
+    'default' => NULL,
+  ));
+  db_add_index('taxonomy_entity_index', 'sort_breadcrumb', array('sort_breadcrumb'));
+
+  _catalog_patch_url_alias();
+  _catalog_taxonomy_entity_index_install();
+}
+
+
+/**
+* Implements hook_uninstall()
+*/
+function catalog_uninstall() {
+  variable_del('menu_parent_catalog_objects');
+  db_delete('menu_links')->condition('module', 'catalog')->execute();
+  db_delete('block')->condition('module', 'catalog')->execute();
+  db_delete('block_role')->condition('module', 'catalog')->execute();
+  menu_cache_clear_all();
+  foreach (db_query('SELECT * FROM {url_alias} WHERE module = \'catalog\'') as $r) {
+    path_delete($r->pid);
+  }
+  db_drop_field('url_alias', 'module');
+  db_drop_field('taxonomy_entity_index', 'sort_breadcrumb');
+}
+
+
+/**
+* Implements hook_schema_alter()
+*/
+function catalog_schema_alter(&$schema) {
+  if (empty($schema['url_alias']['fields']['module'])) {
+    $schema['url_alias']['fields']['module'] = array(
+      'type' => 'varchar',
+      'length' => '32',
+      'not null' => TRUE,
+      'default' => '',
+    );
+    $schema['url_alias']['indexes']['module'] = array('module');
+  }
+  $schema['taxonomy_entity_index']['fields']['sort_breadcrumb'] = array(
+    'type' => 'varchar',
+    'description' => 'Other way for sorting terms in tree. Added by catalog module.', // Needed for sorting by taxonomy fields. @see field_catalog_sql_info()
+    'length' => 255,
+    'not null' => FALSE,
+    'default' => NULL,
+  );
+  $schema['taxonomy_entity_index']['indexes']['sort_breadcrumb'] = array('sort_breadcrumb');
+}
+
+/**
+* Initial index existing entities in taxonomy_entity_index table (see taxonomy_entity_index module)
+*/
+function _catalog_taxonomy_entity_index_install() {
+  $t = get_t();
+  batch_set(array(
+    'operations' => array(
+      array('taxonomy_entity_index_reindex_entity_type', array('node')),
+      array('taxonomy_entity_index_reindex_entity_type', array('user')),
+    ),
+    'title' => $t('Indexing entities by taxonomy terms'),
+  ));
+}
+
+function _catalog_patch_url_alias() {
+  if (db_table_exists('url_alias')) {
+    if (!db_field_exists('url_alias', 'module')) {
+      db_add_field('url_alias', 'module', array('type' => 'varchar', 'length' => '32', 'not null' => TRUE, 'default' => '',));
+    }
+    if (!db_index_exists('url_alias', 'module')) {
+      db_add_index('url_alias', 'module', array('module'));
+    }
+  }
+}
+
+
+function catalog_schema() {
+  $schema = array();
+
+  $schema['catalog_objects'] = array(
+    'description' => 'TODO: please describe this table!; InnoDB free: 453632 kB',
+    'fields' => array(
+      'cid' => array(
+        'description' => 'Catalog id',
+        'type' => 'serial',
+        'not null' => TRUE,
+      ),
+      'entity_type' => array(
+        'description' => 'Entity type name',
+        'type' => 'varchar',
+        'length' => 32,
+        'not null' => FALSE,
+      ),
+      'bundle' => array(
+        'description' => 'Entity bundle name',
+        'type' => 'varchar',
+        'length' => 32,
+        'not null' => FALSE,
+      ),
+      'vid' => array(
+        'description' => 'Taxonomy vocabulary id',
+        'type' => 'varchar',
+        'length' => 255,
+        'not null' => FALSE,
+      ),
+      'tid' => array(
+        'description' => 'Taxonomy term id',
+        'type' => 'varchar',
+        'length' => 255,
+        'not null' => FALSE,
+      ),
+      'status' => array(
+        'description' => 'Enabled or disabled flag',
+        'type' => 'int',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+        'default' => 0,
+      ),
+      'is_block' => array(
+        'description' => 'Catalog object is non-page informer block',
+        'type' => 'int',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+        'default' => 0,
+      ),
+      'block_settings' => array(
+        'description' => 'Array of settings applied to layout contains selected entities (cols, rows, table view, zoom, etc)',
+        'type' => 'blob',
+        'not null' => FALSE,
+        'serialize' => TRUE,
+      ),
+      'machine_name' => array(
+        'description' => 'Machine name of catalog object. Used for generate url aliases.',
+        'type' => 'varchar',
+        'length' => 255,
+        'not null' => TRUE,
+      ),
+      'title' => array(
+        'description' => 'Title of catalog object. Needs for pages or blocks titles',
+        'type' => 'varchar',
+        'length' => 255,
+        'not null' => TRUE,
+      ),
+      'description' => array(
+        'type' => 'text',
+        'not null' => FALSE,
+        'size' => 'big',
+        'description' => 'Description extra field of the catalog object.',
+        'translatable' => TRUE,
+        ),
+      'format' => array(
+        'description' => 'The {filter_format}.format of the description.',
+        'type' => 'varchar',
+        'length' => 255,
+        'not null' => FALSE,
+        ),
+      'depth' => array(
+        'description' => 'Depth of view in taxonomy tree',
+        'type' => 'int',
+        'not null' => FALSE,
+      ),
+      'menu_name' => array(
+        'description' => 'Create link to catalog page in desired menu',
+        'type' => 'varchar',
+        'length' => 32,
+        'not null' => TRUE,
+        'default' => '',
+      ),
+      'menu_mlid' => array(
+        'description' => 'Place link to catalog page into existing menu item',
+        'type' => 'int',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+        'default' => 0,
+      ),
+      'table_view' => array(
+        'description' => 'Switch listed entities in table mode',
+        'type' => 'int',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+        'default' => 0,
+      ),
+      /*DEPRECATED BY IKW
+      'table_visible' => array(
+        'description' => 'TODO: please describe this field!',
+        'type' => 'int',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+        'default' => 0,
+      ),
+      'rows' => array(
+        'description' => 'Layout setting for entities list',
+        'type' => 'int',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+        'default' => 0,
+      ),
+      'cols' => array(
+        'description' => 'Layout setting for entities list',
+        'type' => 'int',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+        'default' => 0,
+      ),
+      'center' => array(
+        'description' => 'Layout setting for entities list',
+        'type' => 'int',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+        'default' => 0,
+      ),
+      'zoom' => array(
+        'description' => 'Layout setting for entities list',
+        'type' => 'int',
+        'not null' => TRUE,
+        'default' => 0,
+      ),
+      */
+      'orders' => array(
+        'description' => 'Enabled order methods serialized array',
+        'type' => 'text',
+        'not null' => FALSE,
+        'serialize' => TRUE,
+      ),
+      'filters' => array(
+        'description' => 'Enabled filter methods serialized array',
+        'type' => 'text',
+        'not null' => FALSE,
+        'serialize' => TRUE,
+      ),
+
+
+
+    ),
+    'primary key' => array('cid'),
+    'indexes' => array(
+    //  'cols' => array('cols'),
+    //  'center' => array('center'),
+      'depth' => array('depth'),
+      'is_block' => array('is_block'),
+      'machine_name' => array('machine_name'),
+      'menu_mlid' => array('menu_mlid'),
+      'menu_name' => array('menu_name'),
+      'table_view' => array('table_view'),
+    //  'rows' => array('rows'),
+      'status' => array('status'),
+      'title' => array('title'),
+    //  'zoom' => array('zoom'),
+      'filter' => array('cid', 'entity_type', 'bundle', 'vid'),
+      'entity_type' => array('entity_type'),
+      'bundle' => array('bundle'),
+      'vid' => array('vid'),
+      'tid' => array('tid'),
+    ),
+  );
+
+  $schema['catalog_exposed'] = array(
+    'description' => 'Storage for catalog_objects settings shared for user',
+    'fields' => array(
+      'eid' => array(
+        'description' => 'Record ID',
+        'type' => 'serial',
+        'not null' => TRUE,
+      ),
+      'cid' => array(
+        'description' => 'catalog_objects.cid',
+        'type' => 'int',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+      ),
+      'type' => array(
+        'description' => 'orders|filters',
+        'type' => 'varchar',
+        'length' => 16,
+        'not null' => TRUE,
+      ),
+      'data' => array(
+        'description' => 'Preset storage',
+        'type' => 'blob',
+        'not null' => FALSE,
+        'size' => 'big',
+        'serialize' => TRUE,
+      ),
+      'uid' => array(
+        'description' => 'users.uid or 0 for all users',
+        'type' => 'int',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+      ),
+      'name' => array(
+        'description' => 'Preset name',
+        'type' => 'varchar',
+        'length' => 128,
+        'not null' => TRUE,
+      ),
+    ),
+    'primary key' => array('eid'),
+    'indexes' => array(
+      'cid' => array('cid'),
+      'uid' => array('uid'),
+    ),
+  );
+
+  $schema['cache_catalog_entities'] = drupal_get_schema_unprocessed('system', 'cache');
+
+  return $schema;
+}
+
+/**
+ * Add image style preset columns in catalog_objects table
+ * <br />
+ * Update fields types
+ */
+function catalog_update_7004() {
+  db_change_field('catalog_objects', 'generate_tree', 'generate_tree', array(
+      'type' => 'varchar',
+      'length' => '128',
+      'not null' => TRUE,
+    ));
+}
+
+/**
+ * Update database schema: split 'generate_tree' column by two columns: 'menu_name' and 'menu_mlid'.
+ *
+ */
+function catalog_update_7005() {
+  db_add_field('catalog_objects', 'menu_name', array(
+      'type' => 'varchar',
+      'length' => '32',
+      'not null' => TRUE,
+      'default' => '',
+    )
+  );
+
+  db_add_field('catalog_objects', 'menu_mlid', array(
+      'type' => 'int',
+      'unsigned' => TRUE,
+      'not null' => TRUE,
+      'default' => 0,
+    )
+  );
+
+  db_add_index('catalog_objects', 'menu_name', array('menu_name'));
+  db_add_index('catalog_objects', 'menu_mlid', array('menu_mlid'));
+
+  /**/
+  foreach (db_query('SELECT cid, generate_tree FROM {catalog_objects}') as $r) {
+    if ($r->generate_tree && ($generate_tree = explode(':', $r->generate_tree))) {
+      db_update('catalog_objects')->fields(
+        array('menu_name' => $generate_tree[0], 'menu_mlid' => $generate_tree[1]))->condition('cid', $r->cid)->execute();
+    }
+  }
+
+  db_drop_field('catalog_objects', 'generate_tree');
+}
+
+/**
+ * Add is_block column into main table. Fix indexes.
+ */
+function catalog_update_7006() {
+  db_add_field('catalog_objects', 'is_block', array(
+      'description' => 'TODO: please describe this field!',
+      'type' => 'int',
+      'unsigned' => TRUE,
+      'not null' => TRUE,
+      'default' => 0,
+    )
+  );
+  db_add_index('catalog_objects', 'status', array('status'));
+  db_add_index('catalog_objects', 'is_block', array('is_block'));
+}
+
+/**
+ * Fix database table
+ */
+function catalog_update_7007() {
+  $schema = catalog_schema();
+  foreach ($schema as $table => $data) {
+    foreach ($data['fields'] as $field => $spec) {
+      if (db_field_exists($table, $field)) {
+        db_change_field($table, $field, $field, $spec);
+      }
+    }
+  }
+}
+
+/**
+ * Add schema for content display fields custom settings
+ */
+function catalog_update_7008() {
+}
+
+/**
+ * Add columns into main table. Fix indexes.
+ */
+function catalog_update_7009() {
+  db_add_field('catalog_objects', 'order_flag',
+    array(
+      'type' => 'varchar',
+      'length' => 128,
+      'not null' => TRUE,
+      'default' => '',
+    )
+  );
+  db_add_field('catalog_objects', 'block_exclude_current',
+    array(
+      'description' => 'TODO: please describe this field!',
+      'type' => 'int',
+      'unsigned' => TRUE,
+      'not null' => TRUE,
+      'default' => 0,
+    )
+  );
+  db_add_index('catalog_objects', 'block_exclude_current', array('block_exclude_current'));
+}
+
+/**
+ * Add new tables in database
+ */
+function catalog_update_7010() {
+  $table = drupal_get_schema_unprocessed('catalog', 'cache_catalog_nodes');
+  if (!db_table_exists('cache_catalog_nodes')) {
+    db_create_table('cache_catalog_nodes', $table);
+  }
+}
+
+/**
+ * Add lightbox feature
+ */
+function catalog_update_7011() {
+  $schema = catalog_schema();
+  if (!db_field_exists('catalog_objects', 'use_lightbox')) {
+    db_add_field('catalog_objects', 'use_lightbox', $schema['catalog_objects']['fields']['use_lightbox']);
+  }
+  if (!db_index_exists('catalog_objects', 'use_lightbox')) {
+    db_add_index('catalog_objects', 'use_lightbox', array('use_lightbox'));
+  }
+}
+
+/**
+ * Add features to catalogs
+ */
+function catalog_update_7012() {
+  $schema = catalog_schema();
+  if (!db_field_exists('catalog_objects', 'center')) {
+    db_add_field('catalog_objects', 'center', $schema['catalog_objects']['fields']['center']);
+  }
+  if (!db_index_exists('catalog_objects', 'center')) {
+    db_add_index('catalog_objects', 'center', array('center'));
+  }
+}
+
+/**
+ * Kill unused database tables and fields, add more fields...
+ */
+function catalog_update_7013() {
+  db_drop_field('catalog_objects', 'l0');
+  db_drop_field('catalog_objects', 'l1');
+  db_drop_field('catalog_objects', 'l2');
+  db_drop_field('catalog_objects', 'l3');
+  $schema = catalog_schema();
+  if (!db_field_exists('catalog_objects', 'material_actuality')) {
+    db_add_field('catalog_objects', 'material_actuality', $schema['catalog_objects']['fields']['material_actuality']);
+  }
+  if (!db_index_exists('catalog_objects', 'material_actuality')) {
+    db_add_index('catalog_objects', 'material_actuality', $schema['catalog_objects']['indexes']['material_actuality']);
+  }
+  db_truncate('cache')->execute();
+  system_rebuild_module_data();
+  registry_update();
+}
+
+/**
+ * Drop deprecated tables; <br />
+ * Add colum into aliases table
+ */
+function catalog_update_7015() {
+  if (db_table_exists('catalog_fields_settings')) {
+    db_drop_table('catalog_fields_settings');
+  }
+  _catalog_patch_url_alias();
+}
+
+/**
+ * Build catalogs aliases
+ */
+function catalog_update_7016() {
+  module_load_include('module', 'catalog', 'catalog');
+  foreach (catalog_object_load_multiple(FALSE) as $catalog_object) {
+    _catalog_object_rebuild_aliases($catalog_object);
+  }
+}
+
+
+/**
+* Update DB
+*/
+function catalog_update_7018() {
+  // \F7\F2\EE \E7\E0 \EF\EE\F0\ED\EE, \EF\EE\F7\E5\EC\F3 \ED\E5 \F1\EE\EE\F2\E2\E5\F2\F1\E2\F3\E5\F2 \F1\EE \F1\F5\E5\EC\EE\E9?
+  db_add_field('catalog_objects', 'term_depth_view', array(
+      'type' => 'int',
+      'not null' => FALSE,
+      'default' => NULL,
+    )
+  );
+
+  db_add_field('catalog_objects', 'term_rows', array(
+      'type' => 'int',
+      'not null' => FALSE,
+      'default' => 10,
+    )
+  );
+
+  db_add_field('catalog_objects', 'term_cols', array(
+      'type' => 'int',
+      'not null' => FALSE,
+      'default' => 1,
+    )
+  );
+}
+
+
+/**
+* Update DB
+*/
+function catalog_update_7019() {
+    $schema = catalog_schema();
+     if (!db_field_exists('catalog_objects', 'condition_flag')) {
+       db_add_field('catalog_objects', 'condition_flag', $schema['catalog_objects']['fields']['condition_flag']);
+     }
+     if (!db_index_exists('catalog_objects', 'condition_flag')) {
+       db_add_index('catalog_objects', 'condition_flag', array('condition_flag'));
+     }
+}
+
+/**
+* Fix DB
+*/
+function catalog_update_7020() {
+  db_query('DELETE FROM {catalog_filters} WHERE cid NOT IN (SELECT cid FROM {catalog_objects})');
+}
+
+/**
+* Restructurize filters schema.
+* Drop use_lightbox column.
+* Add description and term_center columns into catalog.
+*/
+function catalog_update_7021() {
+  //db_truncate('cache')->execute();
+  //system_rebuild_module_data();
+  //registry_update();
+  if (db_field_exists('catalog_objects', 'use_lightbox')) {
+    db_drop_field('catalog_objects', 'use_lightbox');
+  }
+
+  //adding new fields
+  //$schema = catalog_schema();
+  /*foreach (array('node_type', 'vid', 'term_center') as $field) {
+    db_add_field('catalog_objects', $field, $schema['catalog_objects']['fields'][$field]);
+  }*/
+  if (!db_field_exists('catalog_objects', 'node_type')) {
+    db_add_field('catalog_objects', 'node_type', array(
+        'description' => 'TODO: please describe this field!',
+        'type' => 'varchar',
+        'length' => '32',
+        'not null' => FALSE,
+      ));
+  }
+  if (!db_field_exists('catalog_objects', 'vid')) {
+    db_add_field('catalog_objects', 'vid', array(
+        'description' => 'TODO: please describe this field!',
+        'type' => 'varchar',
+        'length' => '255',
+        'not null' => FALSE,
+      ));
+  }
+  if (!db_field_exists('catalog_objects', 'term_center')) {
+    db_add_field('catalog_objects', 'term_center', array(
+        'description' => 'TODO: please describe this field!',
+        'type' => 'int',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+        'default' => 0,
+      ));
+  }
+  if (!db_field_exists('catalog_objects', 'description')) {
+    db_add_field('catalog_objects', 'description', array(
+        'type' => 'text',
+        'not null' => FALSE,
+        'size' => 'big',
+        'description' => 'A description of the catalog object.',
+        'translatable' => TRUE,
+      ));
+  }
+  if (!db_field_exists('catalog_objects', 'format')) {
+    db_add_field('catalog_objects', 'format', array(
+        'description' => 'The {filter_format}.format of the description.',
+        'type' => 'varchar',
+        'length' => 255,
+        'not null' => FALSE,
+      ));
+  }
+
+
+
+  if (!db_index_exists('catalog_objects', 'filter')) {
+    db_add_index('catalog_objects', 'filter', array('cid', 'node_type', 'vid'));
+  }
+  if (!db_index_exists('catalog_objects', 'node_type')) {
+    db_add_index('catalog_objects', 'node_type', array('node_type'));
+  }
+  if (!db_index_exists('catalog_objects', 'vid')) {
+    db_add_index('catalog_objects', 'vid', array('vid'));
+  }
+
+
+  //updating filters
+  if (db_table_exists('catalog_filters')) {
+    $filters = array();
+    $locked = $from_term = FALSE;
+    $query = db_select('catalog_filters', 'cf')->fields('cf', array('cid', 'type', 'id'))->execute();
+    while($row = $query->fetchObject()){
+      if ($row->type == 'tid') {
+        $row->type = 'vid';
+        $term = taxonomy_term_load($row->id);
+        $row->id = $term->vid;
+        $from_term = TRUE;
+      }
+      if (($row->type == 'vid') && !$locked) {
+        if ($from_term) {
+          $locked = TRUE;
+        }
+        $filters[$row->cid][$row->type] = $row->id;
+      }
+      elseif ($row->type != 'vid') {
+        $filters[$row->cid][$row->type] = $row->id;
+      }
+    }
+
+    foreach ($filters as $cid => $filter) {
+      /*$catalog = catalog_object_load($cid);
+      foreach($catalog->filters as $name => $filters) {
+        $catalog->filters[$name] = array();
+      }
+      catalog_object_save($catalog);*/
+      db_update('catalog_objects')
+        ->fields($filter)
+        ->condition('cid', $cid)
+        ->execute();
+    }
+
+    db_drop_table('catalog_filters');
+  }
+
+
+
+  //update menu links
+  $regexp = '^catalog\/[0-9]*/('.implode('|', array_keys(node_type_get_names())).')/[0-9]*/[0-9]*';
+
+  $query = 'SELECT mlid, link_path, router_path FROM {menu_links} WHERE link_path REGEXP(:regexp)';
+  $result = db_query($query, array(':regexp' => $regexp));
+  $links = array();
+  while($row = $result->fetchObject()) {
+    $row->link_path = explode('/', $row->link_path);
+    $row->router_path = explode('/', $row->router_path);
+    array_splice($row->link_path, 2, 2);
+    array_splice($row->router_path, 2, 2);
+    $links[$row->mlid] = $row;
+  }
+  foreach ($links as $mlid => $link) {
+    db_update('menu_links')
+      ->fields(array(
+        'link_path'    => implode($link->link_path, '/'),
+        'router_path'  => implode($link->router_path, '/'),
+      ))
+      ->condition('mlid', $mlid)
+      ->execute();
+  }
+
+  //update redirects
+  $query = 'SELECT source, alias FROM {url_alias_history} WHERE source REGEXP(:regexp)';
+  $result = db_query($query, array(':regexp' => $regexp));
+  $urls = array();
+  while($row = $result->fetchObject()) {
+    $row->new_source = explode('/', $row->source);
+    array_splice($row->new_source, 2, 2);
+    $urls[] = $row;
+  }
+  foreach ($urls as $url) {
+    db_update('url_alias_history')
+      ->fields(array(
+        'source'    => implode($url->new_source, '/'),
+      ))
+      ->condition('source', $url->source)
+      ->condition('alias', $url->alias)
+      ->execute();
+  }
+  db_truncate('cache')->execute();
+  system_rebuild_module_data();
+  registry_update();
+  variable_set('menu_rebuild_needed', TRUE);
+  //_catalog_set_menu_rebuild_task();
+}
+
+/**
+ * Rename cache_catalog_nodes table.  Update catalog menus.
+ */
+function catalog_update_7022() {
+  if (!db_table_exists('cache_catalog_entities')) {
+    db_rename_table('cache_catalog_nodes', 'cache_catalog_entities');
+  }
+
+  $cids = db_select('catalog_objects', 'co')->fields('co', array('cid'))->execute()->fetchCol();
+  foreach ($cids as $cid) {
+    _catalog_set_menu_rebuild_task($cid);
+  }
+  /*try {
+    $catalogs = catalog_object_load_multiple($cids);
+    foreach ($catalogs as $catalog) {
+      catalog_object_save($catalog);
+    }
+    _catalog_object_rebuild_menu_tree();
+  } catch (Exception $e) {}*/
+
+}
+
+/**
+ * Update DB depth fields.
+ */
+function catalog_update_7023() {
+  db_query('UPDATE {catalog_objects} SET depth = depth + 1 WHERE depth >= 0');
+  db_query('UPDATE {catalog_objects} SET term_depth_view = term_depth_view + 1 WHERE term_depth_view >= 0');
+}
+
+/**
+* Add table_view column
+*/
+function catalog_update_7024() {
+  if (!db_field_exists('catalog_objects', 'table_view')) {
+    db_add_field('catalog_objects', 'table_view', array(
+          'description' => 'TODO: please describe this field!',
+          'type' => 'int',
+          'unsigned' => TRUE,
+          'not null' => TRUE,
+          'default' => 0,
+        ));
+  }
+}
+
+
+/**
+* Add multilang support
+*//*
+function catalog_update_7025() {
+  if (!db_table_exists('catalog_objects_translations')) {
+    $schema = drupal_get_schema_unprocessed('catalog');
+    _drupal_schema_initialize($schema, 'catalog', FALSE);
+    db_create_table('catalog_objects_translations', $schema['catalog_objects_translations']);
+  }
+}*/
+
+/**
+ * Add interact field to catalog object
+ */
+function catalog_update_7026() {
+  if (!db_field_exists('catalog_objects', 'interact')) {
+    db_add_field('catalog_objects', 'interact', array(
+      'description' => 'TODO: please describe this field!',
+      'type'        => 'int',
+      'unsigned'    => TRUE,
+      'not null'    => FALSE,
+    ));
+  }
+}
+
+
+/**
+* Enable 3rd party taxonomy_entity_index module
+*/
+function catalog_update_7027() {
+  module_enable(array('taxonomy_entity_index'));
+  // batch call
+  _catalog_taxonomy_entity_index_install();
+}
+
+/**
+* Migrate node_type option to global entity logic, step 1. Add new fields in table.
+*/
+function catalog_update_7028() {
+  if (!db_field_exists('catalog_objects', 'entity_type')) {
+    db_add_field('catalog_objects', 'entity_type', array(
+        'description' => 'TODO: please describe this field!',
+        'type' => 'varchar',
+        'length' => '32',
+        'not null' => FALSE,
+      ));
+  }
+  if (!db_index_exists('catalog_objects', 'entity_type')) {
+    db_add_index('catalog_objects', 'entity_type', array('entity_type'));
+  }
+  if (!db_field_exists('catalog_objects', 'bundle')) {
+    db_add_field('catalog_objects', 'bundle', array(
+        'description' => 'TODO: please describe this field!',
+        'type' => 'varchar',
+        'length' => '32',
+        'not null' => FALSE,
+      ));
+  }
+  if (!db_index_exists('catalog_objects', 'bundle')) {
+    db_add_index('catalog_objects', 'bundle', array('bundle'));
+  }
+}
+
+/**
+* Migrate node_type option to global entity logic, step 2. Move data.
+*/
+function catalog_update_7029() {
+  db_query('UPDATE {catalog_objects} SET entity_type = \'node\'');
+  db_query('UPDATE {catalog_objects} SET bundle = node_type');
+  db_truncate('cache')->execute();
+}
+
+/**
+* Migrate node_type option to global entity logic, step 3.
+*/
+function catalog_update_7030() {
+
+  db_drop_field('catalog_objects', 'node_type');
+}
+
+/**
+* Add table_visible column
+*/
+function catalog_update_7031() {
+  if (!db_table_exists('cache_catalog_entities')) {
+    db_rename_table('cache_catalog_nodes', 'cache_catalog_entities');
+  }
+}
+
+/**
+ * Rename database field condition flag into topicality
+ */
+function catalog_update_7032() {
+  if (db_field_exists('catalog_objects', 'condition_flag')) {
+    db_change_field('catalog_objects', 'condition_flag', 'topicality', array(
+      'type'     => 'varchar',
+      'length'   => 128,
+      'not null' => TRUE,
+      'default'  => '',
+    ));
+  }
+}
+
+
+/**
+* Back to state before update 7033
+*/
+function catalog_update_7034() {
+  db_change_field('catalog_objects', 'vid', 'vid', array(
+      'description' => 'TODO: please describe this field!',
+      'type' => 'varchar',
+      'length' => '255',
+      'not null' => FALSE,
+  ));
+}
+
+
+/**
+* Fix menu urls errors
+*/
+function catalog_update_7035() {
+  foreach (db_query('SELECT mlid, link_path FROM {menu_links} WHERE link_path REGEXP \'^catalog/[0-9]+/taxonomy/term/\'') as $r) {
+    $tid = preg_replace('/^(.*?)(\d+)$/', '\\2', $r->link_path);
+    $cid = preg_replace('/^catalog\/(\d+).*/', '\\1', $r->link_path);
+    $uri = _catalog_build_term_url($tid);
+    db_query('UPDATE {menu_links} SET link_path = :p , router_path = :r WHERE mlid = :m', array(':p' => 'catalog/' . $cid . '/' . $uri, ':r' => 'catalog/%/' . preg_replace('/\d+/', '%', $uri), ':m' => $r->mlid));
+    _catalog_set_menu_rebuild_task($cid);
+  }
+}
+
+/**
+ * Rename database field "term_depth_view" into "term_view"
+ */
+function catalog_update_7036() {
+  if (db_field_exists('catalog_objects', 'term_depth_view')) {
+    db_change_field('catalog_objects', 'term_depth_view', 'term_view', array(
+      'type' => 'int',
+      'not null' => FALSE,
+      'default' => NULL,
+    ));
+  }
+}
+
+/**
+* Taxonomy selection is returns!
+*/
+function catalog_update_7037() {
+  db_add_field('catalog_objects', 'tid', array(
+        'description' => 'TODO: please describe this field!',
+        'type' => 'varchar',
+        'length' => '255',
+        'not null' => FALSE,
+  ));
+  db_add_index('catalog_objects', 'tid', array('tid'));
+}
+
+
+/**
+* Delete orphaned field catalog_description
+*/
+function catalog_update_7038() {
+  if ($field = field_info_field('catalog_description')) {
+    if (empty($field['bundles'])) {
+      field_delete_field('catalog_description');
+    }
+  }
+}
+
+
+
+/**
+* Update orders \ filters system
+*/
+function catalog_update_7039() {
+  db_add_field('catalog_objects', 'orders', array(
+    'description' => 'Enabled order methods serialized array',
+    'type' => 'text',
+    'not null' => FALSE,
+    'serialize' => TRUE,
+  ));
+  db_add_field('catalog_objects', 'filters', array(
+    'description' => 'Enabled filter methods serialized array',
+    'type' => 'text',
+    'not null' => FALSE,
+    'serialize' => TRUE,
+  ));
+}
+
+/**
+* Drop table_visible (deprecated by IKW)
+* Drop obsolete image_preset setting
+*/
+
+function catalog_update_7041() {
+  db_drop_field('catalog_objects', 'table_visible');
+  db_drop_field('catalog_objects', 'image_preset');
+  db_truncate('cache')->execute();
+  registry_rebuild();
+}
+
+
+/**
+* Drop unused fields, update filters and orders subsystem
+*/
+function catalog_update_7042() {
+  db_drop_field('catalog_objects', 'descending');
+  foreach (db_query('SELECT * FROM {catalog_objects}') as $r) {
+    if (!($r->filters = @unserialize($r->filters))) {
+      $r->filters = array();
+    }
+    if (!($r->orders = @unserialize($r->orders))) {
+      $r->orders = array();
+    }
+    if ($r->entity_type === 'node') {
+      if ($r->topicality) {
+        if ($r->bundle === 'poll' || $r->bundle === 'event') {
+          $r->filters['actual']['enabled'] = TRUE;
+        }
+      }
+      if ($r->material_actuality) {
+        $r->filters['material_actuality']['enabled'] = TRUE;
+        $r->filters['material_actuality']['settings']['days'] = $r->material_actuality;
+      }
+      if (($new_price_catalog_filters = variable_get('new_price_catalog_filter', array())) && !empty($new_price_catalog_filters[$r->cid])) {
+        $r->filters['old_price']['enabled'] = TRUE;
+      }
+      if ($r->bundle === 'product' && module_exists('shop_variants') && (!($shop_variants_catalog_show_variants = variable_get('shop_variants_catalog_show_variants', array())) || empty($shop_variants_catalog_show_variants[$r->cid]))) {
+        $r->filters['hide_variants']['enabled'] = TRUE;
+      }
+    }
+    if ($r->order_flag) {
+      $from_to = array(
+        'node_created' => array('created', TRUE,),
+        'node_created_desc' => array('created', FALSE,),
+        'node_changed' => array('changed', TRUE,),
+        'node_changed_desc' => array('changed', FALSE,),
+        'node_title' => array('title', FALSE,),
+        'node_title_desc' => array('title', TRUE,),
+        'user_created' => array('created', FALSE),
+        'user_name' => array('name', FALSE,),
+        'user_mail' => array('mail', FALSE,),
+        'user_access' => array('access', FALSE),
+        'user_is_leader' => array('is_leader', FALSE,),
+        //'task_IKW_sorting' => array('task_IKW_sorting', FALSE,),
+        'event_dates' => array('event_dates', FALSE,),
+        'user_lfm' => array('name', FALSE,),
+        'user_lfm_desc' => array('name', TRUE,),
+        'user_phone' => array('phone', FALSE),
+        'user_phone_desc' => array('phone', TRUE),
+        'random' => array('random', FALSE,),
+      );
+      if (isset($from_to[$r->order_flag])) {
+        $r->orders[$from_to[$r->order_flag][0]] = array(
+          'enabled' => TRUE,
+          'descending' => !empty($from_to[$r->order_flag][1]),
+        );
+      }
+      if ($r->order_flag === 'task_IKW_sorting') {
+        $r->orders['completed']['enabled'] = TRUE;
+        $r->orders['priority']['enabled'] = TRUE;
+        $r->orders['priority']['descending'] = TRUE;
+        $r->orders['deadline']['enabled'] = TRUE;
+        $r->orders['deadline']['descending'] = TRUE;
+
+      }
+    }
+    else {
+      if ($r->entity_type === 'node') {
+        $r->orders['sticky']['enabled'] = TRUE;
+        $r->orders['created']['enabled'] = TRUE;
+      }
+    }
+    db_query('UPDATE {catalog_objects} SET orders = :orders, filters = :filters WHERE cid = :cid', array(
+      ':orders' => serialize($r->orders),
+      ':filters' => serialize($r->filters),
+      ':cid' => $r->cid,
+    ));
+  }
+}
+
+
+/**
+*  Migrate from term_view to extra field display settings; migrate term_cols and term_center properties to extra field settings storage (addons module)
+*/
+function catalog_update_7043() {
+  foreach (db_query('SELECT * FROM {catalog_objects} WHERE NOT is_block') as $r) {
+      $field_bundle_settings = variable_get('field_bundle_settings_catalog_object__' . $r->cid, array());
+      if (!$r->term_view || (!$r->vid && !$r->tid)) {
+        $field_bundle_settings['extra_fields']['display']['terms']['default']['visible'] = FALSE;
+        foreach ($field_bundle_settings['extra_fields']['display']['terms'] as $view_mode => $data) {
+          $field_bundle_settings['extra_fields']['display']['terms'][$view_mode]['visible'] = FALSE;
+          $field_bundle_settings['extra_fields']['display']['terms'][$view_mode]['weight'] = NULL;
+        }
+        variable_set('field_bundle_settings_catalog_object__' . $r->cid, $field_bundle_settings);
+      }
+  }
+  $addons_extra_fields_settings = variable_get('addons_extra_fields_settings', array());
+  $update = FALSE;
+  foreach (db_query('SELECT * FROM {catalog_objects} WHERE NOT is_block AND (term_cols > 1 OR term_center)') as $r) {
+      $settings = array();
+      if ($r->term_cols > 1) {
+        $settings['cols'] = $r->term_cols;
+      }
+      if ($r->term_center) {
+        $settings['center'] = TRUE;
+      }
+      if ($settings) {
+        $update = TRUE;
+        $addons_extra_fields_settings['catalog_object'][$r->cid]['display']['default']['terms'] = $settings;
+      }
+  }
+  if ($update) {
+    variable_set('addons_extra_fields_settings', $addons_extra_fields_settings);
+
+  }
+  field_info_cache_clear();
+}
+
+/**
+* Move 'interact' setting to 'similar' filter in separated catalog_similar.module by IKW
+*/
+function catalog_update_7044() {
+  $catalog_similar = FALSE;
+  foreach (db_query('SELECT * FROM {catalog_objects} WHERE interact AND is_block') as $r) {
+    $catalog_similar = TRUE;
+    if (!($r->filters = @unserialize($r->filters))) {
+      $r->filters = array();
+    }
+    $r->filters['similar']['enabled'] = TRUE;
+    db_query('UPDATE {catalog_objects} SET filters = :filters WHERE cid = :cid', array(':filters' => serialize($r->filters), ':cid' => $r->cid,));
+  }
+  if ($catalog_similar) {
+    module_enable(array('catalog_similar'));
+  }
+}
+
+
+/**
+* Move 'block_exclude_current' setting to 'exclude_current' filter
+*/
+function catalog_update_7045() {
+  foreach (db_query('SELECT * FROM {catalog_objects} WHERE block_exclude_current AND is_block') as $r) {
+    if (!($r->filters = @unserialize($r->filters))) {
+      $r->filters = array();
+    }
+    $r->filters['exclude_current']['enabled'] = TRUE;
+    db_query('UPDATE {catalog_objects} SET filters = :filters WHERE cid = :cid', array(':filters' => serialize($r->filters), ':cid' => $r->cid,));
+  }
+}
+
+/**
+* Add sort_breadcrumb column in {taxonomy_entity_index}
+*/
+function catalog_update_7046() {
+  db_add_field('taxonomy_entity_index', 'sort_breadcrumb', array(
+    'type' => 'varchar',
+    'description' => 'Other way for sorting terms in tree. Added by catalog module.',
+    'length' => 255,
+    'not null' => FALSE,
+    'default' => NULL,
+  ));
+  db_add_index('taxonomy_entity_index', 'sort_breadcrumb', array('sort_breadcrumb'));
+}
+
+/**
+* Rebuild sort_breadcrumb for all terms
+*/
+function catalog_update_7047() {
+  drupal_set_time_limit(600);
+  foreach (db_query('SELECT * FROM {taxonomy_term_data}') as $t) {
+    drupal_static_reset('taxonomy_get_parents_all');
+    _catalog_term_update_sort_breadcrumb($t->tid);
+  }
+}
+
+/**
+* Migrate to support site_translation module
+*/
+function catalog_update_7048() {
+    foreach (db_query('SELECT * FROM {catalog_objects_translations}') as $r) {
+    if ($r->data) {
+      $r->data = unserialize($r->data);
+      if (!empty($r->data['title'])) {
+        if (!module_exists('site_translate')) {
+          module_enable(array('site_translate'));
+        }
+        db_query('INSERT INTO {site_translate} SET object_type = \'catalog\', object_id = :cid, field_id = \'title\', module = \'catalog\', language = :lang, value = :val', array(
+          ':cid' => $r->cid,
+          ':lang' => $r->langcode,
+          ':val' => serialize($r->data['title']),
+        ));
+      }
+      if (!empty($r->data['description']['value'])) {
+        if (!module_exists('site_translate')) {
+          module_enable(array('site_translate'));
+        }
+        db_query('INSERT INTO {site_translate} SET object_type = \'catalog\', object_id = :cid, field_id = \'description\', module = \'catalog\', language = :lang, value = :val', array(
+          ':cid' => $r->cid,
+          ':lang' => $r->langcode,
+          ':val' => serialize($r->data['description']['value']),
+        ));
+      }
+    }
+  }
+  db_drop_table('catalog_objects_translations');
+}
+
+
+/**
+* Drop obsolete columns from {catalog_objects} table.
+*/
+function catalog_update_7049() {
+  db_drop_field('catalog_objects', 'topicality');
+  db_drop_field('catalog_objects', 'material_actuality');
+  db_drop_field('catalog_objects', 'order_flag');
+  db_drop_field('catalog_objects', 'term_view');
+  db_drop_field('catalog_objects', 'term_rows');
+  db_drop_field('catalog_objects', 'term_cols');
+  db_drop_field('catalog_objects', 'term_center');
+  db_drop_field('catalog_objects', 'interact');
+  db_drop_field('catalog_objects', 'block_exclude_current');
+  drupal_get_complete_schema(TRUE);
+  registry_rebuild();
+  entity_info_cache_clear();
+}
+
+
+/**
+* Change {catalog_objects} structure
+*/
+function catalog_update_7050() {
+  db_add_field('catalog_objects', 'block_settings', array(
+        'description' => 'Array of settings applied to layout contains selected entities (cols, rows, table view, zoom, etc)',
+        'type' => 'blob',
+        'not null' => FALSE,
+        'serialize' => TRUE,
+  ));
+  foreach (db_query('SELECT * FROM {catalog_objects} WHERE is_block') as $r) {
+    $block_settings = array(
+      'table_view' => $r->table_view,
+      'cols' => $r->cols,
+      'rows' => $r->rows,
+      'center' => $r->center,
+      'zoom' => $r->zoom,
+    );
+    db_query('UPDATE {catalog_objects} SET block_settings = :block_settings WHERE cid = :cid', array(
+      ':block_settings' => serialize($block_settings),
+      ':cid' => $r->cid,
+    ));
+  }
+  registry_rebuild();
+  entity_info_cache_clear();
+}
+
+/**
+* Move materials view settings to extra fields addons settings
+*/
+function catalog_update_7051() {
+  $addons_extra_fields_settings = variable_get('addons_extra_fields_settings', array());
+  foreach (db_query('SELECT * FROM {catalog_objects} WHERE NOT is_block') as $r) {
+    if (!isset($addons_extra_fields_settings['catalog_object'][$r->cid]['display']['default']['materials'])) {
+      $addons_extra_fields_settings['catalog_object'][$r->cid]['display']['default']['materials'] = array();
+    }
+    $addons_extra_fields_settings['catalog_object'][$r->cid]['display']['default']['materials'] += array(
+      'table_view' => $r->table_view,
+      'cols' => $r->cols,
+      'rows' => $r->rows,
+      'center' => $r->center,
+      'zoom' => $r->zoom,
+    );
+  }
+  variable_set('addons_extra_fields_settings', $addons_extra_fields_settings);
+}
+
+
+/**
+* Clear schema cache after update 7050
+*/
+function catalog_update_7054() {
+  drupal_get_complete_schema(TRUE);
+}
+
+/**
+* Update addons_extra_fields_settings for catalog_object (replace {table_view} to {mode} etc.) SRuban
+*/
+function catalog_update_7055() {
+  $new_config = array();    $old_settings = array();
+     $new_default = array (
+      'mode' => 'list',  // current mode type
+      'modes' => array(
+        'list' => array(
+          'enabled' => 1,
+            'settings' => array (
+              'caption' => t('List'), // switcher caption
+                'cols' => '1',
+                'rows' => '10',
+                'center' => 0,
+                'zoom' => '',
+              ),
+            ),
+        'table' => array(
+          'enabled' => 0,
+            'settings' => array (
+              'caption' => t('Table'),
+                'rows' => '10',
+                'center' => 0,
+                'zoom' => '',
+              ),
+            ),
+        ),
+  );
+  $addons_extra_fields_settings = variable_get('addons_extra_fields_settings', array());
+  variable_set('z_catalog_update_7055_backup', $addons_extra_fields_settings); // backup old settigs
+  foreach ($addons_extra_fields_settings['catalog_object'] as $cid => $conf_catalog) {
+      if (is_array($conf_catalog['display'])) {
+      foreach ($conf_catalog['display'] as $display_modes => $conf) {
+        $it_config = $new_default; // default must be in config, even it not found!
+        $old_define = $conf['materials'];
+        if ($old_define) {
+          if (!empty($old_define['mode'])) {
+            // it's ok but clear old cashe - save only new format
+            foreach (array('table_view','cols','rows','center','zoom','default_settings') as $setting)  unset($old_define[$setting]);
+            $it_config = $old_define; // none more changes
+          }
+          else
+          {
+            if ($old_define['table_view'] === '0') {
+                $it_config['mode'] = 'list';
+              foreach (array('cols','rows','center','zoom') as $setting) {
+                $it_config['modes']['list']['settings'][$setting] = $old_define[$setting];
+              }
+            }
+            elseif ($old_define['table_view'] == '1') {
+              $it_config['mode'] = 'table';
+              $it_config['modes']['table']['enabled'] = 1;
+              $it_config['modes']['list']['enabled'] = 0;
+              foreach (array('rows','center','zoom') as $setting) {
+                $it_config['modes']['table']['settings'][$setting] = $old_define[$setting];
+              }
+            }
+            else {
+              $it_config = $old_define;
+            }
+          }
+          $addons_extra_fields_settings['catalog_object'][$cid]['display'][$display_modes]['materials'] = $it_config;
+        }
+      }
+      if (!isset($conf_catalog['display']['default'])) {
+        $addons_extra_fields_settings['catalog_object'][$cid]['display']['default']['materials'] = $new_default;
+      }
+    }
+  }
+  //m($addons_extra_fields_settings['catalog_object']);
+  //m($new_conf);
+  variable_set('addons_extra_fields_settings', $addons_extra_fields_settings);
+}
+
+/**
+* Update for rebuild catalog_object  block_settings /  SRuban
+*/
+
+function catalog_update_7056() {
+  $old_settings = array();
+  foreach (db_select('catalog_objects', 'c')->fields('c')->condition('is_block', 1)->execute() as $r) {
+      $materials_settings = array();
+    $block_settings = unserialize($r->block_settings);
+    $old_settings[$r->cid] = $block_settings;
+    if (isset($block_settings['table_view'])) {
+          if ($block_settings['table_view']==='0') {
+            $materials_settings['mode'] = 'list';
+          } else {
+            unset($block_settings['cols']);
+            $materials_settings['mode'] = 'table';
+          }
+          unset($block_settings['table_view']);
+          $materials_settings['modes'][$materials_settings['mode']]['settings'] = $block_settings;
+      db_update('catalog_objects')->fields(array(
+        'block_settings' =>  serialize($materials_settings),))->condition('cid', $r->cid)->execute();
+    }
+  }
+  variable_set('z_catalog_update_7056_backup', $old_settings); // backup old settigs
+}
+
+/**
+* Drop obsolete columns from {catalog_objects} table.
+*/
+function catalog_update_7057() {
+  db_drop_field('catalog_objects', 'table_visible');
+  db_drop_field('catalog_objects', 'rows');
+  db_drop_field('catalog_objects', 'cols');
+  db_drop_field('catalog_objects', 'center');
+  db_drop_field('catalog_objects', 'zoom');
+  drupal_get_complete_schema(TRUE);
+  registry_rebuild();
+  entity_info_cache_clear();
+}
+
+function catalog_update_7060() {
+  $old_settings = variable_get('z_catalog_update_7056_backup', array());
+  foreach (db_select('catalog_objects', 'c')->fields('c')->condition('is_block', 1)->execute() as $r) {
+    if (!empty($old_settings[$r->cid]['gallery'])) {
+      $block_settings = unserialize($r->block_settings);
+      $block_settings['gallery'] = $old_settings[$r->cid]['gallery'];
+      if (!empty($block_settings['modes'])) {
+        if ($block_settings['gallery']['enabled']) {
+          $block_settings['mode'] = 'list';
+          $block_settings['modes']['list']['settings']['rows'] = $block_settings['gallery']['view'] === 'ver' ? $block_settings['gallery']['qty'] : 1;
+          $block_settings['modes']['list']['settings']['cols'] = $block_settings['gallery']['view'] === 'ver' ? 1 : $block_settings['gallery']['qty'];
+        }
+        else {
+          $block_settings['mode'] = ($old_settings[$r->cid]['table_view']) ? 'table' : 'list';
+          if ($block_settings['mode']==='list') {
+            $block_settings['modes']['list']['settings']['rows'] = $old_settings[$r->cid]['rows'];
+            $block_settings['modes']['list']['settings']['cols'] = $old_settings[$r->cid]['cols'];
+          }
+        }
+        foreach ($block_settings['modes'] as $key => $data) {
+          unset($block_settings['modes'][$key]['settings']['gallery']);
+        }
+      }
+      //m($block_settings);
+      db_query('UPDATE {catalog_objects} SET block_settings = :w WHERE cid = :c', array(':w' => serialize($block_settings), ':c' => $r->cid,));
+    }
+  }
+}
+
+
+/**
+ * Sync database structure with defined schema
+*/
+function catalog_update_7061() {
+  db_drop_table('catalog_filters');
+  if (!db_index_exists('catalog_objects', 'table_view')) {
+    db_add_index('catalog_objects', 'table_view', array('table_view'));
+  }
+  db_drop_index('catalog_objects', 'filter');
+  db_add_index('catalog_objects', 'filter', array('cid', 'entity_type', 'bundle', 'vid',));
+}
+
+
+/**
+ * Create {catalog_exposed} table
+ */
+function catalog_update_7062() {
+   // Drop very old relict rudiments that remaining some incomplete or cancelled solution
+  if (db_table_exists('catalog_exposed')) {
+    db_drop_table('catalog_exposed');
+  }
+  $schema = array(
+    'description' => 'Storage for catalog_objects settings shared for user',
+    'fields' => array(
+      'eid' => array(
+        'description' => 'Record ID',
+        'type' => 'serial',
+        'not null' => TRUE,
+      ),
+      'cid' => array(
+        'description' => 'catalog_objects.cid',
+        'type' => 'int',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+      ),
+      'type' => array(
+        'description' => 'orders|filters',
+        'type' => 'varchar',
+        'length' => 16,
+        'not null' => TRUE,
+      ),
+      'data' => array(
+        'description' => 'Preset storage',
+        'type' => 'blob',
+        'not null' => FALSE,
+        'size' => 'big',
+        'serialize' => TRUE,
+      ),
+      'uid' => array(
+        'description' => 'users.uid or 0 for all users',
+        'type' => 'int',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+      ),
+      'name' => array(
+        'description' => 'Preset name',
+        'type' => 'varchar',
+        'length' => 128,
+        'not null' => TRUE,
+      ),
+    ),
+    'primary key' => array('eid'),
+    'indexes' => array(
+      'cid' => array('cid'),
+      'uid' => array('uid'),
+    ),
+  );
+
+  db_create_table('catalog_exposed', $schema);
+
+}
+
+
+/**
+ * Move user filter sets from {catalog_objects} to {catalog_exposed}
+ */
+function catalog_update_7063() {
+  db_truncate('catalog_exposed');
+  foreach (db_query('SELECT * FROM {catalog_objects}') as $r) {
+    if ($r->filters = @unserialize($r->filters)) {
+      if (isset($r->filters['user'])) {
+        if ($r->filters['user']) {
+          foreach ($r->filters['user'] as $uid => $item) {
+            if (isset($item['sets'])) {
+              if (!empty($item['sets'])) {
+                foreach ($item['sets'] as $name => $settings) {
+                  $record = array(
+                    'cid' => $r->cid,
+                    'type' => 'filters',
+                    'data' => $settings,
+                    'name' => $name,
+                    'uid' => $uid,
+                  );
+                  drupal_write_record('catalog_exposed', $record);
+                }
+              }
+              unset($r->filters['user'][$uid]);
+            }
+          }
+        }
+        if (!$r->filters['user']) {
+          unset($r->filters['user']);
+        }
+        db_query('UPDATE {catalog_objects} SET filters = :s WHERE cid = :cid', array(
+          ':s' => serialize($r->filters),
+          ':cid' => $r->cid,
+        ));
+      }
+    }
+
+  }
+}
+
+
+
+//@TODO: variable_del('z_catalog_update_7056_backup');
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

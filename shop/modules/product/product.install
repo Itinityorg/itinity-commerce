@@ -1,0 +1,827 @@
+<?php
+//$Id: product.install, v 1.0 2011/02/21 10:34:24 Ivan Demenkov Exp $
+
+/**
+ * @file
+ * Install file for product module.
+ */
+/**
+ * Implements hook_install().
+ * - Add the body field.
+ * - Configure the body field.
+ */
+function product_install() {
+	$t = get_t();
+	$nt = product_node_info();
+	$nt = $nt['product'];
+
+	$content_type = node_type_set_defaults($nt);
+	node_add_body_field($content_type, $t('Product description'));
+
+	node_type_save($content_type);
+
+	module_load_include('inc', 'node', 'content_types');
+	$form = array();
+	$form_state = form_state_defaults();
+	$form_state['values'] = array(
+		'name' => $t('Product'),
+		'description' => $t('Product - is meant to describe goods and services online. Contains a number of specific fields, such as price, quantity, unit of measure.'),
+		'type' => 'product',
+		'old_type' => 'product',
+		'orig_type' => 'product',
+		'additional_settings__active_tab' => 'edit-submission',
+		'title_label' => $t('Name', array(), array('context' => 'product')),
+		'node_preview' => 0,
+		'help' => '',
+		'node_options' =>
+		array(
+			'status' => 'status',
+			'promote' => 0,
+			'sticky' => 0,
+			'revision' => 0,
+		),
+		'node_submitted' => 1,
+		'base' => 'product',
+		'custom' => '0',
+		'modified' => '1',
+    'module' => 'product',
+		'locked' => '0',
+		'comment' => '1',
+		'comment_default_mode' => 1,
+		'comment_default_per_page' => '50',
+		'comment_anonymous' => '2',
+		'comment_subject_field' => 0,
+		'comment_form_location' => 1,
+		'comment_preview' => '0',
+		'menu_options' => array(), // http://itinity.ru/node/683
+		'print_display' => 1,
+		'print_display_comment' => 0,
+		'print_display_urllist' => 1,
+	);
+	node_type_form_submit($form, $form_state);
+
+	_product_install_fieldgroups();
+
+	$body_instance = array(
+		'label' => $t('Body'),
+		'widget' =>
+		array(
+			'type' => 'text_textarea_with_summary',
+			'settings' =>
+			array(
+				'rows' => 20,
+				'summary_rows' => 5,
+			),
+			'weight' => '0',
+			'module' => 'text',
+		),
+		'settings' =>
+		array(
+			'display_summary' => true,
+			'text_processing' => 1,
+			'user_register_form' => false,
+		),
+		'display' =>
+		array(
+			'default' =>
+			array(
+				'label' => 'hidden',
+				'type' => 'text_default',
+				'weight' => '6',
+				'settings' =>
+				array(
+				),
+				'module' => 'text',
+			),
+			'teaser' =>
+			array(
+				'label' => 'hidden',
+				'type' => 'text_summary_or_trimmed',
+				'weight' => '7',
+				'settings' =>
+				array(
+						'trim_length' => 600,
+				),
+				'module' => 'text',
+			),
+			'informer' =>
+			array(
+				'label' => 'above',
+				'type' => 'hidden',
+				'weight' => '6',
+				'settings' =>
+				array(
+				),
+			),
+		),
+		'required' => false,
+		'description' => '',
+		'field_name' => 'body',
+		'entity_type' => 'node',
+		'bundle' => 'product',
+		'deleted' => '0',
+		'default_value' => NULL,
+	);
+
+	field_update_instance($body_instance);
+
+
+	foreach (_product_installed_fields_and_instances() as $name => $settings) {
+		$field = $settings['field'] + array(
+			'label' => $settings['label'],
+			'type' => $settings['type'],
+			'field_name' => $name,
+		);
+		if (!field_read_field($name)) {
+			field_create_field($field);
+		}
+		$instance = $settings['instance'] + array(
+			'label' => $settings['label'],
+			'field_name' => $name,
+			'entity_type' => 'node',
+			'bundle' => $nt['type'],
+		);
+		if (!field_read_instance('node', $name, $nt['type'])) {
+			field_create_instance($instance);
+		}
+	}
+	// be happy
+	$bundle_settings = array(
+		'extra_fields' =>
+		array(
+				'display' =>
+				array(
+						'user_picture' =>
+						array(
+								'default' =>
+								array(
+										'weight' => '17',
+										'visible' => false,
+								),
+								'teaser' =>
+								array(
+										'weight' => '14',
+										'visible' => false,
+								),
+								'informer' =>
+								array(
+										'weight' => '15',
+										'visible' => false,
+								),
+						),
+						'title' =>
+						array(
+								'default' =>
+								array(
+										'weight' => '8',
+										'visible' => false,
+								),
+								'teaser' =>
+								array(
+										'weight' => '3',
+										'visible' => true,
+								),
+								'informer' =>
+								array(
+										'weight' => '4',
+										'visible' => true,
+								),
+						),
+						'readmore' =>
+						array(
+								'default' =>
+								array(
+										'weight' => '16',
+										'visible' => false,
+								),
+								'teaser' =>
+								array(
+										'weight' => '10',
+										'visible' => false,
+								),
+								'informer' =>
+								array(
+										'weight' => '13',
+										'visible' => false,
+								),
+						),
+						'changed' =>
+						array(
+								'default' =>
+								array(
+										'weight' => '15',
+										'visible' => false,
+								),
+								'teaser' =>
+								array(
+										'weight' => '15',
+										'visible' => false,
+								),
+								'informer' =>
+								array(
+										'weight' => '17',
+										'visible' => false,
+								),
+						),
+						'moved_links' =>
+						array(
+								'default' =>
+								array(
+										'weight' => '14',
+										'visible' => false,
+								),
+								'teaser' =>
+								array(
+										'weight' => '13',
+										'visible' => false,
+								),
+								'informer' =>
+								array(
+										'weight' => '16',
+										'visible' => false,
+								),
+						),
+						'author' =>
+						array(
+								'default' =>
+								array(
+										'weight' => '13',
+										'visible' => false,
+								),
+								'teaser' =>
+								array(
+										'weight' => '11',
+										'visible' => false,
+								),
+								'informer' =>
+								array(
+										'weight' => '14',
+										'visible' => false,
+								),
+						),
+						'created' =>
+						array(
+								'default' =>
+								array(
+										'weight' => '11',
+										'visible' => false,
+								),
+								'teaser' =>
+								array(
+										'weight' => '12',
+										'visible' => false,
+								),
+								'informer' =>
+								array(
+										'weight' => '12',
+										'visible' => false,
+								),
+						),
+						'buy_button' =>
+						array(
+								'default' =>
+								array(
+										'weight' => '4',
+										'visible' => true,
+								),
+								'teaser' =>
+								array(
+										'weight' => '6',
+										'visible' => true,
+								),
+						'informer' =>
+							array(
+									'weight' => '3',
+									'visible' => true,
+							),
+						),
+				),
+			'form' =>
+			array(
+				'title' =>
+				array(
+					'weight' => '-5',
+				),
+				'additional_settings' =>
+				array(
+					'weight' => '9223372036854775806',
+				),
+				'actions' =>
+				array(
+					'weight' => '9223372036854775807',
+				),
+			),
+		),
+		'view_modes' =>
+		array(
+			'teaser' =>
+			array(
+				'custom_settings' => true,
+			),
+			'informer' =>
+			array(
+				'custom_settings' => true,
+			),
+			'full' =>
+			array(
+				'custom_settings' => false,
+			),
+			'rss' =>
+			array(
+				'custom_settings' => false,
+			),
+			'search_index' =>
+			array(
+				'custom_settings' => false,
+			),
+			'search_result' =>
+			array(
+				'custom_settings' => false,
+			),
+			'print' =>
+			array(
+				'custom_settings' => false,
+			),
+		),
+	);
+	field_bundle_settings('node', 'product', $bundle_settings);
+	if (module_exists('taxonomy')) {
+		$vocabulary = (object)array(
+			'name' => $t('Catalog of the products'),
+			'description' => $t('Use tags to group products into categories.'),
+			'machine_name' => 'catalog_products',
+			'help' => $t('Enter a comma-separated list of words to describe your content.'),
+			'module' => 'product',
+		);
+
+		taxonomy_vocabulary_save($vocabulary);
+
+		$field = array(
+			'field_name' => 'field_' . $vocabulary->machine_name,
+			'type' => 'taxonomy_term_reference',
+			// Set cardinality to unlimited for tagging.
+			'cardinality' => 1,
+			'settings' => array(
+				'allowed_values' => array(
+					array(
+						'vocabulary' => $vocabulary->machine_name,
+						'parent' => 0,
+					),
+				),
+			),
+		);
+		field_create_field($field);
+
+		$instance = array(
+			'field_name' => 'field_' . $vocabulary->machine_name,
+			'entity_type' => 'node',
+			'label' => $t('Product type'),
+			'bundle' => 'product',
+			'description' => $vocabulary->help,
+			'widget' => array(
+				'type' => 'options_select',
+				'weight' => 5.5,
+			),
+			'display' => array(
+				'default' => array(
+					'type' => 'taxonomy_term_reference_link',
+					'weight' => 10,
+				),
+				'teaser' => array(
+					'type' => 'taxonomy_term_reference_link',
+					'weight' => 10,
+				),
+			),
+		);
+		field_create_instance($instance);	
+	}
+	if (module_exists('catalog')) {
+		$catalog = (object)array(
+			'status' => 1,
+			'is_block' => 0,
+			'block_exclude_current' => 0,
+			'machine_name' => 'katalog_tovarov',
+			'title' => $t('Catalog of the products'),
+			'depth' => NULL,
+			'menu_name' => 'main-menu',
+			'menu_mlid' => 0,
+			'rows' => 10,
+			'cols' => 1,
+			'center' => 0,
+			'zoom' => 0,
+			'material_actuality' => 0,
+			'entity_type' => 'node',
+			'bundle' => 'product',
+			'vid' => isset($vocabulary->vid) ? $vocabulary->vid : NULL,
+			'rdf_mapping' => array(),
+		);
+		catalog_object_save($catalog);
+	}
+}
+
+
+/**
+ * Return a structured array defining the fields created by this content type.
+ * For the job post module there is only one additional field – the company name
+ * Other fields could be added by defining them in this function as additional elements
+ * in the array below
+ */
+
+function _product_installed_fields_and_instances() {
+	$t = get_t();
+	return array(
+		'product_article' => array(
+			'label' => $t('Article number'),
+			'type' => 'text',
+			'field' => array(
+				'cardinality' => 1,
+			),
+			'instance' => array(
+				'description' => $t('Unique product identifier'),
+				'widget' => array(
+					'type' => 'text_textfield',
+					'weight' => -4,
+				),
+				'display' => array(
+					'default' => array(
+						'label' => 'above',
+						'type' => 'text',
+						'weight' => 5,
+					),
+				),
+			),
+		),
+		'product_multimedia' => array(
+			'label' => $t('Product multimedia files'),
+			'type' => 'image',
+			'field' => array(
+				'cardinality' => FIELD_CARDINALITY_UNLIMITED,
+			),
+			'instance' => array(
+				'settings' => array(
+					'file_directory' => 'field/image',
+					'file_extensions' => 'png gif jpg jpeg',
+					'max_filesize' => '',
+					'max_resolution' => '',
+					'min_resolution' => '',
+					'alt_field' => TRUE,
+					'title_field' => '',
+				),
+				'widget' => array(
+					'type' => 'image_image',
+					'weight' => -2,
+					'settings' => array(
+						'progress_indicator' => 'throbber',
+						'preview_image_style' => '128x96',
+					),
+				),
+				'display' => array(
+					'default' => array(
+						'label' => 'hidden',
+						'type' => 'image',
+						'settings' => array(
+							'image_style' => '240x180',
+							'image_link' => ''
+						),
+						'weight' => 1,
+					),
+					'teaser' => array(
+						'label' => 'hidden',
+						'type' => 'image',
+						'settings' => array(
+							'image_style' => '192x144',
+							'image_link' => 'content'
+						),
+						'weight' => 2,
+					),
+					'informer' => array(
+						'label' => 'hidden',
+						'type' => 'image',
+						'settings' => array(
+							'image_style' => '192x144',
+							'image_link' => 'content'
+						),
+						'weight' => 0,
+					),
+				),
+			),
+		),
+	);
+}
+
+function _product_install_fieldgroups() {
+	if (module_exists('fieldgroups')) {
+		$fieldgroups = array(
+			array(
+				'group_name' => 'group_1',
+				'mode' => 'default',
+				'label' => '1',
+				'weight' => '0',
+				'children' => array(
+					0 => 'body',
+					1 => 'product_article',
+					2 => 'product_multimedia',
+					3 => 'group_2',
+				),
+				'format_type' => 'div',
+				'format_settings' => array(
+					'formatter' => 'open',
+					'instance_settings' => array(
+						'show_label' => 0,
+						'label_element' => 'h3',
+						'effect' => 'none',
+						'speed' => 'fast',
+						'classes' => '',
+						'float' => 1,
+					),
+				),
+			),
+			array(
+				'group_name' => 'group_2',
+				'mode' => 'default',
+				'label' => '2',
+				'weight' => '2',
+				'children' => array(
+					0 => 'group_price',
+					1 => 'buy_button',
+				),
+				'format_type' => 'div',
+				'format_settings' => array(
+					'formatter' => 'open',
+					'instance_settings' => array(
+						'show_label' => 0,
+						'label_element' => 'h3',
+						'effect' => 'none',
+						'speed' => 'fast',
+						'classes' => '',
+						'float' => 1,
+					),
+				),
+			),
+			array(
+				'group_name' => 'group_1',
+				'mode' => 'teaser',
+				'label' => '1',
+				'weight' => '1',
+				'children' => array(
+					0 => 'body',
+					1 => 'product_multimedia',
+					2 => 'title',
+					3 => 'group_2',
+				),
+				'format_type' => 'div',
+				'format_settings' => array(
+					'formatter' => 'open',
+					'instance_settings' => array(
+						'show_label' => 0,
+						'label_element' => 'h3',
+						'effect' => 'none',
+						'speed' => 'fast',
+						'classes' => '',
+						'float' => 1,
+					),
+				),
+			),
+			array(
+				'group_name' => 'group_2',
+				'mode' => 'teaser',
+				'label' => '2',
+				'weight' => '4',
+				'children' => array(
+					0 => 'group_price',
+					1 => 'buy_button',
+				),
+				'format_type' => 'div',
+				'format_settings' => array(
+					'formatter' => 'open',
+					'instance_settings' => array(
+						'show_label' => 0,
+						'label_element' => 'h3',
+						'effect' => 'none',
+						'speed' => 'fast',
+						'classes' => '',
+						'float' => 1,
+					),
+				),
+			),
+			array(
+				'group_name' => 'group_1',
+				'mode' => 'informer',
+				'label' => '1',
+				'weight' => '1',
+				'children' => array(
+					0 => 'group_price',
+					1 => 'buy_button',
+				),
+				'format_type' => 'div',
+				'format_settings' => array(
+					'formatter' => 'open',
+					'instance_settings' => array(
+						'show_label' => 0,
+						'label_element' => 'h3',
+						'effect' => 'none',
+						'speed' => 'fast',
+						'classes' => '',
+						'float' => 1,
+					),
+				),
+			),
+			array(
+				'group_name' => 'group_price',
+				'mode' => 'teaser',
+				'label' => 'Price',
+				'weight' => '1',
+				'children' => array(
+					'price',
+				),
+				'format_type' => 'div',
+				'format_settings' => array(
+					'label' => 'Price',
+					'instance_settings' => array(
+						'float' => 1,
+						'classes' => 'container-inline',
+						'description' => '',
+						'show_label' => '0',
+						'label_element' => 'h3',
+						'effect' => 'none',
+						'speed' => 'fast',
+					),
+					'formatter' => 'open',
+				),
+			),
+			array(
+				'group_name' => 'group_price',
+				'mode' => 'default',
+				'label' => 'Price',
+				'weight' => '1',
+				'children' => array(
+							'price',
+				),
+				'format_type' => 'div',
+				'format_settings' => array(
+					'label' => 'Price',
+					'instance_settings' => array(
+						'float' => 1,
+						'classes' => 'container-inline',
+						'description' => '',
+						'show_label' => '0',
+						'label_element' => 'h3',
+						'effect' => 'none',
+						'speed' => 'fast',
+					),
+					'formatter' => 'open',
+				),
+			),
+			array(
+				'group_name' => 'group_price',
+				'mode' => 'informer',
+				'label' => 'Price',
+				'weight' => '1',
+				'children' => array(
+					 'price',
+				),
+				'format_type' => 'div',
+				'format_settings' => array(
+					'formatter' => 'open',
+					'instance_settings' => array(
+						'show_label' => 0,
+						'label_element' => 'h3',
+						'effect' => 'none',
+						'speed' => 'fast',
+						'classes' => '',
+						'float' => 1,
+					),
+				),
+			),
+			array(
+				'group_name' => 'group_price',
+				'mode' => 'form',
+				'label' => '',
+				'weight' => '1',
+				'children' => array(
+					'price',
+					'qty',
+				),
+				'format_type' => 'div',
+				'format_settings' => array(
+					'label' => '',
+					'instance_settings' => array(
+						'required_fields' => 1,
+						'float' => 0,
+						'classes' => 'container-inline',
+						'description' => '',
+						'show_label' => '1',
+						'label_element' => 'h3',
+						'effect' => 'none',
+						'speed' => 'none',
+					),
+					'formatter' => 'open',
+				),
+			),
+		);
+
+		foreach ($fieldgroups as $group) {
+			$group = (object)$group;
+			$group->entity_type = 'node';
+			$group->bundle = 'product';
+			$group->parent_name = isset($group->parent_name) ? $group->parent_name : '';
+			_fieldgroups_save($group);
+		}
+	}
+}
+
+/**
+ * Implementation of hook_uninstall().
+ */
+function product_uninstall() {
+  
+}
+
+function product_update_last_removed() {
+	return 7012;
+	/**
+	* 7012 annotation:
+	* All updates up to 7012 is obsolete. 
+	* If you want to use old database dump, use shop_v7078_rev3741.zip (or get revision #3741 from SVN) instead of actual scripts. 
+	* You must restore all files from archive (or revision #3741), run updates, revert back to latest version and run update again.
+	*/
+}
+
+
+/**
+* Fix title_label 'Product description' to 'Name'
+*/
+function product_update_7013() {
+	db_query('UPDATE {node_type} SET title_label = :new WHERE type = \'product\' AND title_label = :old', array(
+		':new' => t('Name', array(), array('context' => 'product', 'langcode' => language_default('language'))), 
+		':old' => t('Product description', array(), array('langcode' => language_default('language'))), 
+		)
+	);
+}
+
+/**
+ * Update node type descriptions
+ *
+ * http://itinity.ru/node/652
+ */
+function product_update_7014() {
+	$nt = node_type_load('product');
+	if (empty($nt->type)) {
+		return;
+	}
+
+	$t = get_t();
+	$nt->description = $t('Product - is meant to describe goods and services online. Contains a number of specific fields, such as price, quantity, unit of measure.');
+	node_type_save($nt);
+}
+
+
+/**
+* Update menu settings
+* @see http://itinity.ru/node/683
+*/
+function product_update_7015() {
+	variable_set('menu_options_product', array());
+}
+
+/**
+* IKW: temporary disable "Accept bids for products with a zero balance" @see also _shop_settings_subform()
+*/
+function product_update_7016() {
+	if ($shop_info = utils_load_packed_var('shop_info')) {
+		if (!empty($shop_info['balances']['settings']['accept_requests'])) {
+			unset($shop_info['balances']['settings']['accept_requests']);
+			utils_save_packed_var('shop_info', $shop_info);
+			return 'accept_requests was disabled';
+		}
+	}
+}
+
+
+/**
+* Fix installation bug ('product' node type defined as locked, but installer creates standard full-customizable node type)
+*/
+function product_update_7017() {
+  db_query('UPDATE {node_type} SET locked = 1, custom = 0 WHERE orig_type = \'product\'');
+}
+
+
+/**
+* IKW: want to rename 'product' as other node types
+*/
+function product_update_7018() {
+  db_query('UPDATE {node_type} SET locked = 0 WHERE orig_type = \'product\'');
+}
+
+
+
+
+
+
+
+
+
+
+
+
+

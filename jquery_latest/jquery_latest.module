@@ -1,0 +1,163 @@
+<?php
+/**
+ * Copyright 2015-2017 Itinity Ltd. (itinity.ru). All rights reserved.
+ * Licensed under the GNU General Public License, version 2 or later.
+ */
+
+/**
+ * @file
+ * Updates Drupal to use the latest version of jQuery.
+ */
+
+ // Development mode flag. If true - module will load non-minified scripts and enable jquery.migrate (only for jQuery >= 1.9) debug messages
+define('JQUERY_LATEST_DEVMODE', FALSE);
+// Active jQuery core version ( must be in 1.5, 1.7, 1.8, 1.9, 1.10, 1.11, 2.1, 3.0 @see dirs in /replace/jquery )
+define('JQUERY_LATEST_VERSION', '2.1');
+// jQuery UI version
+define('JQUERY_LATEST_UI_VERSION', '1.10.2');
+
+
+/**
+ * Implements hook_library()
+ */
+function jquery_latest_library() {
+  // Connect jQuery Migrate plugin
+  if (version_compare(JQUERY_LATEST_VERSION, '1.9', '>=')) {
+    $version = version_compare(JQUERY_LATEST_VERSION, '3.0', '<') ? '1.2.1' : '3.0.0';
+    $result = array(
+      'jquery.migrate' => array(
+        'title' => 'jQuery Migrate',
+        'website' => 'http://plugins.jquery.com/migrate',
+        'version' => $version,
+        'js' => array(
+          drupal_get_path('module', 'jquery_latest') . '/replace/jquery-migrate/' . $version . '/jquery-migrate' . (JQUERY_LATEST_DEVMODE ? '' : '.min') . '.js' => array(
+            'group' => JS_LIBRARY,
+            'weight' => -19.8,
+          ),
+          array(
+            // Configure the jQuery Migrate plugin.
+            // Note: This must be done after jQuery has loaded, but before the jQuery
+            // migrate plugin has loaded.
+            'data' => 'jQuery.migrateMute=' . json_encode(!JQUERY_LATEST_DEVMODE) . ';jQuery.migrateTrace=' . json_encode(JQUERY_LATEST_DEVMODE) . ';',
+            'type' => 'inline',
+            'group' => JS_LIBRARY,
+            'weight' => -19.899999999,          
+          ),
+        ),
+      )
+    );
+    if (version_compare(JQUERY_LATEST_VERSION, '3.0', '>=')) {
+      // Add own crutches for abandoned $.browser in jquery migrate plugin
+      $result['jquery.migrate']['js'][drupal_get_path('module', 'jquery_latest') . '/replace/jquery-migrate/' . $version . '/jquery.browser.js'] = array(
+        'group' => JS_LIBRARY,
+        'weight' => -19.799999999,
+      );
+    }
+    return $result;
+  } 
+}
+
+
+/**
+ * Implements hook_library_alter().
+ */
+function jquery_latest_library_alter(&$javascript, $module) {
+  $path = drupal_get_path('module', 'jquery_latest') . '/replace/';
+
+  if (is_dir($path . 'jquery/' . JQUERY_LATEST_VERSION)) {
+
+    $min = JQUERY_LATEST_DEVMODE ? '' : '.min';
+
+    // Modified System Library.
+    if ($module === 'system') {
+
+      $javascript['jquery']['version'] = JQUERY_LATEST_VERSION;
+      $javascript['jquery']['js']['misc/jquery.js']['data'] = $path . 'jquery/' . JQUERY_LATEST_VERSION . '/jquery' . $min . '.js';
+
+      // jQuery UI replacements
+      if (version_compare(JQUERY_LATEST_VERSION, '1.6', '>=')) {
+        // ui.menu needed for new ui.autocomplete
+        $javascript['ui.menu'] = array(
+          'title' => 'jQuery UI: Menu',
+          'website' => 'http://jqueryui.com/demos/menu/',
+          'version' => JQUERY_LATEST_UI_VERSION,
+          'js' => array('misc/ui/jquery.ui.menu.min.js' => array()),
+          'css' => array('misc/ui/jquery.ui.menu.css' => array()),
+          'dependencies' => array(array('system', 'ui.widget'), array('system', 'ui.position')),
+        );
+        // fix dependencies
+        $javascript['ui.autocomplete']['dependencies'][] = array('system', 'ui.menu');
+
+        // Replace all CSS files.
+        $names = drupal_map_assoc(array(
+          'ui.accordion', 'ui.autocomplete', 'ui.button', 'ui.datepicker', 'ui.dialog',
+          'ui.progressbar', 'ui.resizable', 'ui.selectable', 'ui.slider', 'ui.tabs',
+          'ui.menu',
+        ));
+        $names += array('ui' => 'ui.core');
+
+        $csspath = $path . 'ui/' . JQUERY_LATEST_UI_VERSION . '/themes/base/' . (($min == '.min') ? 'minified/' : '');
+        foreach ($names as $name => $file) {
+          $javascript[$name]['css']['misc/ui/jquery' . $file . 'css']['data'] = $csspath . 'jquery.' . $file . $min . '.css';
+        }
+        // Make sure ui.theme is replaced as well.
+        $javascript['ui']['css']['misc/ui/jquery.ui.theme.css']['data'] = $csspath . 'jquery.ui.theme' . $min . '.css';
+
+        // Replace jQuery UI's JavaScript, beginning by defining the mapping.
+
+        $names = drupal_map_assoc(array(
+          'ui.accordion', 'ui.autocomplete', 'ui.button', 'ui.datepicker', 'ui.dialog', 'ui.draggable',
+          'ui.droppable', 'ui.mouse', 'ui.position', 'ui.progressbar', 'ui.resizable', 'ui.selectable',
+          'ui.slider', 'ui.sortable', 'ui.tabs', 'ui.widget', 'ui.menu',
+        ));
+        $names += array('ui' => 'ui.core', 'effects' => array('effects.core', 'ui.effect'));// map[library_hook] = array(core_fn, updated_fn)
+        $effect_names = array(
+          'blind', 'bounce', 'clip', 'drop', 'explode', 'fade', 'fold',
+          'highlight', 'pulsate', 'scale', 'shake', 'slide', 'transfer',
+        );
+        foreach ($effect_names as $effect_name) {
+          $names['effects.' . $effect_name] = array('effects.' . $effect_name, 'ui.effect-' . $effect_name);
+        }
+
+        foreach ($names as $name => $file) {
+          list($file_core, $file_updated) = is_array($file) ? $file : array($file, $file);
+          $javascript[$name]['js']['misc/ui/jquery.' . $file_core . '.min.js']['data'] = $path . 'ui/' . JQUERY_LATEST_UI_VERSION . '/ui/' . ($min ? 'minified/' : '') . 'jquery.' . $file_updated . $min . '.js';
+          $javascript[$name]['version'] = JQUERY_LATEST_UI_VERSION;
+        }
+      }
+
+      if (version_compare(JQUERY_LATEST_VERSION, '1.9', '>=')) {
+        // Load jQuery Migrate plugin for jQuery >= 1.9
+        $javascript['jquery']['dependencies'][] = array('jquery_latest', 'jquery.migrate');
+      }
+
+      // Replace the jQuery Cookie plugin.
+      $javascript['cookie']['js']['misc/jquery.cookie.js']['data'] = $path . 'ui/' . JQUERY_LATEST_UI_VERSION . '/external/jquery.cookie.js';
+      // Noting the version based on git commit as no version number is available.
+      $javascript['cookie']['version'] = '67fb34f6a866c40d0570';
+
+      // Replace jQuery Form Plugin.
+      // jQuery >= 1.5 requires jQuery Form Plugin 3.x.
+      $jquery_form_version = version_compare(JQUERY_LATEST_VERSION, '1.5', '>=') ? '3.51.0' : '2.69';
+      $javascript['jquery.form']['js']['misc/jquery.form.js']['data'] = $path . 'jquery.form/' . $jquery_form_version . '/jquery.form' . $min . '.js';
+      $javascript['jquery.form']['version'] = $jquery_form_version;      
+    }
+  }
+
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

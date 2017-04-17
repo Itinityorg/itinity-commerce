@@ -1,0 +1,6 @@
+; $Id: jquery_latest.info, v 1.0 2015/11/19 15:54:22 itinity Exp $
+name = JQuery latest
+description = Replace old 1.4 version of jQuery to new 2.1
+package = ITK
+version = "7.x-dev"
+core = "7.x"

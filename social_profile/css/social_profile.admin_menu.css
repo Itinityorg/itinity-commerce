@@ -1,0 +1,35 @@
+#admin-menu li.admin-menu-account ul {
+	right: 0;
+}
+
+#admin-menu li.admin-menu-account li.expandable ul {
+	margin: -29px 160px 0 0;
+}
+
+#admin-menu-account   .admin-menu-account > a  {
+  position: relative;
+  padding-left: 42px !important;
+  min-height: 32px;
+}
+
+#admin-menu-account  .admin-menu-account a  img {
+  position: absolute;
+  top: 2px;
+  left: 8px;
+  max-width: 30px;
+  height: 26px;
+}
+
+#admin-menu  .admin-menu-account .admin-menu-text {
+  margin-right: 5px;
+}
+
+
+@media (max-width: 1600px) {
+  #admin-menu-account .admin-menu-account > a {
+    padding-left: 32px !important;
+  }
+
+}
+
+

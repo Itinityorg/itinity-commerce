@@ -1,0 +1,459 @@
+<?php //$Id: contacts.install, v 1.0 2011/03/10 09:42:26 Ivan Demenkov Exp $
+
+
+/**
+ * Implements hook_schema()
+ */
+function contacts_schema() {
+  $schema = array();
+  $schema['contacts_submissions'] = array(
+    'description' => 'Log contacts form submissions',
+    'fields' => array(
+      'id' => array(
+        'description' => 'Internal record id',
+        'type' => 'serial',
+        'not null' => TRUE,
+      ),
+      'ip' => array(
+        'description' => 'Sender IP address',
+        'type' => 'varchar',
+        'length' => '64',
+        'not null' => TRUE,
+      ),
+      'uid' => array(
+        'description' => '{users}.uid',
+        'type' => 'int',
+        'unsigned' => TRUE,
+        'not null' => FALSE,
+      ),
+      'lfm' => array(
+        'description' => 'Typed name field',
+        'type' => 'varchar',
+        'length' => '128',
+        'not null' => TRUE,
+      ),
+      'phone' => array(
+        'description' => 'Typed phone field',
+        'type' => 'varchar',
+        'length' => '64',
+        'not null' => TRUE,
+      ),
+      'mail' => array(
+        'description' => 'Typed email field',
+        'type' => 'varchar',
+        'length' => '255',
+        'not null' => TRUE,
+      ),
+      'message' => array(
+        'description' => 'Message text',
+        'type' => 'text',
+        'not null' => TRUE,
+      ),
+      'timestamp' => array(
+        'description' => 'Timestamp of submission',
+        'type' => 'int',
+        'not null' => TRUE,
+      ),
+      'url' => array(
+        'description' => 'URL of the page from which the message was sent',
+        'type' => 'varchar',
+        'length' => '255',
+        'not null' => TRUE,
+      ),
+    ),
+    'unique keys' => array(
+      'id' => array('id')
+    ),
+    'indexes' => array(
+      'mail' => array('mail'),
+      'ip' => array('ip'),
+      'lfm' => array('lfm'),
+      'phone' => array('phone'),
+      'timestamp' => array('timestamp'),
+      'uid' => array('uid'),
+      'url' => array('url'),
+    ),
+  );
+
+
+  return $schema;
+}
+
+
+/**
+ * Implements hook_install()
+ */
+function contacts_install() {
+
+}
+
+
+/**
+ * Implements hook_uninstall()
+ */
+function contacts_uninstall() {
+  db_query('DELETE FROM {file_usage} WHERE module = \'contacts\'');
+  variable_del('contacts_block_settings');
+}
+
+
+/**
+ * Restructirize array of address values.
+ */
+function contacts_update_7001() {
+  $site_contacts = utils_load_packed_var('site_contacts');
+  if (isset($site_contacts['address_wrapper'])) {
+    $site_contacts['address_wrapper']['address'] = $site_contacts['address_wrapper']['address']['address'];
+  }
+  utils_save_packed_var('site_contacts', $site_contacts);
+}
+
+/**
+ * Hide contacts message block.
+ */
+function contacts_update_7002() {
+  db_update('block')
+    ->fields(array(
+      'status' => 0,
+      'pages' => 'contacts
+admin/*
+node/add
+node/add/*
+node/*/edit
+user'
+    ))
+    ->condition('module', 'contacts')
+    ->condition('delta', 'message')
+    ->execute();
+}
+
+/**
+ * Remove cockeyed 'address_wrapper' from variable
+ */
+function contacts_update_7003() {
+  $site_contacts = utils_load_packed_var('site_contacts');
+  if (isset($site_contacts['address_wrapper']) && !isset($site_contacts['address'])) {
+    $site_contacts['address'] = $site_contacts['address_wrapper']['address'];
+    unset($site_contacts['address_wrapper']);
+    utils_save_packed_var('site_contacts', $site_contacts);
+  }
+}
+
+/**
+ * Restructurize contacts working time
+ */
+function contacts_update_7004() {
+  $days = array(
+    'sun' => 0,
+    'mon' => 1,
+    'tue' => 2,
+    'wed' => 3,
+    'thu' => 4,
+    'fri' => 5,
+    'sat' => 6,
+  );
+  $site_contacts = utils_load_packed_var('site_contacts');
+  foreach ($site_contacts['additional']['working_time'] as &$item) {
+    foreach ($item['days'] as $day => $val) {
+      $item['days'][$days[$day]] = $val;
+      unset($item['days'][$day]);
+    }
+  }
+  utils_save_packed_var('site_contacts', $site_contacts);
+}
+
+/**
+ * Restructurize contacts working time
+ */
+function contacts_update_7005() {
+  $site_contacts = utils_load_packed_var('site_contacts');
+  if (!empty($site_contacts['additional']['working_time'])) {
+    foreach ($site_contacts['additional']['working_time'] as $idx => $data) {
+      foreach ($data['days'] as $day => $val) {
+        if ($val) {
+          $site_contacts['additional']['working_time'][$idx]['days'][$day] = '' . $day;
+        }
+        else {
+          unset($site_contacts['additional']['working_time'][$idx]['days'][$day]);
+        }
+      }
+    }
+    utils_save_packed_var('site_contacts', $site_contacts);
+  }
+}
+
+/**
+ * Update logotype paths (see also line 281 in contacts.module)
+ */
+function contacts_update_7006() {
+  foreach (db_query('SELECT * FROM {variable} WHERE name REGEXP(\'^theme_.*_settings$\')') as $r) {
+    $r->value = unserialize($r->value);
+    if (!empty($r->value['logo_path'])) {
+      if (preg_match('/^http\:\/\/.*?\//', $r->value['logo_path'])) {
+        $old_logo_path = preg_replace('/^http\:\/\/.*?\//', '', $r->value['logo_path']);
+        $files_path = file_stream_wrapper_get_instance_by_scheme('public')->getDirectoryPath() . '/';
+        if (strpos($old_logo_path, $files_path) === 0) {
+          $new_logo_path = 'public://' . substr($old_logo_path, strlen($files_path));
+          if (is_file($new_logo_path)) {
+            $r->value['logo_path'] = $new_logo_path;
+            variable_set($r->name, $r->value);
+          }
+        }
+      }
+    }
+  }
+}
+
+/**
+ * Update file_usage table. Drop all usages by contacts module.
+ */
+function contacts_update_7007() {
+  db_delete('file_usage')
+    ->condition('module', 'contacts')
+    ->execute();
+}
+
+/**
+ * Change agreement field from textarea to text_format
+ */
+function contacts_update_7008() {
+  $agreement = utils_load_packed_var('company_agreement', NULL);
+  if (!empty($agreement)) {
+    $agreement = array(
+      'user_agreement' => array(
+        'value' => $agreement['user_agreement'],
+        'format' => 'advanced',
+      ),
+    );
+    utils_save_packed_var('company_agreement', $agreement);
+  }
+}
+
+/**
+ * Change theme settings to global theme settings.
+ */
+function contacts_update_7009() {
+  $unity = variable_get('theme_unity_settings');
+  variable_set('theme_settings', $unity);
+  variable_del('theme_unity_settings');
+}
+
+/**
+ * Change detailed field from textarea to text_format
+ */
+function contacts_update_7010() {
+  $site_contacts = utils_load_packed_var('site_contacts');
+  if (!empty($site_contacts) && !empty($site_contacts['additional']['detailed'])) { // fail with $site_contacts['additional']['detailed'] = ''.
+    $site_contacts['additional']['detailed'] = array(
+      'value' => $site_contacts['additional']['detailed'],
+      'format' => 'advanced',
+    );
+    utils_save_packed_var('site_contacts', $site_contacts);
+  }
+}
+
+
+/**
+ * Fix detailed field invalid empty string
+ */
+function contacts_update_7011() {
+  $site_contacts = utils_load_packed_var('site_contacts');
+  if (isset($site_contacts['additional']['detailed']) && !is_array($site_contacts['additional']['detailed'])) { // Remove empty string abandoned in update 7010
+    unset($site_contacts['additional']['detailed']);
+    utils_save_packed_var('site_contacts', $site_contacts);
+  }
+}
+
+/**
+ * Add possibility of translating.
+ */
+function contacts_update_7012() {
+  $language = language_default();
+  $site_contacts = utils_load_packed_var('site_contacts');
+  foreach (array(
+             'site_contacts',
+             'company_agreement',
+             'company_requisites'
+           ) as $key) {
+    $value = utils_load_packed_var($key);
+    utils_save_packed_var($language->language . '_' . $key, $value);
+    variable_del($key);
+  }
+}
+
+/**
+ * Change variables keys.
+ */
+function contacts_update_7013() {
+  $languages = language_list();
+  foreach (array(
+             'site_contacts',
+             'company_agreement',
+             'company_requisites'
+           ) as $key) {
+    foreach ($languages as $langcode => $language) {
+      if ($settings = utils_load_packed_var($langcode . '_' . $key, FALSE)) {
+        utils_save_packed_var('contacts_' . $key . '_' . $langcode, $settings);
+        variable_del($langcode . '_' . $key);
+      }
+    }
+  }
+}
+
+
+/**
+ * Fix errors in users information in site contacts
+ */
+function contacts_update_7014() {
+  foreach (db_query('SELECT * FROM {variable} WHERE name LIKE \'contacts_site_contacts_%\'') as $r) {
+    $var = utils_load_packed_var($r->name, array());
+    if (!empty($var['users'])) {
+      foreach ($var['users'] as $idx => $data) {
+        if (!isset($data['uid']) && (!empty($data['mail']) || !empty($data['name']))) {
+          $query = db_select('users', 'u')->fields('u');
+          $query->condition(!empty($data['mail']) ? 'mail' : (module_exists('social_profile') ? 'lfm' : 'name'), !empty($data['mail']) ? $data['mail'] : $data['name']);
+          $query->range(0, 2);
+          if ($accs = $query->execute()->fetchAll()) {
+            if (count($accs) == 1) {
+              $acc = reset($accs);
+              $var['users'][$idx]['uid'] = $acc->uid;
+              $need_update = TRUE;
+            }
+          }
+        }
+      }
+      if (!empty($need_update)) {
+        utils_save_packed_var($r->name, $var);
+      }
+    }
+  }
+}
+
+/**
+ * Disable contact module
+ */
+function contacts_update_7015() {
+  module_disable(array('contact'));
+}
+
+/**
+ * Remove autoreply.
+ */
+function contacts_update_7016() {
+  variable_del('contacts_autoreply');
+}
+
+
+/**
+ * Update settings structure
+ */
+function contacts_update_7017() {
+  if ($settings = variable_get('contacts_block_message_settings')) {
+    foreach ($settings as $idx => $val) {
+      if ($val !== $idx) {
+        if (!$val) {
+          unset($settings[$idx]);
+        }
+        else {
+          $settings[$idx] = $idx;
+        }
+      }
+    }
+    variable_set('contacts_block_message_settings', $settings);
+  }
+}
+
+
+/**
+ * Install schema
+ */
+function contacts_update_7018() {
+  if (!db_table_exists('contacts_submissions')) {
+    $schema = contacts_schema();
+    db_create_table('contacts_submissions', $schema['contacts_submissions']);
+    return st('Created table contacts_submissions');
+  }
+}
+
+
+/**
+ * Rename settings variable
+ */
+function contacts_update_7019() {
+  variable_del('contacts_block_settings');
+  if ($settings = variable_get('contacts_block_settings_new')) {
+    variable_set('contacts_block_settings', $settings);
+  }
+  variable_del('contacts_block_settings_new');
+}
+
+/**
+ * Rebuild menu for 7021
+ */
+function contacts_update_7020() {
+  menu_rebuild();
+}
+
+/**
+ * Hide items menu: about, agreement, contacts
+ */
+function contacts_update_7021() {
+  $or = db_or()
+    ->condition('router_path', 'about')
+    ->condition('router_path', 'agreement')
+    ->condition('router_path', 'contacts');
+
+  db_update('menu_links')
+    ->fields(array(
+      'hidden' => 1,
+      'customized' => 1,
+    ))
+    ->condition('menu_name', 'main-menu')
+    ->condition($or)
+    ->execute();
+}
+
+/**
+ * Show item menu: contacts
+ */
+function contacts_update_7022() {
+  db_update('menu_links')
+    ->fields(array(
+      'hidden' => 0,
+      'customized' => 1,
+    ))
+    ->condition('menu_name', 'main-menu')
+    ->condition('router_path', 'contacts')
+    ->execute();
+}
+
+
+/**
+* Delete deprecated perm
+*/
+function contacts_update_7023() {
+  db_query('DELETE FROM {role_permission} WHERE module = \'contacts\' AND permission = \'administer contacts\'');
+}
+
+/**
+* Remove about company page.
+*/
+//TODO uncomment after 30.04.17
+//function contacts_update_7024() {
+//  $about_page = utils_load_packed_var('contacts_about_company_ru');
+//  if ($about_page['about_company'] ?? '') {
+//    $about_page['about_company'] = array(
+//      'value' => '',
+//      'format' => 'advanced',
+//    );
+//    utils_save_packed_var('contacts_about_company_ru', $about_page);
+//  }
+//}
+
+
+
+
+
+
+
+

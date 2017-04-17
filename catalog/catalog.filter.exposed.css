@@ -1,0 +1,27 @@
+
+div.catalog-filter-links a.filter-link {
+  /*text-decoration: dashed;*/
+  /*border-bottom: 1px dashed;*/
+}
+
+div.catalog-filter-links .filter-remember-link-delete {
+  text-decoration: none;
+  color: red;
+}
+.filter-collapsed {
+  background-color: green;
+} 
+
+html.js div.catalog-filter-links a.filter-link {
+  background   : url(/misc/menu-expanded.png) 5px 65% no-repeat;
+  padding-left : 15px;
+}
+
+html.js div.catalog-filter-links a.filter-link1.collapsed {
+  background-image    : url(/misc/menu-collapsed.png);
+  background-position : 5px 50%;
+}
+
+
+
+

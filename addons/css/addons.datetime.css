@@ -1,0 +1,4 @@
+.form-type-datetime .form-type-textfield div,
+.form-type-datetime .form-type-textfield label {
+  display: inline;
+}

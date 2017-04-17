@@ -1,0 +1,118 @@
+<?php //$Id: shop_units.module, v 1.0 2011/02/08 11:40:42 Ivan Demenkov Exp $
+/**
+ * Copyright 2011-2017 Itinity Ltd. (itinity.ru). All rights reserved.
+ * Licensed under the GNU General Public License, version 2 or later.
+ */
+
+/**
+ * @file
+ * Add units and custom settings pages.
+ * Register it on regional settings page.
+ *
+ */
+
+ 
+function shop_units_init() {
+	
+}
+
+/**
+ * Implements hook_menu()
+ */
+function shop_units_menu() {
+	$items['admin/config/regional/units'] = array(
+		'title' => 'Units',
+		'description' => 'Configure units for use in shop.',
+		'page callback' => 'drupal_get_form',
+		'page arguments' => array('shop_units_settings_form'),
+		'access arguments' => array('administer site configuration'),
+		'file' => 'shop_units.admin.inc',
+	);
+	return $items;
+}
+
+/**
+* Load units from database
+* @param $unit_ids
+*		List of units ids or single unit id for load. Optional.
+* @param $conditions
+*		Additional filter
+*/
+
+function shop_units_load($unit_ids = NULL, $conditions = array()) {
+	$units = &drupal_static(__FUNCTION__);
+	if (!isset($units)) {
+		$units = array();
+		if ($cache = cache_get('shop_units')) {
+			$units = $cache->data;
+		}
+		else {
+			foreach (db_query('SELECT su.*, suc.title AS category_title FROM {shop_units} su INNER JOIN {shop_unit_categories} suc ON suc.category_id = su.category_id ORDER BY suc.weight + (su.weight / 10000) ASC') as $r) {
+				$units[$r->unit_id] = $r;
+			}
+			cache_set('shop_units', $units);
+		}
+	}
+	if ($unit_ids) {
+		$unit_ids = is_scalar($unit_ids) ? array($unit_ids) : $unit_ids;
+	}
+	$result = $units;
+	foreach ($units as $unit_id => $unit) {
+		if ($unit_ids && !in_array($unit_id, $unit_ids, TRUE)) {
+			unset($result[$unit_id]);
+		}
+		if ($conditions) {
+			foreach ($conditions as $field => $val) {
+				if ($unit->{$field} != $val) {
+					unset($result[$unit_id]);
+					break;
+				}
+			}
+		}
+	}
+	if ($unit_ids && count($unit_ids) == 1) {
+		$id = reset($unit_ids);
+		$result = isset($result[$id]) ? $result[$id] : NULL;
+	}
+	return $result;
+}
+
+
+/**
+ * Get units categories list.
+ */
+function shop_units_categories() {
+	$categories = array();
+	foreach (db_query('SELECT * FROM {shop_unit_categories} ORDER BY weight ASC') as $r) {
+		$r->title = drupal_ucfirst(t($r->title));
+		$categories[$r->category_id] = $r;
+	}
+
+	return $categories;
+}
+
+
+/**
+ * Get units options list for 'select' type form element;
+ * @param $grouped
+ *	Return two-level or flat options list
+ */
+function shop_units_options($grouped = FALSE) {
+	$result = array();
+	$translated_categories = array();
+	foreach (shop_units_load(NULL, array('enabled' => TRUE,)) as $unit_id => $unit) {
+		if ($grouped && !isset($translated_categories[$unit->category_id])) {
+			$translated_categories[$unit->category_id] = drupal_ucfirst(t($unit->category_title));
+		}
+		if (!$grouped) {
+			$result[$unit_id] = html_entity_decode(t($unit->symbol));
+		}
+		else {
+			$result[$translated_categories[$unit->category_id]][$unit_id] = html_entity_decode(t($unit->symbol));
+		}
+	}
+	return $result;
+}
+
+
+

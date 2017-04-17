@@ -1,0 +1,34 @@
+.form-item.changelog  .events-wrapper {
+	max-height:300px;
+	overflow:visible;
+	overflow-y:auto;
+	border: 1px solid rgba(100, 100, 100, .2);
+}
+
+.form-item.changelog .events-wrapper .form-item.changelog-event {
+	margin:0;
+}
+
+.form-item.changelog-event {
+	font-size:.9em;
+	padding:.3em .5em;
+	border-bottom: 1px solid rgba(100, 100, 100, .2);
+}
+
+.form-item.changelog-event.last {
+	border-bottom: none;
+}
+
+.form-item.changelog-event.even {
+	background-color: rgba(160,160,160,.15);
+}
+
+.comment .form-item.changelog-event {
+	border: 1px solid rgba(100, 100, 100, .2);
+	display:inline-block;
+}
+
+
+
+
+

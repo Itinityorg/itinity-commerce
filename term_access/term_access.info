@@ -1,0 +1,7 @@
+; $Id: term_access.info, v 1.0 2013/10/14 10:23:45 itinity Exp $
+name = Term access
+description = Extends access rules for taxonomy.
+dependencies[] = taxonomy
+package = ITK/Access
+version = "7.x-dev"
+core = "7.x"

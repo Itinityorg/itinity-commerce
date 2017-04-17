@@ -1,0 +1,437 @@
+# $Id$
+#
+# Russian translation
+# Copyright YEAR NAME <EMAIL@ADDRESS>
+# Generated from files:
+#  contacts.blocks.inc: n/a
+#  contacts.module, v 1.0 2011/03/10 09:42:26 Ivan Demenkov
+#  contacts.tokens.inc: n/a
+#  contacts.info, v 1.0 2011/03/10 09:42:26 Ivan Demenkov
+#
+#, fuzzy
+msgid ""
+msgstr ""
+"Project-Id-Version: PROJECT VERSION\n"
+"POT-Creation-Date: 2013-09-07 18:34+0300\n"
+"PO-Revision-Date: 2013-09-07 18:34+0300\n"
+"Last-Translator: NAME <EMAIL@ADDRESS>\n"
+"Language-Team: Russian <EMAIL@ADDRESS>\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=utf-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=3; plural=((((n%10)==1)&&((n%100)!=11))?(0):(((((n%10)>=2)&&((n%10)<=4))&&(((n%100)<10)||((n%100)>=20)))?(1):2));\n"
+
+#: contacts.blocks.inc:37 contacts.module:558;599
+msgid "Write message"
+msgstr "Написать сообщение"
+
+#: contacts.blocks.inc:46
+msgid "office @office"
+msgstr "офис @office"
+
+#: contacts.blocks.inc:54 contacts.module:1187;47
+msgid "User agreement"
+msgstr "Пользовательское соглашение"
+
+#: contacts.tokens.inc:11 contacts.module:162;781;55 contacts.info:0
+msgid "Contacts"
+msgstr "Контакты"
+
+#: contacts.tokens.inc:17
+msgid "Company trade name"
+msgstr "Торговое название компании"
+
+#: contacts.module:109
+msgid "Agreement"
+msgstr "Соглашение"
+
+#: contacts.module:123
+msgid "Setting up contacts."
+msgstr "Настройки контактной информации."
+
+#: contacts.module:134
+msgid "View contacts"
+msgstr "Просмотр контактов"
+
+#: contacts.module:143
+msgid "Trade name"
+msgstr "Торговое наименование"
+
+#: contacts.module:150
+msgid "Logotype"
+msgstr "Логотип"
+
+#: contacts.module:155;194
+msgid "Insert a picture"
+msgstr "Вставить изображение"
+
+#: contacts.module:161
+msgid "General organization contacts"
+msgstr "Общие контакты организации"
+
+#: contacts.module:175
+msgid "The form of sending message"
+msgstr "Форма отправки сообщений"
+
+#: contacts.module:183;629
+msgid "Address"
+msgstr "Адрес"
+
+#: contacts.module:189
+msgid "Appearance or location map"
+msgstr "Внешний вид или схема проезда"
+
+#: contacts.module:198
+msgid "Additional information"
+msgstr "Дополнительная информация"
+
+#: contacts.module:204
+msgid "Business time"
+msgstr "Время работы"
+
+#: contacts.module:216;766
+msgid "Business hours"
+msgstr "Часы работы"
+
+#: contacts.module:222
+msgid "from"
+msgstr "от"
+
+#: contacts.module:228;246
+msgid "to"
+msgstr "до"
+
+#: contacts.module:240
+msgid "break on"
+msgstr "перерыв с"
+
+#: contacts.module:250
+msgid "Other information"
+msgstr "Дополнительная информация"
+
+#: contacts.module:254;574
+msgid "Contact persons"
+msgstr "Контактные лица"
+
+#: contacts.module:267
+msgid "Username"
+msgstr "Имя пользователя"
+
+#: contacts.module:273;1142
+msgid "Last First Middle"
+msgstr "Фамилия Имя Отчество"
+
+#: contacts.module:278
+msgid "Sphere of responsibility"
+msgstr "Сфера ответственности"
+
+#: contacts.module:283;583;1147
+msgid "Job"
+msgstr "Должность"
+
+#: contacts.module:288
+msgid "Email"
+msgstr "Email"
+
+#: contacts.module:293;584;896;1323
+msgid "Phone"
+msgstr "Телефон"
+
+#: contacts.module:298;1157;1194;1463
+msgid "Save"
+msgstr "Сохранить"
+
+#: contacts.module:443
+msgid "Your phone"
+msgstr "Ваш телефон"
+
+#: contacts.module:534;1083
+msgid "Juridical name"
+msgstr "Юридическое наименование"
+
+msgctxt "contacts"
+msgid "Full name"
+msgstr "Полное наименование"
+
+#: contacts.module:539
+msgid "Edit contacts"
+msgstr "Изменить контакты"
+
+#: contacts.module:574
+msgid "Contact person"
+msgstr "Контактное лицо"
+
+#: contacts.module:582
+msgid "Given name"
+msgstr "Имя"
+
+#: contacts.module:686
+msgid "Location on the map"
+msgstr "Местоположение на карте"
+
+#: contacts.module:704
+msgid "Sun"
+msgstr "Вс"
+
+#: contacts.module:705
+msgid "Mon"
+msgstr "Пн"
+
+#: contacts.module:706
+msgid "Tue"
+msgstr "Вт"
+
+#: contacts.module:707
+msgid "Wed"
+msgstr "Ср"
+
+#: contacts.module:708
+msgid "Thu"
+msgstr "Чт"
+
+#: contacts.module:709
+msgid "Fri"
+msgstr "Пт"
+
+#: contacts.module:710
+msgid "Sat"
+msgstr "Сб"
+
+#: contacts.module:725
+msgid "Round-the-clock"
+msgstr "Круглосуточно"
+
+#: contacts.module:732
+msgid "on&nbsp;@start&nbsp;to&nbsp;@end"
+msgstr "с&nbsp;@start&nbsp;до&nbsp;@end"
+
+#: contacts.module:742
+msgid "without break"
+msgstr "без перерыва"
+
+#: contacts.module:748
+msgid "break on&nbsp;@start&nbsp;to&nbsp;@end"
+msgstr "перерыв с&nbsp;@start&nbsp;до&nbsp;@end"
+
+#: contacts.module:789
+msgid "Contact information"
+msgstr "Контактная информация"
+
+#: contacts.module:794;862;68
+msgid "Contact"
+msgstr "Обратная связь"
+
+#: contacts.module:814
+msgid "Period of copyright in the site content"
+msgstr ""
+"Период авторского права на содержание "
+"сайта"
+
+#: contacts.module:887
+msgid "The message from a contact form of a site @site from the user @username"
+msgstr ""
+"Сообщение из контактной формы сайта "
+"@site от пользователя @username"
+
+#: contacts.module:894
+msgid "Name"
+msgstr "Название"
+
+#: contacts.module:1088;1244
+msgid "Juridical address"
+msgstr "Юридический адрес"
+
+msgid "Mail address"
+msgstr "Почтовый адрес"
+
+#: contacts.module:1093;1237
+msgid "Taxpayer Identification Number"
+msgstr ""
+"Индивидуальный Номер "
+"Налогоплательщика"
+
+msgid "TIN"
+msgstr "ИНН"
+
+#: contacts.module:1099;1238
+msgid "Taxpayer record validity code"
+msgstr "Код причины постановки"
+
+msgid "TRVC"
+msgstr "КПП"
+
+#: contacts.module:1105;1239
+msgid "Settlement account"
+msgstr "Расчетный счет"
+
+#: contacts.module:1111;1240
+msgid "Bank identification code"
+msgstr "Банковский идентификационный код"
+
+msgid "BIC"
+msgstr "БИК"
+
+#: contacts.module:1117;1241
+msgid "Bank name"
+msgstr "Имя банка"
+
+#: contacts.module:1122;1242
+msgid "Correspondent Account"
+msgstr "Корреспондентский счет"
+
+#: contacts.module:1128;1243
+msgid "The main state registration number"
+msgstr ""
+"Основной государственный "
+"регистрационный номер"
+
+msgid "MSRN"
+msgstr "ОГРН"
+
+
+#: contacts.module:1134
+msgid "The representative of the company"
+msgstr "Представитель компании"
+
+#: contacts.module:1135
+msgid "The company concludes contracts on behalf of the representative"
+msgstr ""
+"Компания заключает договоры от имени "
+"представителя"
+
+#: contacts.module:1152
+msgid "Base"
+msgstr "Базовый"
+
+#: contacts.module:1184
+msgid "View user agreement"
+msgstr ""
+"Просмотр пользовательского "
+"соглашения"
+
+#: contacts.module:1225
+msgid "Edit agreement"
+msgstr "Изменить соглашение"
+
+#: contacts.module:1249;30
+msgid "Requisites"
+msgstr "Реквизиты"
+
+#: contacts.module:1266
+msgid "The changes have been saved."
+msgstr "Изменения сохранены."
+
+#: contacts.module:1318
+msgid "Your name"
+msgstr "Ваше имя"
+
+#: contacts.module:1328
+msgid "Email address"
+msgstr "Электронный адрес"
+
+#: contacts.module:1338
+msgid "Message"
+msgstr "Сообщение"
+
+#: contacts.module:1343
+msgid "Send yourself a copy."
+msgstr "Прислать мне копию."
+
+#: contacts.module:1357
+msgid "Submit"
+msgstr "Отправить"
+
+#: contacts.module:1400
+msgid "Message from the contact form on the site @site user @lfm"
+msgstr ""
+"Сообщение из контактной формы на "
+"сайте @site от пользователя @lfm"
+
+#: contacts.module:1413
+msgid "Your message from the contact form on the site @site received"
+msgstr ""
+"Ваше сообщение из контактной формы на "
+"сайте @site получено"
+
+#: contacts.module:1419
+msgid "A copy of your message from the contact form on the site @site"
+msgstr ""
+"Копия вашего сообщения из контактной "
+"формы на сайте @site"
+
+#: contacts.module:1423
+msgid "We will get back to you shortly."
+msgstr "Мы свяжемся с вами в ближайшее время."
+
+#: contacts.module:1426
+msgid "\r\nLFM: @lfm<br/>\r\nPhone: @phone<br/>\r\nEmail address: @mail<br/>\r\nMessage: @message<br/>"
+msgstr "\r\nФИО: @lfm<br/>\r\nТелефон: @phone<br/>\r\nЭлектронный адрес: @mail<br/>\r\nСообщение:\r\n@message<br/>"
+
+#: contacts.module:1448
+msgid "Submitted contact form"
+msgstr "Отправлена форма контактов"
+
+#: contacts.module:1449
+msgid "When user submit site-wide contact form"
+msgstr ""
+"Когда пользователь отправляет общую "
+"форму обратной связи"
+
+#: contacts.module:1458
+msgid "Automatic reply"
+msgstr "Автоматический ответ"
+
+#: contacts.module:10
+msgid "Information about company"
+msgstr "Информация о компании"
+
+#: contacts.module:21
+msgid "About company"
+msgstr "О компании"
+
+msgid "Edit info about company"
+msgstr "Изменить информацию о компании"
+
+#: contacts.module:38
+msgid "Contact form"
+msgstr "Форма контактов"
+
+#: contacts.info:0
+msgid "Add contacts setting pages"
+msgstr ""
+"Добавить страницы настройки "
+"контактов"
+
+#: contacts.info:0
+msgid "ITK"
+msgstr ""
+
+
+msgid "View contacts form submission"
+msgstr "Просмотр сообщения формы контактов"
+
+msgid "Page from message sent"
+msgstr "Страница, откуда отослано сообщение"
+
+msgid "URL of the page from which the message was sent"
+msgstr "Адрес страницы, с которой отправлено сообщение"
+
+
+msgid "Sender"
+msgstr "Отправитель"
+
+msgid "Submission date"
+msgstr "Дата отправки"
+
+
+
+
+
+
+
+
+
+
+
+
+

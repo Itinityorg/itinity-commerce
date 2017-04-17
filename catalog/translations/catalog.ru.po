@@ -1,0 +1,621 @@
+# $Id$
+#
+# Russian translation of Drupal (general)
+# Copyright YEAR NAME <EMAIL@ADDRESS>
+# Generated from files:
+#  catalog.module, v 1.0 2011/02/02 15:53:12 admin
+#  catalog.info, v 1.0 2011/02/02 15:53:12 admin
+#
+#, fuzzy
+msgid ""
+msgstr ""
+"Project-Id-Version: PROJECT VERSION\n"
+"POT-Creation-Date: 2011-12-05 12:51+0200\n"
+"PO-Revision-Date: 2011-12-05 12:51+0200\n"
+"Last-Translator: NAME <EMAIL@ADDRESS>\n"
+"Language-Team: Russian <EMAIL@ADDRESS>\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=utf-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=3; plural=((((n%10)==1)&&((n%100)!=11))?(0):(((((n%10)>=2)&&((n%10)<=4))&&(((n%100)<10)||((n%100)>=20)))?(1):2));\n"
+
+
+
+#: catalog.module:489;499;514
+msgid "Weight in lists"
+msgstr "Вес в списках"
+
+#: catalog.module:498;520
+msgid "Without weight"
+msgstr "Без веса"
+
+#: catalog.module:500
+msgid "Materials with this option always have a higher priority in sorting in listings relatively to the materials without the weight."
+msgstr "Материалы с этой опцией всегда имеют более высокий приоритет при сортировке в списках по отношению к материалам без веса."
+
+#: catalog.module:543
+msgid "Target"
+msgstr ""
+
+
+#: catalog.module:547;585;2389
+msgid "Content list"
+msgstr "Список материалов"
+
+#: catalog.module:687
+msgid "No available content lists. <a href=\"@link\">Add content list</a>."
+msgstr "Нет доступных списков материалов. <a href=\"@link\">Добавить список материалов</a>."
+
+#: catalog.module:740
+msgid "Informer"
+msgstr "Информер"
+
+#: catalog.module:1197
+msgid "Content list title"
+msgstr "Наименование списка материалов"
+
+#: catalog.module:1311
+msgid "List description"
+msgstr "Описание списка"
+
+#: catalog.module:1216;2514
+msgid "Content selection"
+msgstr "Выборка содержимого"
+
+#: catalog.module:1223
+msgid "<Any content types>"
+msgstr "<Любые типы содержимого>"
+
+#: catalog.module:1253
+msgid "<Any terms>"
+msgstr "<Любые категории>"
+
+#: catalog.module:1263
+msgid "All terms in %vocabulary vocabulary"
+msgstr "Все категории словаря %vocabulary"
+
+#: catalog.module:1278
+msgid "Any vocabularies"
+msgstr "Все словари"
+
+#: catalog.module:1302
+msgid "Content displaying options"
+msgstr "Параметры отображения содержимого"
+
+
+#: catalog.module:1308
+msgid "Please note, if you have a random sort, the pager will not be displayed."
+msgstr "Обратите внимание, что если вы настроили случайную сортировку, то постраничная навигация отображаться не будет."
+
+#: catalog.module:1313
+msgid "Display materials are not older than"
+msgstr "Отображать материалы не старше"
+
+#: catalog.module:1314
+msgid "Сontents of the list"
+msgstr "Содержимое списка"
+
+#: catalog.module:1315
+msgid "To display all of the materials without any restrictions leave blank or enter zero."
+msgstr "Для отображения всех материалов без ограничений оставьте пустым или введите ноль."
+
+#: catalog.module:1317
+msgid "days"
+msgstr "дней"
+
+#: catalog.module:1322;1383
+msgid "Depth of a conclusion of objects on taxonomy"
+msgstr "Глубина вывода объектов по таксономии"
+
+#: catalog.module:1323
+msgid "All levels"
+msgstr "Все уровни"
+
+#: catalog.module:1324
+msgid "Whether to display in a current category the objects attached to subcategories of the dictionary."
+msgstr "Отображать ли в текущей категории объекты, прикреплённые к подкатегориям словаря."
+
+#: catalog.module:1329;1389
+msgid "Rows"
+msgstr "Строки"
+
+#: catalog.module:1335;1395
+msgid "Cols"
+msgstr "Колонки"
+
+#: catalog.module:1341
+msgid "Alignment columns by center"
+msgstr "Выравнивание в колонках по центру"
+
+#: catalog.module:1341
+msgid "On the left edge"
+msgstr "По левому краю"
+
+#: catalog.module:1341
+msgid "On the center"
+msgstr "По центру"
+
+#: catalog.module:1346
+msgid "Text zoom"
+msgstr "Масштаб текста"
+
+#: catalog.module:1357
+msgid "Display a gallery of images in a popup window by clicking on the picture."
+msgstr "Показать всплывающую галерею картинок при клике по изображению"
+
+
+msgid "Vocabulary for materials filtration"
+msgstr "Словарь для фильтрации материалов"
+
+#: catalog.module:1384
+msgid "Don't display"
+msgstr "Не отображать"
+
+#: catalog.module:1444
+msgid "Generate sub tree contains children objects"
+msgstr "Генерировать полное дерево с дочерними объектами"
+
+#: catalog.module:1848
+msgid "There is currently no content in this list."
+msgstr "Материалы отсутствуют в данном списке."
+
+
+#: catalog.module:2258
+msgid "Created date, oldest first"
+msgstr "Дата создания, сначала старые"
+
+#: catalog.module:2260
+msgid "Changed date, oldest first"
+msgstr "Дата изменения, сначала старые"
+
+#: catalog.module:2261
+msgid "Alphabetical"
+msgstr "По алфавиту"
+
+
+#: catalog.module:2272
+msgid "Administer content lists"
+msgstr "Управлять списками материалов"
+
+#: catalog.module:2297
+msgid "Are you sure want delete the custom content list %title?"
+msgstr "Вы действительно хотите удалить список материалов %title?"
+
+#: catalog.module:2305
+msgid "The content list %title has been deleted."
+msgstr "Список материалов %title был удален."
+
+#: catalog.module:2510
+msgid "Content listn title and machine name"
+msgstr "Заголовок списка материалов и машинное имя"
+
+#: catalog.module:2515
+msgid "Content selector settings"
+msgstr "Настройка выборки содержимого"
+
+#: catalog.module:2519
+msgid "View setup"
+msgstr "Настройка представления"
+
+#: catalog.module:2520
+msgid "Display settings for aggregated items"
+msgstr "Настройки отображения агрегированных элементов"
+
+#: catalog.module:2536
+msgid "Representation of current category"
+msgstr "Представление текущей категории"
+
+#: catalog.module:2537
+msgid "Current term"
+msgstr "Текущая категория"
+
+#: catalog.module:2541
+msgid "First pager"
+msgstr ""
+
+#: catalog.module:2542;2558
+msgid "Navigation links"
+msgstr ""
+
+#: catalog.module:2547
+msgid "Term list"
+msgstr ""
+
+#: catalog.module:2548
+msgid "List of categories"
+msgstr "Список категорий"
+
+#: catalog.module:2553
+msgid "Assigned content"
+msgstr ""
+
+#: catalog.module:2557
+msgid "Second pager"
+msgstr ""
+
+#: catalog.module:2562
+msgid "Links for adding term or material"
+msgstr "Ссылки для добавления термина и материала"
+
+#: catalog.module:2699
+msgid "informer"
+msgstr "информер"
+
+#: catalog.module:2770
+msgid "Override the default title for the block. Use <em>!placeholder</em> to display no title, or leave blank to use the default block title."
+msgstr "Введите название блока. Для отключения вывода названия, используйте запись <em>!placeholder</em>. Оставьте это поле незаполненным, чтобы позволить блоку использовать заголовок по умолчанию или генерировать его динамически."
+
+#: catalog.module:2789
+msgid "Exclude object already displayed in main content"
+msgstr "Исключить объект уже показанный в основном контенте"
+
+#: catalog.module:2848
+msgid "The informer has been created."
+msgstr "Информер был создан."
+
+#: catalog.module:2859
+msgid "delete"
+msgstr "удалить"
+
+#: catalog.module:2883
+msgid "The informer %name has been removed."
+msgstr "Информер %name был удален."
+
+#: catalog.module:2885
+msgid "Informer has not been deleted."
+msgstr "Информер не был удален."
+
+
+#: catalog.module:2306
+msgid "Deleted content list %title."
+msgstr "Удален список материалов %title"
+
+#: catalog.module:2644
+msgid "Material lists"
+msgstr "Списки материалов"
+
+#: catalog.module:2645
+msgid "Manage material lists"
+msgstr "Управление списками материалов"
+
+
+#: catalog.module:2666;2680
+msgid "Add informer"
+msgstr "Добавить информер"
+
+msgid "Add term into \"%name\" vocabulary"
+msgstr "Добавить категорию в словарь \"%name\""
+
+msgid "Add %name into \"%term\" term"
+msgstr "Добавить %name в категорию \"%term\""
+
+msgid "Add %name"
+msgstr "Добавить %name"
+
+msgid "Using table"
+msgstr "Таблицей"
+
+msgid "Using list"
+msgstr "Списком"
+
+msgid "cols X"
+msgstr "колонок на"
+
+msgid "rows"
+msgstr "строк"
+
+
+msgid "Centered cells"
+msgstr "Центрировать содержимое ячеек"
+
+
+
+#: catalog.info:0;0
+msgid "Catalog"
+msgstr "Каталог"
+
+msgid "Split every object by fields into shared table cells"
+msgstr "Разбить каждый объект по полям в ячейки общей таблицы"
+
+msgid "%fieldname translations"
+msgstr "Переводы поля %fieldname"
+
+
+msgid "Display materials that specific to the current category list"
+msgstr "Отображать материалы относящиеся только к текущей категории списка"
+
+msgid "Output objects of type"
+msgstr "Выводить объекты типа"
+
+msgid "by vocabulary"
+msgstr "по словарю"
+
+msgid "from category"
+msgstr "из категории"
+
+
+msgid "Category view on level 0"
+msgstr "Просмотр категорий на уровне 0"
+
+msgid "Category view on level 1"
+msgstr "Просмотр категорий на уровне 1"
+
+msgid "Category view on level 2"
+msgstr "Просмотр категорий на уровне 2"
+
+msgid "Category view on level 3"
+msgstr "Просмотр категорий на уровне 3"
+
+msgid "Category view on level 4"
+msgstr "Просмотр категорий на уровне 4"
+
+msgid "Category view on level 5"
+msgstr "Просмотр категорий на уровне 5"
+
+msgid "Category view on level 6"
+msgstr "Просмотр категорий на уровне 6"
+
+msgid "Category view on level 7"
+msgstr "Просмотр категорий на уровне 7"
+
+msgid "Category view on level 8"
+msgstr "Просмотр категорий на уровне 8"
+
+msgid "Category view on level 9 and more"
+msgstr "Просмотр категорий на уровне 9 и ниже"
+
+
+
+msgid "Show only actual materials"
+msgstr "Показывать только актуальные материалы"
+
+# msgid "Contents of the informer"
+# msgstr "Содержимое информера"
+
+msgid "Informer displaying options"
+msgstr "Параметры отображения информера"
+
+msgid "Alignment in cells"
+msgstr "Выравнивание в ячейках"
+
+msgid "The path %path is already reserved by system."
+msgstr "Путь %path зарезервирован системой."
+
+msgid "The alias is already in use in %uri."
+msgstr "Синоним уже назначен для страницы %uri."
+
+msgid "edit tree"
+msgstr "редактировать дерево"
+
+msgid "All lists"
+msgstr "Все списки"
+
+msgid "Additional restrictions"
+msgstr "Дополнительные ограничения"
+
+msgctxt "Verb"
+msgid "Sort"
+msgstr "Сортировать"
+
+msgid "Content sorting"
+msgstr "Сортировка содержимого"
+
+msgid "Sorting allowed to user"
+msgstr "Сортировка доступна пользователю"
+
+msgid "Sorting order by default"
+msgstr "Порядок сортировки по умолчанию"
+
+msgid "Reverse order"
+msgstr "В обратном порядке"
+
+msgid "By field %name !descr"
+msgstr "По полю %name !descr"
+
+msgid "can slow down the server"
+msgstr "может замедлить работу сервера"
+
+msgid "Materials with value of %name field in between"
+msgstr "Материалы со значением поля %name между"
+
+msgid "Materials with checked %name option"
+msgstr "Материалы с включенной опцией %name"
+
+msgid "Only materials that have picture in field %name"
+msgstr "Только материалы имеющие картинку в поле %name"
+
+msgid "Actuality threshold"
+msgstr "Порог актуальности"
+
+msgid "By weight"
+msgstr "По весу"
+
+msgid "Catalog description"
+msgstr "Описание списка"
+
+msgid "Text field contains information about this list"
+msgstr "Текстовое поле с информацией относящейся непосредственно к данному списку"
+
+msgid "Terms"
+msgstr "Категории"
+
+msgid "Sorting control"
+msgstr "Управление сортировкой"
+
+msgid "List sorting tool"
+msgstr "Управление сортировкой списка"
+
+msgid "Selected content"
+msgstr "Отобранное содержимое"
+
+msgid "Only active polls"
+msgstr "Только активные голосования"
+
+msgid "By modification date"
+msgstr "По дате изменения"
+
+msgid "Random"
+msgstr "Случайно"
+
+msgid "By author"
+msgstr "По автору"
+
+msgid "Set up view mode for terms in %vocabulary"
+msgstr "Настройте отображение терминов для словаря %vocabulary"
+
+msgid "Table output"
+msgstr "Табличный вывод"
+
+msgid "Set up sorting links displaying"
+msgstr "Настройте отображение ссылок сортировки"
+
+msgid "Pagination tool"
+msgstr "Инструмент постраничной навигации"
+
+msgid "Order by"
+msgstr "Сортировать по"
+
+msgid "Except users"
+msgstr "Исключая пользователей"
+
+msgid "Enter comma-separated user ids list, e.g \"1, 2, 3\""
+msgstr "Введите список идентификаторов пользователей, разделенных запятыми, например \"1,2,3\""
+
+msgid "Method of adding links"
+msgstr "Способ добавления ссылки"
+
+msgid "Enter URL"
+msgstr "Ввод URL"
+
+msgid "Content list selection"
+msgstr "Выбор списка"
+
+msgid "This feature is locked because current menu link is used in autogenerated menu tree. See catalog <a target=\"_blank\" href=\"@url\">%title</a> settings."
+msgstr "Данная возможность заблокирована по причине использования текущего пункта меню в составе автоматически генерируемого дерева. См. настройки списка материалов <a target=\"_blank\" href=\"@url\">%title</a>."
+
+msgid "Display as"
+msgstr "Показывать как"
+
+
+msgid "Current category"
+msgstr "Текущая категория"
+
+msgid "Children categories"
+msgstr "Дочерние категории"
+
+msgid "Representation of current category in <a href=\"@url\" target=\"_blank\">full mode</a>"
+msgstr "Представление текущей категории в <a href=\"@url\" target=\"_blank\">полном режиме просмотра</a>"
+
+msgid "List of %vocabulary categories or subcategories according to current state, in <a href=\"@url\" target=\"_blank\">\"teaser\" view mode</a>"
+msgstr "Список категорий или подкатегорий словаря %vocabulary в зависимости от текущего состояния, в <a href=\"@url\" target=\"_blank\">режиме просмотра \"в списке\"</a>"
+
+msgid "Pager copy"
+msgstr "Пейджер копия"
+
+msgid "This copy can be used for placing pagers as above, so below of the list."
+msgstr "Эту копию можно использовать для размещения пейджеров как вверху, так и внизу списка"
+
+msgid "%type type materials in <a href=\"@url\" target=\"_blank\">\"teaser\" view mode</a>"
+msgstr "Материалы типа %type в <a href=\"@url\" target=\"_blank\">режиме просмотра \"в списке\"</a>"
+
+msgid "Users in <a href=\"@url\" target=\"_blank\">\"teaser\" view mode</a>"
+msgstr "Пользователи в <a href=\"@url\" target=\"_blank\">режиме просмотра \"в списке\"</a>"
+
+msgid "List %name"
+msgstr "Список %name"
+
+msgid "Only materials belonging to the currently displayed user profile"
+msgstr "Только материалы принадлежащие просматриваемому профилю"
+
+msgid "Informer will be visible only on users pages like \"user/123\""
+msgstr "Информер будет виден только на пользовательких страницах наподобие \"user/123\""
+
+msgid "Only those tasks for which the user is responsible"
+msgstr "Только те задачи, где пользователь ответственный"
+
+msgid "Only root projects"
+msgstr "Только корневые проекты"
+
+
+msgid "Main settings"
+msgstr "Общие настройки"
+
+msgid "By published"
+msgstr "По опубликованности"
+
+msgid "Switches"
+msgstr "Переключатели"
+
+msgid "Display modes"
+msgstr "Режимы отображения"
+
+msgid "Enabled modes"
+msgstr "Отображать режимы"
+
+msgid "Sorting order"
+msgstr "Порядок сортировки"
+
+msgid "Content sorting by default"
+msgstr "Сортировка содержимого по умолчанию"
+
+msgid "Add sort criterion"
+msgstr "Добавить критерий сортировки"
+
+msgid "Filter & Sorting"
+msgstr "Фильтры и Сортировка"
+
+msgid "Filter for user"
+msgstr "Фильтр для пользователя"
+
+msgid "Sorting for user"
+msgstr "Сортировка для пользователя"
+
+msgid "Remember"
+msgstr "Запомнить"
+
+msgid "For all"
+msgstr "Для всех"
+
+msgid "Form is expanded"
+msgstr "Форма развернута"
+
+msgid "Alignment by columns"
+msgstr "Выравнивание по колонкам"
+
+msgid "Title"
+msgstr "Заголовок"
+
+msgid "Title contains this text"
+msgstr "Заголовок содержит этот текст"
+
+msgid "+ @node_type in %term"
+msgstr "+ @node_type в %term"
+
+msgid "Project readiness"
+msgstr "Готовность проекта"
+
+msgid "Add a link to the list of materials"
+msgstr "Добавить ссылку на список материалов"
+
+msgid "Title links"
+msgstr "Название ссылки"
+
+msgid "URL links"
+msgstr "Адрес ссылки"
+
+msgid "Classes for links"
+msgstr "Классы для ссылки"
+
+msgid "All list"
+msgstr "Весь список"
+
+msgid "Text contains"
+msgstr "Текст содержит"
+
+msgid "Field %name"
+msgstr "Поле %name"
+
+
+
+
+

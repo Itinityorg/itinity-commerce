@@ -1,0 +1,351 @@
+<?php //$Id: money.install, v 1.0 2015/05/07 17:44:52 itinity Exp $
+
+
+
+/**
+* Implements hook_install()
+*/
+function money_install() {
+  
+}
+
+
+/**
+* Implements hook_uninstall()
+*/
+function money_uninstall() {
+  variable_del('money_payment_systems_settings');
+}
+
+
+/**
+* Implements hook_schema()
+*/
+function money_schema() {
+  $schema = array();
+  $schema['money_transactions'] = array(
+    'description' => 'Storage for money transactions',
+    'fields' => array(
+      'id' => array(
+        'description' => 'Unique transaction identifier; autoincrement',
+        'type' => 'serial',
+        'not null' => TRUE,
+      ),
+      'internal_document_id' => array(
+        'description' => 'Store and index additional identifier used in any payment systems. Can be need for avoid duplicated transactions',
+        'type' => 'varchar',
+        'length' => 128,
+        'not null' => FALSE,
+      ),
+      'operation' => array(
+        'description' => 'Operation machine name',
+        'type' => 'varchar',
+        'length' => '64',
+        'not null' => TRUE,
+      ),
+      'operation_key' => array(
+        'description' => 'Optional operation identifier',
+        'type' => 'varchar',
+        'length' => '64',
+        'not null' => FALSE,
+      ),
+      'operation_info_snapshot' => array(
+        'description' => 'Human-readable name of operation, can be needed when module that implements this operation was uninstalled.',
+        'type' => 'text',
+        'not null' => FALSE,
+      ),
+      'source' => array(
+        'description' => 'Money source machine name',
+        'type' => 'varchar',
+        'length' => '64',
+        'not null' => TRUE,
+      ),
+      'source_key' => array(
+        'description' => 'Optional money source identifier',
+        'type' => 'varchar',
+        'length' => '64',
+        'not null' => TRUE,
+        'default' => '',
+      ),
+      'source_balance_snapshot' => array(
+        'description' => 'Source balance after operation',
+        'type' => 'numeric',
+        'not null' => TRUE,
+        'precision' => '10',
+        'scale' => '2',
+      ),
+      'recipient' => array(
+        'description' => 'Recipient machine name',
+        'type' => 'varchar',
+        'length' => '64',
+        'not null' => TRUE,
+      ),
+      'recipient_key' => array(
+        'description' => 'Optional recipient identifier',
+        'type' => 'varchar',
+        'length' => '64',
+        'not null' => TRUE,
+        'default' => '',
+      ),
+      'recipient_balance_snapshot' => array(
+        'description' => 'Recipient balance after operation',
+        'type' => 'numeric',
+        'not null' => TRUE,
+        'precision' => '10',
+        'scale' => '2',
+      ),
+      'sum' => array(
+        'description' => 'Operable sum',
+        'type' => 'numeric',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+        'precision' => '10',
+        'scale' => '2',
+      ),
+      'status' => array(
+        'description' => 'Complete/incomplete flag',
+        'type' => 'int',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+      ),
+      'uid' => array(
+        'description' => 'Account which initialize transaction',
+        'type' => 'int',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+      ),
+      'timestamp' => array(
+        'description' => 'Execution timestamp',
+        'type' => 'int',
+        'not null' => TRUE,
+      ),
+      'mail' => array(
+        'description' => 'E-mail of account which initialize transaction. Can be needed for guests and deleted users.',
+        'type' => 'varchar',
+        'length' => '128',
+        'not null' => TRUE,
+      ),
+      'ip' => array(
+        'description' => 'Client ip address',
+        'type' => 'varchar',
+        'length' => '64',
+        'not null' => TRUE,
+      ),
+      'uri' => array(
+        'description' => 'Page on which transaction was initialized',
+        'type' => 'varchar',
+        'length' => '255',
+        'not null' => TRUE,
+      ),
+      'request_uri' => array(
+        'description' => 'Raw url of page on which transaction was initialized',
+        'type' => 'varchar',
+        'length' => '255',
+        'not null' => TRUE,
+      ),
+      'data' => array(
+        'description' => 'Additional data that was placed into transaction object',
+        'type' => 'blob',
+        'not null' => TRUE,
+      ),
+    ),
+    'primary key' => array('id'),
+    'indexes' => array(
+      'internal_document_id' => array('internal_document_id'),
+      'ip' => array('ip'),
+      'mail' => array('mail'),
+      'operation' => array('operation'),
+      'operation_key' => array('operation_key'),
+      'recipient' => array('recipient'),
+      'recipient_key' => array('recipient_key'),
+      'source' => array('source'),
+      'source_key' => array('source_key'),
+      'status' => array('status'),
+      'sum' => array('sum'),
+      'timestamp' => array('timestamp'),
+      'uid' => array('uid'),
+      'uri' => array('uri'),
+    ),
+  );
+  $schema['money_hold'] = array(
+    'description' => 'Holded moneys storage',
+    'fields' => array(
+      'operation' => array(
+        'description' => 'Operation machine name',
+        'type' => 'varchar',
+        'length' => '64',
+        'not null' => TRUE,
+      ),
+      'operation_key' => array(
+        'description' => 'Optional operation identifier',
+        'type' => 'varchar',
+        'length' => '64',
+        'not null' => TRUE,
+      ),
+      'source' => array(
+        'description' => 'Source machine nam',
+        'type' => 'varchar',
+        'length' => '64',
+        'not null' => TRUE,
+      ),
+      'source_key' => array(
+        'description' => 'Optional source identifier',
+        'type' => 'varchar',
+        'length' => '64',
+        'not null' => TRUE,
+        'default' => '',
+      ),
+      'sum' => array(
+        'description' => 'Sum to operate',
+        'type' => 'numeric',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+        'precision' => '10',
+        'scale' => '2',
+      ),
+      'uid' => array(
+        'description' => 'Account which initialize transaction',
+        'type' => 'int',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+      ),
+      'timestamp' => array(
+        'description' => 'Current timestamp',
+        'type' => 'int',
+        'not null' => TRUE,
+      ),
+    ),
+    'unique keys' => array(
+      'operation_key_source_key' => array('operation', 'operation_key', 'source', 'source_key',)
+    ),
+    'indexes' => array(
+      'timestamp' => array('timestamp'),
+      'uid' => array('uid'),
+    ),
+  );
+
+
+  return $schema;
+}
+
+
+/**
+* Update {money_transactions} and {money_hold} tables
+*/
+function money_update_7001() {
+  db_add_field('money_hold', 'source_key', array(
+    'description' => 'TODO: please describe this field!',
+    'type' => 'varchar',
+    'length' => '64',
+    'not null' => FALSE,
+  ));
+  db_add_index('money_hold', 'source_key', array('source_key'));
+  db_drop_unique_key('money_hold', 'operation_key_source');
+  db_add_unique_key('money_hold', 'operation_key_source_key', array('operation', 'operation_key', 'source', 'source_key',));
+  foreach (db_query('SELECT * FROM {money_transactions}') as $r) {
+    $update = FALSE;
+    if (preg_match('/^(.+?):(.*?)$/', $r->source, $m)) {
+      $r->source = $m[1];
+      $r->source_key = $m[2];
+      $update = TRUE;
+    }
+    if (preg_match('/^(.+?):(.*?)$/', $r->recipient, $m)) {
+      $r->recipient = $m[1];
+      $r->recipient_key = $m[2];
+      $update = TRUE;
+    }
+    if ($update) {
+      db_query('UPDATE {money_transactions} SET source = :s, source_key = :sk, recipient = :r, recipient_key = :rk WHERE id = :id', array(
+        ':s' => $r->source,
+        ':sk' => $r->source_key,
+        ':r' => $r->recipient,
+        ':rk' => $r->recipient_key,
+        ':id' => $r->id,
+      ));
+    }
+  }
+  /*
+  
+    'unique keys' => array(
+      'operation_key_source' => array('operation', 'operation_key', 'source')
+    ),
+    */
+  foreach (db_query('SELECT * FROM {money_hold}') as $r) {
+    if (preg_match('/^(.+?):(.*?)$/', $r->source, $m)) {
+      db_query('UPDATE {money_hold} SET source = :s, source_key = :k WHERE source = :s1', array(
+        ':s' => $m[1],
+        ':k' => $m[2],
+        ':s1' => $r->source,
+      ));
+    }
+  }
+}
+
+/**
+* Update {money_transactions} and {money_hold} tables
+*/
+function money_update_7002() {
+  db_query('UPDATE {money_transactions} SET source_key = \'\' WHERE (source_key IS NULL)');
+  db_query('UPDATE {money_transactions} SET recipient_key = \'\' WHERE (recipient_key IS NULL)');
+  db_query('UPDATE {money_hold} SET source_key = \'\' WHERE (source_key IS NULL)');
+  db_change_field('money_transactions', 'source_key', 'source_key', array(
+    'description' => 'TODO: please describe this field!',
+    'type' => 'varchar',
+    'length' => '64',
+    'not null' => TRUE,
+    'default' => '',
+  ));
+  db_change_field('money_transactions', 'recipient_key', 'recipient_key', array(
+    'description' => 'TODO: please describe this field!',
+    'type' => 'varchar',
+    'length' => '64',
+    'not null' => TRUE,
+    'default' => '',
+  ));
+  db_change_field('money_hold', 'source_key', 'source_key', array(
+    'description' => 'TODO: please describe this field!',
+    'type' => 'varchar',
+    'length' => '64',
+    'not null' => TRUE,
+    'default' => '',
+  ));
+}
+
+
+/**
+* Drop unnecessary indexes
+*/
+function money_update_7003() {
+  db_drop_index('money_hold', 'operation');
+  db_drop_index('money_hold', 'operation_key');
+  db_drop_index('money_hold', 'source');
+  db_drop_index('money_hold', 'source_key');
+}
+
+
+/**
+* Add internal_document_id column in {money_transactions}
+*/
+function money_update_7004() {
+  db_add_field('money_transactions', 'internal_document_id', array(
+    'description' => 'Store and index additional identifier used in any payment systems. Can be need for avoid duplicated transactions',
+    'type' => 'varchar',
+    'length' => 128,
+    'not null' => FALSE,
+  ));
+  db_add_index('money_transactions', 'internal_document_id', array('internal_document_id',));
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+

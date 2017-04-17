@@ -1,0 +1,7 @@
+; $Id: field_icq.info, v 1.0 2011/03/30 12:02:00 Ivan Demenkov Exp $
+name = ICQ field
+description = Add icq field and widget type
+package = ITK/Fields
+version = 7.x
+core = 7.x
+dependencies[] = addons

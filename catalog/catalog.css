@@ -1,0 +1,284 @@
+.catalog-object.inactive {
+  background-color: #fff4f4;
+}
+
+.catalog-table {
+  margin: 0 -.5em;
+}
+
+.table-view.catalog-table {
+  width: 100%;
+  margin: 0;
+}
+
+.block-colors .catalog-table, .gallery-block-enabled .catalog-table {
+  margin: 0;
+}
+
+.region-content .catalog-table {
+  margin-bottom: 1em;
+}
+
+.catalog-table.table-invisible, .catalog-table.table-invisible tr.catalog-row.even, .catalog-table.table-invisible tr.catalog-row.odd, 
+.catalog-table.table-invisible td, .catalog-table.table-invisible tbody {
+  background-color: transparent;
+  border: none;
+}
+
+.catalog-cell {
+  vertical-align: top;
+  padding: 0;
+}
+
+.catalog-cell .node {
+  margin-left: .5em;
+  margin-right: .5em;
+}
+
+.catalog-cell.first .node {
+  margin-left: 0;
+}
+
+.catalog-cell.last .node {
+  margin-right: 0;
+}
+
+.catalog-table.centered .catalog-cell,
+.catalog-table.centered .node, .catalog-table.centered .profile, .catalog-table.centered.mode-table td, .catalog-table.centered.terms .parent-term,
+.catalog-table.table-view.nodes.centered td, .catalog-table.table-view.nodes.centered th {
+  text-align: center;
+}
+
+.catalog-table.centered .float-left, .catalog-table.centered .float-next {
+  float: none;
+}
+
+.child-terms {
+  margin-left: 1.5em;
+}
+
+.catalog-row {
+  vertical-align: top;
+}
+
+.taxonomy-term.sub-teaser h2 {
+  font-size: 1.27em;
+}
+
+.catalog-table.terms .term {
+  margin: 0;
+  padding: 0;
+}
+
+.catalog-table.not-centered.terms .term .term {
+  padding-left: 1em;
+}
+.catalog-table.terms .term .term {
+  font-size: 90%;
+}
+
+.catalog-table.terms .term .term .term .term {
+  font-size: 100%;
+}
+
+.catalog-object.table-view div.node.node-teaser {
+  display: none;
+}
+
+.catalog-table.centered.table-view .node,
+.catalog-table.table-view.nodes.centered td.td-title,
+.catalog-table.table-view.nodes.centered th.th-title {
+	text-align: left;
+}
+
+.catalog-table.centered.table-view .catalog-cell {
+  vertical-align: middle;
+}
+
+.catalog-table.nodes .catalog-row.node .catalog-cell.content,
+.catalog-table .catalog-cell {
+  padding-top: .25em;
+  padding-bottom: .25em;
+}
+
+/*
+paddings in content region
+*/
+.list-view .catalog-table .catalog-cell  {
+  padding-top: .8em;
+  padding-bottom: .8em;
+}
+
+.region-content .catalog-table.users .catalog-cell {
+padding-top: .5em;
+padding-bottom: .5em; 
+}
+
+.catalog-table td.parent-term {
+  vertical-align: top;
+  padding-top: .5em;
+  padding-bottom: .5em;
+}
+
+/*
+.catalog-cell-wrapper.centered .catalog-cell {
+  text-align:center;
+}*/
+
+div.catalog-table .catalog-cell-wrapper, div.catalog-table .catalog-col-wrapper {
+  display: inline-block;
+  vertical-align: top;
+}
+
+
+div.catalog-table .catalog-cell-wrapper  {width: 100%;}
+div.catalog-table.cols-2 .catalog-cell-wrapper, div.catalog-table.cols-2 .catalog-col-wrapper {width: 50%;}
+div.catalog-table.cols-3 .catalog-cell-wrapper, div.catalog-table.cols-3 .catalog-col-wrapper {width: 33.3%;}
+div.catalog-table.cols-4 .catalog-cell-wrapper, div.catalog-table.cols-4 .catalog-col-wrapper {width: 25%;}
+div.catalog-table.cols-5 .catalog-cell-wrapper, div.catalog-table.cols-5 .catalog-col-wrapper {width: 20%;}
+div.catalog-table.cols-6 .catalog-cell-wrapper, div.catalog-table.cols-6 .catalog-col-wrapper {width: 16.66%;}
+div.catalog-table.cols-7 .catalog-cell-wrapper, div.catalog-table.cols-7 .catalog-col-wrapper {width: 14.28%;}
+div.catalog-table.cols-8 .catalog-cell-wrapper, div.catalog-table.cols-8 .catalog-col-wrapper {width: 12.5%;}
+div.catalog-table.cols-9 .catalog-cell-wrapper, div.catalog-table.cols-9 .catalog-col-wrapper {width: 11.11%;}
+div.catalog-table.cols-10 .catalog-cell-wrapper, div.catalog-table.cols-10 .catalog-col-wrapper {width: 10%;}
+
+
+
+@media (max-width:1280px) {
+  div.catalog-table.cols-6 .catalog-cell-wrapper, 
+  div.catalog-table.cols-7 .catalog-cell-wrapper, 
+  div.catalog-table.cols-8 .catalog-cell-wrapper, 
+  div.catalog-table.cols-9 .catalog-cell-wrapper,
+  div.catalog-table.cols-10 .catalog-cell-wrapper,
+
+  div.catalog-table.cols-10 .catalog-col-wrapper {
+    width: 20%;
+  }
+    
+  div.catalog-table.cols-8 .catalog-col-wrapper {
+    width: 25%;
+  }
+  
+  div.catalog-table.cols-6 .catalog-col-wrapper,
+  div.catalog-table.cols-9 .catalog-col-wrapper {
+    width: 33.33%;
+  }
+}
+
+@media (max-width:1024px) {
+  div.catalog-table.cols-5 .catalog-cell-wrapper,
+  div.catalog-table.cols-6 .catalog-cell-wrapper, 
+  div.catalog-table.cols-7 .catalog-cell-wrapper, 
+  div.catalog-table.cols-8 .catalog-cell-wrapper, 
+  div.catalog-table.cols-9 .catalog-cell-wrapper,
+  div.catalog-table.cols-10 .catalog-cell-wrapper {
+    width: 25%;
+  }
+  
+  div.catalog-table.cols-4 .catalog-col-wrapper {
+    width: 50%;
+  }
+  
+  
+  div.catalog-table.cols-7 .catalog-col-wrapper {
+    width: 100%;
+  }
+}
+
+@media (max-width:850px)  {
+  div.catalog-table.cols-4 .catalog-cell-wrapper, 
+  div.catalog-table.cols-5 .catalog-cell-wrapper,
+  div.catalog-table.cols-6 .catalog-cell-wrapper, 
+  div.catalog-table.cols-7 .catalog-cell-wrapper, 
+  div.catalog-table.cols-8 .catalog-cell-wrapper, 
+  div.catalog-table.cols-9 .catalog-cell-wrapper,
+  div.catalog-table.cols-10 .catalog-cell-wrapper {
+    width: 33.3%;
+  }
+  
+  div.catalog-table.cols-6 .catalog-col-wrapper,
+  div.catalog-table.cols-8 .catalog-col-wrapper,
+  div.catalog-table.cols-10 .catalog-col-wrapper {
+    width: 50%;
+  }
+
+  div.catalog-table.cols-5 .catalog-col-wrapper {
+    width: 100%;
+  }
+  
+}
+
+@media (max-width:768px) {
+  div.catalog-table.cols-3 .catalog-cell-wrapper, 
+  div.catalog-table.cols-4 .catalog-cell-wrapper, 
+  div.catalog-table.cols-5 .catalog-cell-wrapper,
+  div.catalog-table.cols-6 .catalog-cell-wrapper, 
+  div.catalog-table.cols-7 .catalog-cell-wrapper, 
+  div.catalog-table.cols-8 .catalog-cell-wrapper, 
+  div.catalog-table.cols-9 .catalog-cell-wrapper,
+  div.catalog-table.cols-10 .catalog-cell-wrapper {
+    width: 50%;
+  }
+}
+
+@media (max-width:640px) {
+  div.catalog-table.cols-2 .catalog-cell-wrapper, 
+  div.catalog-table.cols-3 .catalog-cell-wrapper, 
+  div.catalog-table.cols-4 .catalog-cell-wrapper, 
+  div.catalog-table.cols-5 .catalog-cell-wrapper,
+  div.catalog-table.cols-6 .catalog-cell-wrapper, 
+  div.catalog-table.cols-7 .catalog-cell-wrapper, 
+  div.catalog-table.cols-8 .catalog-cell-wrapper, 
+  div.catalog-table.cols-9 .catalog-cell-wrapper,
+  div.catalog-table.cols-10 .catalog-cell-wrapper,
+   
+  div.catalog-table.cols-2 .catalog-col-wrapper,
+  div.catalog-table.cols-3 .catalog-col-wrapper,
+  div.catalog-table.cols-4 .catalog-col-wrapper,
+  div.catalog-table.cols-6 .catalog-col-wrapper,
+  div.catalog-table.cols-8 .catalog-col-wrapper,
+  div.catalog-table.cols-9 .catalog-col-wrapper,
+  div.catalog-table.cols-10 .catalog-col-wrapper {
+    width: 100%;
+  }
+}
+
+
+div.catalog-table .catalog-col-wrapper .catalog-cell-wrapper {
+  width:100%;!important;
+}
+
+.catalog-admin-links {
+  text-align: right;
+}
+.catalog-admin-links .form-submit:last-child {
+  margin-right: 0;
+}
+
+/**
+* Fix for contextual links in chrome. Need to check.
+*/
+td.catalog-cell .contextual-links-td {
+  position: relative;
+  top: -0.8em;
+  right: -0.3em;
+}
+
+/*test use flex box model*/
+/*.list-view .catalog-table {
+  display: -webkit-box;
+  display: -webkit-flex;
+  display: -moz-box;
+  display: -ms-flexbox;
+  display: flex;
+  -webkit-flex-wrap: wrap;
+  -ms-flex-wrap: wrap;
+  flex-wrap: wrap;
+}
+.list-view .catalog-table .catalog-cell, .list-view .catalog-table .node {
+  height: 100%;
+}*/
+
+.catalog-switch-mode {
+  margin-bottom: 1em;
+}

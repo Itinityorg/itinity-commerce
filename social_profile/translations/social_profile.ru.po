@@ -1,0 +1,196 @@
+# $Id$
+#
+# Russian translation
+# Copyright YEAR NAME <EMAIL@ADDRESS>
+# Generated from files:
+#  social_profile.module: n/a
+#  social_profile.info: n/a
+#
+#, fuzzy
+msgid ""
+msgstr ""
+"Project-Id-Version: PROJECT VERSION\n"
+"POT-Creation-Date: 2012-11-23 13:42+0300\n"
+"PO-Revision-Date: 2012-11-23 13:42+0300\n"
+"Last-Translator: NAME <EMAIL@ADDRESS>\n"
+"Language-Team: Russian <EMAIL@ADDRESS>\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=utf-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=3; plural=((((n%10)==1)&&((n%100)!=11))?(0):(((((n%10)>=2)&&((n%10)<=4))&&(((n%100)<10)||((n%100)>=20)))?(1):2));\n"
+
+#: social_profile.module:34;35;46;47;626;805
+msgid "Last First Middle"
+msgstr "Фамилия Имя Отчество"
+
+#: social_profile.module:39;40;51;52;633;812
+msgid "Phone"
+msgstr "Телефон"
+
+#: social_profile.module:104
+msgid "Profile"
+msgstr "Профиль"
+
+#: social_profile.module:168
+msgid "View"
+msgstr "Просмотр"
+
+#: social_profile.module:173;524
+msgid "Edit"
+msgstr "Редактировать"
+
+#: social_profile.module:178;524;93
+msgid "Settings"
+msgstr "Настройки"
+
+#: social_profile.module:218
+msgid "Files"
+msgstr "Файлы"
+
+#: social_profile.module:443
+msgid "Login: @name"
+msgstr "Логин: @name"
+
+#: social_profile.module:455
+msgid "Comments (@count)"
+msgstr "Комментарии (@count)"
+
+#: social_profile.module:459
+msgid "Add material"
+msgstr "Добавить материал"
+
+#: social_profile.module:461
+msgid "Publications"
+msgstr "Публикации"
+
+#: social_profile.module:520
+msgid "Show on page"
+msgstr "Показать на странице"
+
+#: social_profile.module:698
+msgid "settings"
+msgstr "настройки"
+
+#: social_profile.module:785
+msgid "@user's picture"
+msgstr "Аватар пользователя @user"
+
+#: social_profile.module:895
+msgid "User"
+msgstr "Пользователь"
+
+#: social_profile.module:914
+msgid "Search results"
+msgstr "Результаты поиска"
+
+#: social_profile.module:927
+msgid "Undefined"
+msgstr ""
+
+#: social_profile.module:242
+msgid "Personal cabinet"
+msgstr "Личный кабинет"
+
+#: social_profile.info:0
+msgid "Social Profile"
+msgstr "Социальный профиль"
+
+#: social_profile.info:0
+msgid "Social profile"
+msgstr "Социальный профиль"
+
+#: social_profile.info:0
+msgid "ITK"
+msgstr ""
+
+msgid "L.F.M."
+msgstr "Ф.И.О."
+
+
+msgid "To access the contents of the site you need to take user agreement."
+msgstr "Для доступа к содержимому сайта вы должны принять пользовательское соглашение."
+
+
+
+msgid "Text of agreement"
+msgstr "Текст соглашения"
+
+msgid "Clear accounts data"
+msgstr "Очистить данные аккаунтов"
+
+msgid "This text is for @lang (%native) language. If multilingual is enabled, please switch to different language for translate text to specific version."
+msgstr "Этот текст для @lang (%native) языка. Если на сайте используется многоязычность, пожалуйста, переключитесь на другой язык для перевода текста для конкретной версии."
+
+msgid "Delete confirmed users flags."
+msgstr "Удалить подтвержденные пользователями флажки."
+
+msgid "This action most in demand if text of agreement has been heavily modified. Do not use this operation too often."
+msgstr "Это действие востребовано если смысл текста соглашения был сильно изменен. Не используйте эту операцию слишком часто."
+
+msgid "Are you sure want to delete all stored confirmations in users profiles?"
+msgstr "Вы уверены, что хотите удалить все сохраненные подтверждения в профилях пользователей?"
+
+msgid "Require confirmation from the user"
+msgstr "Требовать подтверждения от пользователей"
+
+msgid "Accounts with confirmed terms of service was not found in database"
+msgstr "Accounts with confirmed terms of service was not found in database"
+
+msgid "User agreement"
+msgstr "Пользовательское соглашение"
+
+msgid "I\'m agreed with <a title=\"@title\" target=\"_blank\" class=\"ajax-popup\" href=\"@url\">terms of service</a>"
+msgstr "Я согласен с <a title=\"@title\" target=\"_blank\" class=\"ajax-popup\" href=\"@url\">пользовательским соглашением</a>"
+
+msgid "User already agreed with this terms of service"
+msgstr "Пользователь уже согласился с этим условием"
+
+msgid "List is empty"
+msgstr "Список пуст"
+
+msgid "%account profile"
+msgstr "Профиль %account"
+
+msgid "Private field"
+msgstr "Приватное поле"
+
+msgid "This information will visible only for owner and sites administrators"
+msgstr "Эта информация будет показываться только владельцам и администраторам сайта"
+
+msgid "User with this phone number already exists."
+msgstr "Пользователь с этим номером телефона уже существует."
+
+msgid "Menu item can not be empty. You must specify one or more options."
+msgstr "Пункт меню не должен быть пустым. Вы должны указать одну или более настроек."
+
+msgid "One account per one phone number"
+msgstr "Одна учетная запись на один номер телефона"
+
+msgid "Authentication via social network"
+msgstr "Аутентификация через социальные сети"
+
+msgid "Identified"
+msgstr "Идентифицироваться"
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

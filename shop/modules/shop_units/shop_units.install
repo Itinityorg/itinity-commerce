@@ -1,0 +1,451 @@
+<?php //$Id: shop_units.install, v 1.0 2011/02/08 11:40:42 Ivan Demenkov Exp $
+/**
+ * Implements hook_install().
+ * Add flag 'installed' to tell the hook_enable
+ * that the module is included for the first time.
+ *
+ */
+function shop_units_install() {
+  $GLOBALS['shop_units_just_installed'] = TRUE;
+}
+
+/**
+ * Implements hook_shema().
+ * Define new tables for units of measurements
+ * and categories for group it.
+ *
+ */
+function shop_units_schema() {
+  $schema = array();
+  $schema['shop_units'] = array(
+    'description' => 'Units of measurement used in the shop.',
+    'fields'      => array(
+      'unit_id'     => array(
+        'description' => 'The primary identifier for a unit.',
+        'type'        => 'varchar',
+        'length'      => '50',
+        'not null'    => TRUE,
+      ),
+      'category_id' => array(
+        'description' => 'The shop_unit_categories.category_id identifier of the category to which the unit.',
+        'type'        => 'varchar',
+        'length'      => '50',
+        'not null'    => TRUE,
+      ),
+      'title'       => array(
+        'description' => 'Full name of unit.',
+        'type'        => 'varchar',
+        'length'      => '100',
+        'not null'    => TRUE,
+      ),
+      'symbol'      => array(
+        'description' => 'Symbol of unit.',
+        'type'        => 'varchar',
+        'length'      => '10',
+        'not null'    => TRUE,
+      ),
+      'enabled'     => array(
+        'description' => 'Unit is enabled.',
+        'type'        => 'int',
+        'unsigned'    => TRUE,
+        'not null'    => TRUE,
+        'default'     => 0,
+      ),
+      'weight'      => array(
+        'description' => 'Unit weight in the same list at the same depth.',
+        'type'        => 'int',
+        'not null'    => TRUE,
+        'default'     => 0,
+      ),
+    ),
+    'unique keys' => array(
+      'unit_id' => array('unit_id')
+    ),
+		'indexes' => array(
+			'category_id' => array('category_id',),
+			'enabled' => array('enabled',),
+			'weight' => array('weight',),
+		),
+  );
+
+  $schema['shop_unit_categories'] = array(
+    'description' => 'Categories of units of measurement.',
+    'fields'      => array(
+      'category_id' => array(
+        'description' => 'The primary identifier for a category.',
+        'type'        => 'varchar',
+        'length'      => '50',
+        'not null'    => TRUE,
+      ),
+      'title'       => array(
+        'description' => 'Name of category.',
+        'type'        => 'varchar',
+        'length'      => '100',
+        'not null'    => TRUE,
+      ),
+      'weight'      => array(
+        'description' => 'Category weight in the same list at the same depth.',
+        'type'        => 'int',
+        'not null'    => TRUE,
+        'default'     => 0,
+      ),
+    ),
+    'primary key' => array('category_id'),
+		'indexes' => array(
+			'weight' => array('weight',),
+		),
+  );
+  return $schema;
+}
+
+/**
+ * Implements hook_enable().
+ * Add default units into system from define folder.
+ *
+ */
+function shop_units_enable() {
+  if (isset($GLOBALS['shop_units_just_installed'])) {
+    //Insert default units and categories into database.
+    $path = drupal_get_path('module', 'shop_units') . '/define';
+    $categories = array();
+
+    $group_names = array(
+      'L'   => 'length',
+      'S'   => 'area',
+      'V'   => 'volume',
+      'M'   => 'mass',
+      'E'   => 'economic_units',
+      'T'   => 'time',
+      'IN'  => 'information',
+      'INS' => 'data_transfer_rate',
+      'SP'  => 'speed',
+      'C'   => 'temperature',
+      'W'   => 'energy',
+      'P'   => 'power',
+      'F'   => 'force',
+      'FR'  => 'frequency',
+      'PR'  => 'pressure',
+      'I'   => 'electric_current',
+      'U'   => 'voltage',
+      'UND' => 'other',
+    ); 
+    if (($handle = fopen($path . '/exported.csv', "r")) !== FALSE) {
+      while (($data = fgetcsv($handle, 4096)) !== FALSE) {
+
+        if (empty($data[1])) {
+          continue;
+        }
+
+        foreach ($data as $idx => $val) {
+          $data[$idx] = trim($data[$idx]);
+        }
+
+        $data[5] = isset($data['5']) ? preg_replace('/[—?]/', '', $data[5]) : NULL;
+
+        $record = (object) array(
+          'type'      => $data[0],
+          'unit_id' => $data[1],
+          'title'     => $data[3],
+          'symbol'    => $data[5],
+          'enabled'   => FALSE,
+        );
+
+        if (!isset($categories[$group_names[$record->type]])) {
+          $categories[$group_names[$record->type]] = array(
+            'title' => $group_names[$record->type],
+          );
+        }
+
+        $categories[$group_names[$record->type]]['units'][$record->unit_id] = $record;
+      }
+    }
+
+    $categories['other']['weight'] = 100;
+
+    foreach ($categories as $category_id => $category) {
+      foreach ($category['units'] as $unit_id => $unit) {
+        $unit->unit_id     = $unit_id;
+        $unit->category_id = $category_id;
+        $unit->enabled = 1;
+        drupal_write_record('shop_units', $unit);
+      }
+
+      $category = (object) array(
+        'category_id' => $category_id,
+        'title'       => $category['title'],
+        'weight'      => (int) isset($category['weight']) ? $category['weight'] : 0,
+      );
+      drupal_write_record('shop_unit_categories', $category);
+    }
+  }
+}
+
+/**
+ * Implements hook_uninstall().
+ */
+function shop_units_uninstall() {
+  
+  variable_del('site_default_country');
+  variable_del('units_settings');
+}
+
+
+/**
+ * Indexes update in shop_unit table
+ */
+function shop_units_update_7003() {
+  if (db_index_exists('shop_units', 'PRIMARY')) {
+    db_drop_index('shop_units', 'PRIMARY');
+    db_add_primary_key('shop_units', array('unit_id', 'category_id'));
+  }
+}
+
+/**
+ * Add new units from csv file
+ */
+function shop_units_update_7004() {
+  $path = drupal_get_path('module', 'shop_units') . '/define';
+  $categories = array();
+
+  $group_names = array(
+    'L'   => 'length',
+    'S'   => 'area',
+    'V'   => 'volume',
+    'M'   => 'mass',
+    'E'   => 'economic_units',
+    'T'   => 'time',
+    'IN'  => 'information',
+    'INS' => 'data_transfer_rate',
+    'SP'  => 'speed',
+    'C'   => 'temperature',
+    'W'   => 'energy',
+    'P'   => 'power',
+    'F'   => 'force',
+    'FR'  => 'frequency',
+    'PR'  => 'pressure',
+    'I'   => 'electric_current',
+    'U'   => 'voltage',
+    'UND' => 'other',
+  );
+
+  if (($handle = fopen($path . '/exported.csv', "r")) !== FALSE) {
+    while (($data = fgetcsv($handle, 4096)) !== FALSE) {
+      if (empty($data[1])) {
+        continue;
+      }
+
+      foreach ($data as $idx => $val) {
+        $data[$idx] = trim($data[$idx]);
+      }
+
+      $data[5] = isset($data['5']) ? preg_replace('/[—?]/', '', $data[5]) : NULL;
+
+      $record = (object) array(
+        'type' => $data[0],
+        'unit_id' => $data[1],
+        'title' => $data[3],
+        'symbol' => $data[5],
+      );
+
+      if (!isset($categories[$group_names[$record->type]])) {
+        $categories[$group_names[$record->type]] = array(
+          'title' => $group_names[$record->type],
+        );
+      }
+
+      $categories[$group_names[$record->type]]['units'][$record->unit_id] = $record;
+    }
+  }
+
+  $categories['other']['weight'] = 100;
+
+  foreach ($categories as $category_id => $category) {
+    foreach ($category['units'] as $unit_id => $unit) {
+      $unit->unit_id     = $unit_id;
+      $unit->category_id = $category_id;
+      $unit->enabled     = 1;
+      drupal_write_record('shop_units', $unit);
+    }
+
+    $category = (object) array(
+      'category_id' => $category_id,
+      'title'       => $category['title'],
+      'weight'      => (int) isset($category['weight']) ? $category['weight'] : 0,
+    );
+    drupal_write_record('shop_unit_categories', $category);
+  }
+}
+
+
+/**
+ * Restore default units. It was messed up on some sites.
+ */
+function shop_units_update_7006() {
+  db_delete('shop_units')->execute();
+  db_delete('shop_unit_categories')->execute();
+
+  $path = drupal_get_path('module', 'shop_units') . '/define';
+  $categories = array();
+
+  $group_names = array(
+    'L'   => 'length',
+    'S'   => 'area',
+    'V'   => 'volume',
+    'M'   => 'mass',
+    'E'   => 'economic_units',
+    'T'   => 'time',
+    'IN'  => 'information',
+    'INS' => 'data_transfer_rate',
+    'SP'  => 'speed',
+    'C'   => 'temperature',
+    'W'   => 'energy',
+    'P'   => 'power',
+    'F'   => 'force',
+    'FR'  => 'frequency',
+    'PR'  => 'pressure',
+    'I'   => 'electric_current',
+    'U'   => 'voltage',
+    'UND' => 'other',
+  );
+
+  if (($handle = fopen($path . '/exported.csv', "r")) !== FALSE) {
+    while (($data = fgetcsv($handle, 4096)) !== FALSE) {
+      if (empty($data[1])) {
+        continue;
+      }
+
+      foreach ($data as $idx => $val) {
+        $data[$idx] = trim($data[$idx]);
+      }
+
+      $data[5] = isset($data['5']) ? preg_replace('/[—?]/', '', $data[5]) : NULL;
+
+      $record = (object) array(
+        'type' => $data[0],
+        'unit_id' => $data[1],
+        'title' => $data[3],
+        'symbol' => $data[5],
+      );
+
+      if (!isset($categories[$group_names[$record->type]])) {
+        $categories[$group_names[$record->type]] = array(
+          'title' => $group_names[$record->type],
+        );
+      }
+
+      $categories[$group_names[$record->type]]['units'][$record->unit_id] = $record;
+    }
+  }
+
+  $categories['other']['weight'] = 100;
+
+  $default_enabled_unit_ids = array(
+    'MTK',
+    'HUR',
+    'km/h',
+    'km/h',
+    'GRM',
+    'KGM',
+    'CMT',
+    'MTR',
+    'MMT',
+    'KMT',
+    'PCE',
+  );
+
+  foreach ($categories as $category_id => $category) {
+    foreach ($category['units'] as $unit_id => $unit) {
+      $unit->unit_id     = $unit_id;
+      $unit->category_id = $category_id;
+      $unit->enabled     = in_array($unit_id, $default_enabled_unit_ids) ? 1 : 0;
+
+      drupal_write_record('shop_units', $unit);
+    }
+
+    $category = (object) array(
+      'category_id' => $category_id,
+      'title'       => $category['title'],
+      'weight'      => (int) isset($category['weight']) ? $category['weight'] : 0,
+    );
+    drupal_write_record('shop_unit_categories', $category);
+  }
+
+}
+
+
+/**
+* Fix buggy category IDs naming
+*/
+function shop_units_update_7007() {
+	db_query('UPDATE {shop_unit_categories} SET category_id = \'economic_units\' WHERE category_id = \'economic units\'');
+	db_query('UPDATE {shop_unit_categories} SET category_id = \'data_transfer_rate\' WHERE category_id = \'data transfer rate\'');
+	db_query('UPDATE {shop_unit_categories} SET category_id = \'electric_current\' WHERE category_id = \'electric current\'');
+	
+	db_query('UPDATE {shop_units} SET category_id = \'economic_units\' WHERE category_id = \'economic units\'');
+	db_query('UPDATE {shop_units} SET category_id = \'data_transfer_rate\' WHERE category_id = \'data transfer rate\'');
+	db_query('UPDATE {shop_units} SET category_id = \'electric_current\' WHERE category_id = \'electric current\'');
+}
+
+
+/**
+* Clear cache after update 7007
+*/
+function shop_units_update_7008() {
+	cache_clear_all('shop_units_', 'cache', TRUE);
+}
+
+
+/**
+* Remove currencies from shop units
+*/
+function shop_units_update_7009() {
+	db_query('DELETE FROM {shop_units} WHERE category_id = \'currencies\'');
+	db_query('DELETE FROM {shop_unit_categories} WHERE category_id = \'currencies\'');
+}
+
+
+/**
+* Drop obsolete columns
+*/
+function shop_units_update_7010() {
+	db_drop_field('shop_unit_categories', 'type');
+	db_drop_field('shop_unit_categories', 'menu_name');
+	db_drop_field('shop_units', 'deleted');
+	db_drop_field('shop_units', 'quantity');
+	db_drop_field('shop_units', 'decimals');
+	db_drop_field('shop_units', 'reduction');
+}
+
+
+
+/**
+* Change index in shop units tables
+*/
+function shop_units_update_7011() {
+	db_drop_primary_key('shop_units');
+	db_add_unique_key('shop_units', 'unit_id', array('unit_id', ));
+}
+
+
+/**
+* Change index in shop units tables
+*/
+function shop_units_update_7012() {
+	db_add_index('shop_units', 'category_id', array('category_id',));
+	db_add_index('shop_units', 'enabled', array('enabled',));
+	db_add_index('shop_units', 'weight', array('weight',));
+	db_add_index('shop_unit_categories', 'weight', array('weight',));
+}
+
+
+
+
+
+
+
+
+
+
+
+
+

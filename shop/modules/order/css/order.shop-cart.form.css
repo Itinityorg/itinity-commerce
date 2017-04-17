@@ -1,0 +1,148 @@
+.shop-cart td, .shop-cart th {
+	white-space: nowrap;
+	padding-left: .75em;
+	padding-right: .75em;
+}
+
+.shop-cart td .messages, .shop-cart th .messages{
+  white-space: normal;
+}
+
+.shop-cart td.col-title, .shop-cart th.col-title {
+	white-space: normal;
+}
+
+.shop-cart .col-control {
+	width: 1%;
+	vertical-align: middle;
+}
+
+.shop-cart-sub-form.readonly .shop-cart .col-control {
+	width: 0;
+}
+
+.shop-cart .col-qty,
+.shop-cart .col-price,
+.shop-cart .col-sum {
+	width: 1%;
+}
+
+
+.shop-cart .col-image {
+	width: 10%;
+}
+
+.col-price, .col-sum {
+	text-align: right;
+}
+.shop-cart .col-qty {
+  min-width: 6em;
+}
+
+.shop-cart-sub-form .shop-cart .form-text.form-autocomplete {
+  width: 75%;
+}
+
+.shop-cart-sub-form .shop-cart h3, .shop-cart-sub-form .shop-cart input.form-submit {
+  margin: 0;
+}
+
+.shop-cart-sub-form.waiting td.col-control {
+  cursor: auto;
+}
+
+.shop-cart-sub-form .col-total, .block-shop table tr:last-child td:last-child {
+	text-align:right;
+}
+
+.order-price-delivery, .order-price-total {
+	text-align:right;
+}
+
+.form-item-shop-cart-use-bonus {
+	text-align: right;
+}
+
+
+.form-type-entity-selector.form-item-shop-cart-add .entity-selector-add-link, form.node-order-form a.save-continue-link {
+  display: none;
+}
+
+html.js form.node-order-form  a.save-continue-link {
+	display: inline;
+}
+
+.shop-cart .col-control .form-submit {
+	background: none !important;
+	border: 0;
+}
+
+
+/*css for shop cart in phone*/
+.device-phone .shop-cart tr {
+  display: block;
+  position: relative;
+  margin: 4px 0;
+}
+
+.device-phone .shop-cart .col-qty, .device-phone .shop-cart .col-price,
+.device-phone .shop-cart .col-sum, .device-phone .shop-cart .col-control,
+.device-phone .shop-cart .cart-summary > td, .device-phone .shop-cart .cart-add > td  {
+  display: inline-block;  
+}
+
+.device-phone .shop-cart .cart-summary > td:first-child,
+.device-phone .shop-cart thead, .device-phone .shop-cart .col-price {
+  display: none;
+}
+
+.device-phone .shop-cart .col-qty,
+.device-phone .shop-cart .col-price,
+.device-phone .shop-cart .col-sum,
+.device-phone .shop-cart .col-control {
+  width: auto;
+}
+.device-phone .shop-cart .col-image {
+  width: 30%;
+}
+
+.device-phone .shop-cart .col-control{
+  position: absolute;
+  top: 0;
+  right: 0;
+  z-index: 10;
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

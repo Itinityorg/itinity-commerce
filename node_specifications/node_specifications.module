@@ -1,0 +1,1948 @@
+<?php
+
+
+/**
+ * Implements hook_menu().
+ */
+function node_specifications_menu() {
+	// full view for catalog filters
+	$items['specification_filters'] = array(
+		'title' => 'All specifications',
+		'page callback' => 'drupal_get_form',
+		'page arguments' => array('node_specifications_filters_block'),
+		'access callback' => TRUE,
+		'file' => 'inc/node_specifications.blocks.inc',
+		'type' => MENU_CALLBACK,
+		'hidden' => TRUE,
+	);
+
+	// filter presets
+	$items['node_specifications_filter_presets/add'] = array(
+		'title' => 'Create new specification filter preset',
+		'page callback' => 'drupal_get_form',
+		'page arguments' => array('node_specifications_filter_preset_form'),
+		'access arguments' => array('administer specifications'),
+		'file' => 'inc/node_specifications.forms.inc',
+		'type' => MENU_LOCAL_ACTION,
+	);
+	$items['node_specifications_filter_presets/%node_specifications_filter_preset'] = array(
+		'title callback' => 'node_specifications_filter_preset_title_callback',
+		'title arguments' => array(1),
+		'page callback' => 'node_specifications_filter_preset_view',
+		'page arguments' => array(1),
+		'access arguments' => array('administer specifications'),
+	);
+	$items['node_specifications_filter_presets/%node_specifications_filter_preset/view'] = array(
+		'title' => 'View',
+		'type' => MENU_DEFAULT_LOCAL_TASK,
+		'weight' => -1,
+	);
+	$items['node_specifications_filter_presets/%node_specifications_filter_preset/edit'] = array(
+		'title' => 'Edit',
+		'page callback' => 'drupal_get_form',
+		'page arguments' => array('node_specifications_filter_preset_form', 1),
+		'access arguments' => array('administer specifications'),
+		'file' => 'inc/node_specifications.forms.inc',
+		'context' => MENU_CONTEXT_PAGE | MENU_CONTEXT_INLINE,
+		'type' => MENU_LOCAL_TASK,
+	);
+	$items['node_specifications_filter_presets/%node_specifications_filter_preset/delete'] = array(
+		'title' => 'Delete',
+		'page callback' => 'node_specifications_filter_preset_delete',
+		'page arguments' => array(1),
+		'access arguments' => array('administer specifications'),
+		'file' => 'inc/node_specifications.forms.inc',
+		'context' => MENU_CONTEXT_PAGE | MENU_CONTEXT_INLINE,
+		'type' => MENU_LOCAL_TASK,
+		'weight' => 10,
+	);
+
+	// specifications admin paths
+	/*
+	$items['admin/structure/node_specifications'] = array(
+		'title' => 'Node specifications',
+		'page callback' => 'node_specifications_overview',
+		'weight' => 0,
+		'file' => 'inc/node_specifications.forms.inc',
+		'access arguments' => array('administer specifications'),
+	); */
+
+  $items['admin/structure/node_specifications'] = array(
+		'title' => 'Node specifications',
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('node_specifications_overview_form'),
+    'type' => MENU_LOCAL_TASK,
+		'access arguments' => array('administer specifications'),
+		'file' => 'inc/node_specifications.forms.inc',
+//    'weight' => 10,
+  );
+
+
+
+	$items['admin/structure/node_specifications/add'] = array(
+		'title' => 'Add specification set',
+		'page callback' => 'drupal_get_form',
+		'page arguments' => array('node_specifications_form'),
+		'file' => 'inc/node_specifications.forms.inc',
+		'type' => MENU_LOCAL_ACTION,
+		'access arguments' => array('administer specifications'),
+		'weight' => 0,
+	);
+	$items['admin/structure/node_specifications/%node_specifications'] = array(
+		'page callback' => 'drupal_get_form',
+		'page arguments' => array('node_specifications_fields_overview', 3),
+		'file' => 'inc/node_specifications.forms.inc',
+		'access arguments' => array('administer specifications'),
+		'title callback' => '_node_specifications_title_callback',
+		'title arguments' => array(3),
+	);
+	$items['admin/structure/node_specifications/%node_specifications/list'] = array(
+		'title' => 'Field list',
+		'type' => MENU_DEFAULT_LOCAL_TASK,
+		'weight' => -20,
+	);
+	$items['admin/structure/node_specifications/%node_specifications/edit'] = array(
+		'page callback' => 'drupal_get_form',
+		'page arguments' => array('node_specifications_form', 3),
+		'file' => 'inc/node_specifications.forms.inc',
+		'title' => 'Edit',
+		'type' => MENU_LOCAL_TASK,
+		'weight' => -10,
+		'access arguments' => array('administer specifications'),
+	);
+	$items['admin/structure/node_specifications/%node_specifications/hints'] = array(
+		'page callback' => 'drupal_get_form',
+		'page arguments' => array('node_specifications_hints_form', 3),
+		'file' => 'inc/node_specifications.forms.inc',
+		'title' => 'Hints',
+		'type' => MENU_LOCAL_TASK,
+		'access arguments' => array('administer specifications'),
+	);
+	$items['admin/structure/node_specifications/%node_specifications/delete'] = array(
+		'page callback' => 'drupal_get_form',
+		'title' => 'Delete',
+		'page arguments' => array('node_specifications_delete_form', 3),
+		'file' => 'inc/node_specifications.forms.inc',
+		'access arguments' => array('administer specifications'),
+	);
+
+	// comparing callbacks
+	$items['node/compare'] = array(
+		'title' => 'Node compare',
+		'page callback' => 'node_specifications_compare',
+		'file' => 'inc/node_specifications.forms.inc',
+		'access callback' => TRUE,
+		'hidden' => TRUE,
+	);
+	$items['node/compare/clear'] = array(
+		'title' => 'Clean compare list',
+		'page callback' => 'node_specifications_compare_clear',
+		'access callback' => TRUE,
+		'hidden' => TRUE,
+	);
+	$items['node/compare/add/%node'] = array(
+		'title' => 'Add compare item',
+		'page callback' => 'node_specifications_compare_add',
+		'page arguments' => array(3),
+    'access callback' => 'node_access',
+		'access arguments' => array('view', 3),
+	);
+	$items['node/compare/remove/%node'] = array(
+		'title' => 'Remove from comparing',
+		'page callback' => 'node_specifications_compare_delete',
+		'page arguments' => array(3),
+		'access arguments' => array('access content',),
+	);
+
+	// TESTING CALLBACKS
+	// test filters
+	$items['admin/structure/node_specifications/test_filter'] = array(
+		'title' => 'Filter test',
+		'page callback' => 'drupal_get_form',
+		'page arguments' => array('node_specifications_test_filter_form'),
+		'file' => 'inc/node_specifications.test.inc',
+		'access callback' => FALSE,
+	);
+	// generate specs
+	$items['admin/structure/node_specifications/generate'] = array(
+		'title' => 'Generate specifications',
+		'page callback' => 'drupal_get_form',
+		'page arguments' => array('node_specifications_generate_form'),
+		'file' => 'inc/node_specifications.test.inc',
+		'access callback' => FALSE,
+	);
+
+	return $items;
+}
+
+
+/**
+ * Implements hook_entity_info().
+ */
+function node_specifications_entity_info() {
+	$entity_info = array(
+		'node_specifications' => array(
+			'label' => t('Node specification'),
+			'controller class' => 'NodeSpecificationsController',
+			'base table' => 'node_specifications',
+			'bundles' => array(),
+			'bundle keys' => array(
+				'bundle' => 'type',
+			),
+			'entity keys' => array(
+				'id' => 'nsid',
+				'label' => 'name',
+				'bundle' => 'type',
+			),
+		),
+	);
+
+	return $entity_info;
+}
+
+class NodeSpecificationsController extends DrupalDefaultEntityController {
+	protected function attachLoad(&$specifications, $revision_id = FALSE) {
+    foreach ($specifications as $specification) {
+      $specification->tids = array();
+      $specification->fields = array();
+    }
+		//indexes
+		$nsids = array_keys($specifications);
+    foreach (db_query('SELECT nsi.nsid, nsi.tid, td.vid FROM {node_specifications_index} nsi INNER JOIN {taxonomy_term_data} td ON td.tid = nsi.tid WHERE nsi.nsid IN (:nsids)', array(':nsids' => $nsids)) as $r) {
+      $specifications[$r->nsid]->tids[$r->tid] = $r->tid;
+    }
+
+		//fields
+		$q = db_select('node_specifications_fields', 'nsf');
+		$q->fields('nsf')->condition('nsf.nsid', $nsids);
+		$q->leftJoin('node_specifications_fields_variants', 'nsfv', 'nsf.nsid = nsfv.nsid AND nsf.delta = nsfv.delta');
+		$q->fields('nsfv', array('var_id', 'var_weight', 'var_value', 'var_data'));
+		$q->orderBy('nsf.nsid, nsf.weight, nsfv.var_weight');
+
+		//units
+		if (module_exists('shop_units')) {
+			$q->leftJoin('shop_units', 'su', 'nsf.unit_id = su.unit_id');
+			$q->addField('su', 'unit_id', 'unit_id');
+			$q->addField('su', 'title', 'unit_title');
+			$q->addField('su', 'symbol', 'unit_symbol');
+		}
+
+		foreach ($q->execute() as $result) {
+			$result = (array) $result;
+			$delta = $result['delta'];
+			$nsid = $result['nsid'];
+
+			if (!isset($specifications[$nsid]->fields[$delta])) {
+				$specifications[$nsid]->fields[$delta] = $result;
+			}
+
+			foreach (array('var_id', 'var_weight', 'var_value', 'var_data',) as $value) {
+				if (isset($result[$value])) {
+					$specifications[$nsid]->fields[$delta]['vars'][$result['var_id']][$value] = $result[$value];
+				}
+				unset($specifications[$nsid]->fields[$delta][$value]);
+			}
+		}
+
+		parent::attachLoad($specifications, $revision_id);
+	}
+}
+
+
+/**
+ * Implements hook_admin_menu_map()
+ */
+function node_specifications_admin_menu_map() {
+	$map = array();
+
+	if (user_access('administer specifications')) {
+		$map['admin/structure/node_specifications/%node_specifications'] = array(
+			'parent' => 'admin/structure/node_specifications',
+			'arguments' => array(array('%node_specifications' => array_keys(node_specifications_get_names())),),
+		);
+	}
+
+	return $map;
+}
+
+/**
+ * Implements hook_permission().
+ */
+function node_specifications_permission() {
+	return array(
+		'administer specifications' => array(
+			'title' => t('Administer node specifications sets'),
+			'description' => t('Perform administration tasks for node specifications sets'),
+		),
+	);
+}
+
+/**
+ * Implements hook_theme().
+ */
+function node_specifications_theme() {
+	return array(
+		'node_specifications_fields_overview' => array(
+			'render element' => 'form',
+			'file' => 'inc/node_specification.theme.inc',
+		),
+		'node_specifications_overview_form' => array(
+			'render element' => 'form',
+			'file' => 'inc/node_specification.theme.inc',
+		),
+		'node_specifications_block_configure_form' => array(
+			'render element' => 'form',
+			'file' => 'inc/node_specification.theme.inc',
+		),
+		'node_specifications_filter_presets_form' => array(
+			'render element' => 'form',
+			'file' => 'inc/node_specification.theme.inc',
+		),
+		'node_specifications_field' => array(
+			//'varaibles' => array(
+			//	'node' => NULL,
+			//	'nsid' => NULL,
+			//	'delta' => NULL,
+			//	'label' => NULL,
+			//	'label_display' => NULL,
+			//),
+      'render element' => 'field',
+			'file' => 'inc/node_specification.theme.inc',
+		),
+	);
+}
+
+/**
+ * Implements hook_entity_view_alter()
+ *
+ * View message about empty filtration result.
+ */
+function node_specifications_entity_view_alter(&$build, $type) {
+	if ($type == 'catalog_object' && ($query = array_intersect_key($_GET, _node_specifications_get_filter_query_symbols()))) {
+/**
+* Implements hook_page_alter()
+*/
+  if (module_exists('seo')) {
+    // If possible, override meta tags with tags specified in filter presets
+    // @see node_specifications_filter_preset_form()
+    $query = '?' . drupal_http_build_query($query);
+    $uri = drupal_lookup_path('alias', $_GET['q']) . $query;
+    $urls[$uri] = $uri;
+    $uri = $_GET['q'] . $query;
+    $urls[$uri] = $uri;
+    if ($data = db_query_range('SELECT * FROM {seo_meta} WHERE entity_type = \'node_specification_filter_presets\' AND uri IN (:urls)', 0, 1, array(':urls' => $urls))->fetch()) {
+      _seo_add_meta((array)$data);
+    }
+  }
+
+// @todo:
+//		if (empty($build['materials']['#rows'])) {
+//			$build['materials'] = array(
+//				'#markup' => t('Not found anything matching your search. Expand the range and try again, or reset all filters.'),
+//			);
+//		}
+
+		//IKW
+		foreach (element_children($build) as $element) {
+			if (!in_array($element, array('pager1', 'pager2', 'materials'))) {
+				unset($build[$element]);
+			}
+		}
+	}
+}
+
+/**
+ * Implements hook_field_extra_fields().
+ */
+function node_specifications_field_extra_fields() {
+	$result = array();
+
+  // NEW:
+
+  foreach (node_specifications_load_multiple() as $nsid => $specification) {
+    if ($specification->node_type) {
+      $result['node'][$specification->node_type]['form']['specifications_data'] = array(
+        'label' => t('Specifications'),
+        'description' => t('Node specifications module element'),
+        'weight' => NULL,
+      );
+
+      $result['node'][$specification->node_type]['display']['specifications'] = array(
+        'label' => t('Specifications'),
+        'label_display' => 'hidden',
+        'description' => t('Node specifications module element'),
+        'weight' => NULL,
+      );
+			if ($specification->as_extrafields) {
+        foreach ($specification->fields as $delta => $field) {
+          $result['node'][$specification->node_type]['display'][$nsid. '/' . $delta] = array(
+            'label' => $field['title'],
+            'description' => t('Node specifications module element') . '. ' . t('Set') . ' ' . check_plain($specification->name),
+            'weight' => NULL,
+            'label_display' => TRUE,
+          );
+        }
+			}
+      $result['node'][$specification->node_type]['display']['compare_link'] = array(
+        'label' => t('Compare link'),
+        'description' => t('Node specifications module element'),
+        'weight' => NULL,
+      );
+    }
+  }
+	return $result;
+}
+
+/**
+ * Implements hook_extra_field_formatter_settings_form()
+ *
+ * @see addons_form_field_ui_display_overview_form_alter()
+ */
+function node_specifications_extra_field_formatter_settings_form($entity_type, $bundle, $mode, $field_name, $settings) {
+	$form = array();
+
+	if ($mode === 'display' && $field_name === 'specifications') {
+		$specifications = node_specifications_get_names();
+		$visibility_settings = isset($settings['visibility_settings']) ? $settings['visibility_settings'] : array();
+		$options = array();
+		foreach (_node_specifications_get_field_names() as $nsid => $fields) {
+			$options[$specifications[$nsid]->name] = $fields;
+			if (!isset($settings['visibility_settings'])) {
+				$visibility_settings += array_combine(array_keys($fields), array_keys($fields));
+			}
+		}
+		$form['visibility_settings'] = array(
+			'#type' => 'select',
+			'#title' => t('Specification fields visibility settings'),
+			'#multiple' => TRUE,
+			'#options' => $options,
+			'#size' => min(50, array_sum(array_map('count', $options)) + count($options)),
+			'#default_value' => $visibility_settings,
+		);
+    $form['with_labels'] = array(
+      '#type' => 'checkbox',
+      '#title' => t('With labels'),
+      '#default_value' => isset($settings['with_labels']) ? $settings['with_labels'] : TRUE,
+    );
+    //DEPRECATED (IKW) // $form['inline'] = array(
+    //DEPRECATED (IKW) //   '#type' => 'checkbox',
+    //DEPRECATED (IKW) //   '#title' => t('Inline'),
+    //DEPRECATED (IKW) //   '#default_value' => !isset($settings['inline']) || $settings['inline']
+    //DEPRECATED (IKW) // );
+   
+	}
+
+	return $form;
+}
+
+/**
+ * Implements hook_extra_field_formatter_settings_summary()
+ *
+ * @see addons_form_field_ui_display_overview_form_alter()
+ */
+function node_specifications_extra_field_formatter_settings_summary($entity_type, $bundle, $mode, $field_name, $settings) {
+	$output = '';
+
+	if ($mode == 'display' && $field_name == 'specifications') {
+    // todo or not todo?
+	}
+
+	return $output;
+}
+
+/**
+ * Implements hook_node_node_load().
+ */
+function node_specifications_node_load($nodes, $types) {
+  if ($field_data = node_specifications_load_field_data(array_keys($nodes))) {
+    $nsids = array();
+    foreach ($field_data as $nid => $data) {
+      $nsids += drupal_map_assoc(array_keys($data));
+    }
+    $all_specs = &drupal_static(__FUNCTION__, NULL);
+    if (!isset($all_specs)) {
+      $all_specs = node_specifications_load_multiple();
+    }
+    //$specifications = node_specifications_load_multiple($nsids);
+    foreach ($field_data as $nid => $data) {
+      foreach ($data as $nsid => $vals) {
+        if (isset($all_specs[$nsid])) {
+          $nodes[$nid]->specifications[$nsid] = $all_specs[$nsid];
+          $nodes[$nid]->specifications_data[$nsid] = $field_data[$nid][$nsid];
+        }
+      }
+    }
+  }
+}
+
+/**
+ * Implements hook_node_view()
+ */
+function node_specifications_node_view($node, $view_mode, $langcode) {
+	if (!empty($node->specifications_data)) {
+    //view comparing checkbox
+    static $attached;
+    if (!$attached) {      
+      drupal_add_library('system', 'jquery.cookie');
+      drupal_add_js(drupal_get_path('module', 'node_specifications') . '/js/node_specifications_compare_checkboxes.js');
+      $attached = TRUE;
+    }
+    $compare_list = array();
+    if (!empty($_COOKIE['compare_list'])) {
+      $compare_list = explode(',', $_COOKIE['compare_list']);
+    }
+    $node->content['compare_link'] = array(
+      '#type' => 'checkbox',
+      '#title' => t('Compare'),
+      '#return_value' => $node->nid,
+      '#attributes' => array('class' => array('ns-compare'),),
+      '#id' => drupal_html_id('node-compare-link-' . $node->nid),
+    );
+    if (in_array($node->nid, $compare_list)) {
+      $node->content['compare_link']['#attributes']['checked'] = 'checked';
+    }
+
+    //render specification fields
+    if (!empty($node->specifications)) {
+      $bundle_settings = field_bundle_settings('node', $node->type);
+      $extra_settings = addons_extra_field_get_settings('node', $node->type, 'display', $view_mode, 'specifications');    
+      foreach ($node->specifications as $nsid => $specification) {
+        foreach ($specification->fields as $delta => $field) {
+          if (!empty($node->specifications_data[$nsid][$delta]) && !empty($field['enabled'])) { 
+                                                                      // @TODO: 'enabled' is obsolete column in node_specifications_fields or not? 
+                                                                      // Where it used? 
+                                                                      //@see also node_specifications_form()
+            
+            if (!isset($extra_settings['visibility_settings']) || !empty($extra_settings['visibility_settings']["$nsid/$delta"])) {
+              
+              $node_specifications_field = array(
+                '#theme' => 'node_specifications_field',
+                '#node' => $node,
+                '#nsid' => $nsid,
+                '#delta' => $delta,
+                '#title' => $field['title'],
+                '#title_display' => !isset($extra_settings['with_labels']) || $extra_settings['with_labels'] ? 'inline' : 'hidden', // DEPRECATED 'inline',// DEPRECATED (IKW) : !isset($extra_settings['inline']) || $extra_settings['inline'] ? 'inline' : 'normal',
+              );
+
+              if (!empty($specification->as_extrafields)) {
+                // trying to get specification field bundle settings
+                $display_settings = !empty($bundle_settings['extra_fields']['display']["$nsid/$delta"][$view_mode])
+                  ? $bundle_settings['extra_fields']['display']["$nsid/$delta"][$view_mode]
+                  : array();
+                if (!$display_settings && !empty($bundle_settings['extra_fields']['display']["$nsid/$delta"]['default'])) {
+                  $display_settings = $bundle_settings['extra_fields']['display']["$nsid/$delta"]['default'];
+                }
+                if (isset($display_settings['label'])) {
+                  $node_specifications_field['#label'] = $display_settings['label'];
+                }
+                if (isset($display_settings['label_display'])) {
+                  $node_specifications_field['#label_display'] = $display_settings['label_display'];
+                }
+                
+                
+                // Crutches for display in catalog tables
+                if (isset($node->_current_catalog->materials_settings['mode']) && $node->_current_catalog->materials_settings['mode'] === 'table' && !empty($node->_current_catalog->materials_settings['modes']['table']['enabled'])) {
+                  // Remove labels because already displayed in table header
+                  $node_specifications_field['#title_display'] = 'hidden';
+                  $node_specifications_field = array($node_specifications_field);
+                }
+                
+                
+                $node->content["$nsid/$delta"] = $node_specifications_field;
+             }
+             else {
+                $node->content['specifications'][$nsid][$delta] = $node_specifications_field;
+              }
+            }
+
+          }
+
+        }
+
+      }
+      if (!empty($node->content['specifications'])) {
+        $node->content['specifications'] += array(
+          '#type' => 'item',
+          '#title' => t('Specifications'),
+        );
+      }
+    }
+	}
+}
+
+
+/**
+ * Implements hook_node_view_alter()
+ *
+ * Attach specification field values into $node->title according to field 'in_title' setting
+ */
+function node_specifications_node_view_alter(&$build) {
+	$node = $build['#node'];
+	if (!empty($node->specifications)) {
+    $title_suffix = '';
+    foreach ($node->specifications as $nsid => $specification) {
+      foreach ($specification->fields as $delta => $field) {
+        if (!empty($field['in_title']) && !empty($node->specifications_data[$nsid][$delta])) {
+          $field_data = $node->specifications_data[$nsid][$delta];
+          $field_unit = isset($field['unit_id']) ? t($field['unit_symbol']) : '';
+          if (($field['field_type'] == 'color_select' || $field['field_type'] == 'list_text') && !is_array($field_data)) {
+            $field_data = array($field_data => $field_data);
+          }
+          $field_markup = array();
+          switch ($field['field_type']) {
+            case 'color_select':
+              foreach ($field_data as $var_id) {
+                if (isset($field_vars[$var_id]['var_data'])) {
+                   $field_markup[] = $field_vars[$var_id]['var_data'];
+                }
+              }
+              break;
+            case 'list_text':
+              foreach ($field_data as $var_id) {
+                if (isset($field_vars[$var_id]['var_value'])) {
+                  $field_markup[] = $field_vars[$var_id]['var_value'] . $field_unit;
+                }
+              }
+              break;
+            case 'logic':
+              $field_markup[] = $field_data == 1 ? t('No') : t('Yes');
+              break;
+            default:
+              $field_markup[] = $field_data . $field_unit;
+              break;
+          }
+          $title_suffix .= ' ' . implode(', ', $field_markup);
+        }
+      }
+    }
+
+    if ($title_suffix) {
+      $new_title = $node->title . ' ' . $title_suffix;
+      if (node_is_page($node) && ($build['#view_mode'] === 'full' || $build['#view_mode'] === 'default')) {
+        drupal_set_title($new_title);
+      }
+      else {
+        if (!empty($build['title']['#value'])) {
+          // @todo: try to use regex here
+          $uri = entity_uri('node', $node);
+          $build['title']['#value'] = l($new_title, $uri['path']);
+        }
+      }
+    }
+	}
+}
+
+/**
+ * Implements hook_form_FORM_ID_alter().
+ */
+function node_specifications_form_node_form_alter(&$form, &$form_state, $form_id) {
+	$node = $form['#node'];
+
+
+
+
+
+	/*
+  $nsids = array();
+		//check $form_state['values'] for taxonomy field values
+		if (!empty($form_state['values'])) {
+			$nsids = _node_specifications_get_nsids_by_node((object) $form_state['values']);
+		}
+	*/
+
+	//preload all specifications
+  if ($all_specifications = node_specifications_load_multiple(FALSE, array('node_type' => $node->type))) {
+    $tids = array();
+    foreach (element_children($form) as $key) {
+      if (!empty($node->$key) && ($inst = field_info_instance('node', $key, $node->type))) {
+        if (!empty($inst['widget']['type']) && $inst['widget']['type'] === 'options_select') {
+          $field_info_field = field_info_field($key);
+          if ($field_info_field['module'] === 'taxonomy') {
+            foreach (field_get_items('node', $node, $key) as $item) {
+              $tids[$item['tid']] = $item['tid'];
+            }
+          }
+        }
+      }
+    }
+
+    $specifications_data_visible = FALSE;
+    foreach ($all_specifications as $nsid => $specification) {
+      if (!empty($specification->fields)) {
+        foreach ($specification->fields as $delta => $field) {
+          $field_values = !empty($node->specifications_data[$nsid][$delta]) ? $node->specifications_data[$nsid][$delta] : array();
+          $element = array();
+          switch ($field['field_type']) {
+            case 'color_select' :
+              //variants
+              $opts = array();
+              if (!empty($field['vars'])) {
+                foreach ($field['vars'] as $var) {
+                  //style attribute cuts out from #options array, so we use some JS magic to style color field elemnts
+                  //@see node_specifications.js
+                  $opts[$var['var_id']] =
+                    (!empty($var['var_value']) ? '<span class="color_me" data="' . $var['var_value'] . '"></span>' : '') .
+                    (!empty($var['var_data']) ? $var['var_data'] : '');
+                }
+              }
+              $element = array(
+                '#type' => 'checkboxes',
+                '#options' => $opts,
+                '#default_value' => $field_values,
+              );
+              //add empty option for radios
+              if (!$field['multiple']) {
+                $element['#type'] = 'radios';
+                $element['#options'] = array(0 => t('<None>')) + $element['#options'];
+              }
+              break;
+
+            case 'image' :
+              //variants
+              $opts = array();
+              if (!empty($field['vars'])) {
+                foreach ($field['vars'] as $var) {
+                  if (!empty($var['var_value'])) {
+                    if ($file = file_load($var['var_value'])) {
+                      if ($url = file_create_url($file->uri)) {
+                        $opts[$var['var_id']] =
+                          (!empty($var['var_value']) ? '<img src="' . $url . '" class="node-specification-image-field" />' : '') .
+                          (!empty($var['var_data']) ? $var['var_data'] : '');
+                      }
+                    }
+                  }
+                }
+              }
+              $element = array(
+                '#type' => 'checkboxes',
+                '#options' => $opts,
+                '#default_value' => $field_values,
+              );
+              //add empty option for radios
+              if (!$field['multiple']) {
+                $element['#type'] = 'radios';
+                $element['#options'] = array(0 => t('<None>')) + $element['#options'];
+              }
+              break;
+
+            case 'list_text' :
+              //variants
+              $vars = array();
+              if (!empty($field['vars'])) {
+                foreach ($field['vars'] as $var) {
+                  $vars[$var['var_id']] = isset($var['var_value']) ? $var['var_value'] : NULL;
+                }
+              }
+              $element = array(
+                '#type' => $field['multiple'] ? 'checkboxes' : 'select',
+                '#options' => $vars,
+                '#empty_value' => '',
+                '#default_value' => $field_values,
+              );
+              break;
+
+            case 'number_integer':
+              $element = array(
+                '#type' => 'digit',
+                '#min' => -PHP_INT_MAX,
+                '#step' => 10,
+                '#float' => TRUE,
+                '#default_value' => $field_values,
+              );
+              break;
+
+            case 'logic':
+              $element = array(
+                '#type' => 'select',
+                '#options' => array(2 => t('Yes'), 1 => t('No'),),// TODO: Re-factor wrong logic 1 == YES; 2 == NO.
+                '#empty_value' => '',
+                '#empty_option' => '- ' . t('Select') . ' -',
+                '#default_value' => $field_values,
+              );
+              break;
+
+            case 'text':
+              $element = array(
+                '#type' => 'textfield',
+                '#default_value' => $field_values ? $field_values : '',
+              );
+              break;
+          }
+
+          if ($element) {
+            $form['specifications_data'][$nsid][$delta] = $element + array(
+                '#title' => $field['title'] . ($field['important'] ? ' ' . theme('form_required_marker', array()) : ''),
+                '#_required' => $field['important'],
+                '#field_suffix' => _node_specifications_get_field_unit_symbol($field),
+              );
+          }
+        }
+
+        if (!empty($form['specifications_data'][$nsid])) {
+          $form['specifications_data'][$nsid] += array(
+            '#type' => 'fieldset',
+            '#title' => $specification->name . l(
+                theme('pictogram', array('icon' => 'pencil')), 'admin/structure/node_specifications/' . $nsid . '/edit',
+                array('attributes' => array(
+                  'target' => '_blank',
+                  'title' => t('Edit this set'),
+                  'class' => 'edit-specification-set',
+                ),
+                'html' => TRUE,
+                )
+              ),
+            '#collapsible' => FALSE, // TRUE,
+            '#attributes' => array(
+              'data-tids' => '',
+            ),
+           /*'edit' => array(
+              '#markup' => '<div class="node-specifications-edit-label">' . l(
+                theme('pictogram', array('icon' => 'pencil')), 'admin/structure/node_specifications/' . $nsid . '/edit',
+                array('attributes' => array(
+                  'target' => '_blank',
+                  'title' => t('Edit this set'),
+                ),
+                'html' => TRUE,
+                )
+              ) . '</div>',
+            ),*/
+          );
+          // Interactive node specifications with taxonomy term fields states. Hide/show corresponding specifications by selected terms
+          // @see js/node_specifications.node-form.js
+          if (!empty($specification->tids)) {
+            $spec_tids = $specification->tids;
+            if ($specification->go_deep) {
+              foreach (taxonomy_term_load_multiple($spec_tids) as $term) {
+                foreach (taxonomy_get_tree($term->vid, $term->tid) as $t) {
+                  $spec_tids[$t->tid] = $t->tid;
+                }
+              }
+            }
+            $form['specifications_data'][$nsid]['#attributes']['data-tids'] = implode(',', $spec_tids);
+            if (!empty($node->specifications[$nsid])) {
+              $specifications_data_visible = TRUE;
+            }
+            else {
+              $form['specifications_data'][$nsid]['#attributes']['class'][] = 'js-hide';
+            }
+          }
+          else {
+            $specifications_data_visible = TRUE;
+          }
+        }
+      }
+    }
+
+    if (!empty($form['specifications_data'])) {
+     $form['#attached']['library'][] = array('system', 'jquery.cookie');
+     $form['#attached']['js'][] = drupal_get_path('module', 'node_specifications') . '/js/node_specifications.js';
+     $form['#attached']['css'][] = drupal_get_path('module', 'node_specifications') . '/css/node_specifications.css';
+
+     $form['#attached']['js'][] = drupal_get_path('module', 'node_specifications') . '/js/node_specifications.node-form.js';
+
+      $form['specifications_data'] += array(
+        '#prefix' => '<div class="node-specifications-field' . ($specifications_data_visible ? '' : ' js-hide') . '">', // . '<label>' . t('Specification sets') . '</label>',
+        '#type' => 'fieldset',
+        '#tree' => TRUE,
+        '#title' => t('Specifications'),
+        '#suffix' => '</div>',
+      );
+      $form['#validate'][] = '_node_specifications_node_form_validate';
+    }
+  }
+
+
+}
+
+
+function _node_specifications_node_form_validate($form, &$form_state) {
+	$tids = array();
+	foreach (element_children($form) as $key) {
+		if ($inst = field_info_instance('node', $key, $form['#node']->type)) {
+			if (!empty($inst['widget']['type']) && $inst['widget']['type'] === 'options_select') {
+				$field_info_field = field_info_field($key);
+				if ($field_info_field['module'] === 'taxonomy') {
+					$lang = field_language('node', $form['#node'], $key);
+					if ($tid = (array)$form[$key][$lang]['#value']) {
+						$tids += drupal_map_assoc($tid);
+					}
+				}
+			}
+		}
+	}
+	foreach (element_children($form['specifications_data']) as $nsid) {
+		foreach (element_children($form['specifications_data'][$nsid]) as $f) {
+			if (!empty($form['specifications_data'][$nsid][$f]['#_required']) && !$form['specifications_data'][$nsid][$f]['#value']) {
+				if (!$form['specifications_data'][$nsid]['#attributes']['data-tids'] && !$tids) {
+					form_error($form['specifications_data'][$nsid][$f], t('!name field is required.', array('!name' => $form['specifications_data'][$nsid][$f]['#title'])));
+				}
+				if ($tids && $form['specifications_data'][$nsid]['#attributes']['data-tids']) {
+					if (array_intersect($tids, explode(',', $form['specifications_data'][$nsid]['#attributes']['data-tids']))) {
+						form_error($form['specifications_data'][$nsid][$f], t('!name field is required.', array('!name' => $form['specifications_data'][$nsid][$f]['#title'])));
+					}
+				}
+			}
+		}
+	}
+}
+
+
+/**
+ * Implements hook_node_insert().
+ */
+function node_specifications_node_insert($node) {
+	_node_specifications_node_update($node);
+}
+
+/**
+ * Implements hook_node_update().
+ */
+function node_specifications_node_update($node) {
+	_node_specifications_node_update($node);
+}
+
+function _node_specifications_node_update($node) {
+	if (module_exists('doc_import') && isset($node->doc_import_csv) && isset($node->doc_import_preset)) {
+		module_load_include('inc', 'node_specifications', 'inc/node_specifications.doc_import');
+		_node_specifications_doc_import($node);
+	}
+	node_specifications_update_field_data($node);
+	_node_specifications_clear_caches();
+}
+
+/**
+ * Implements hook_node_delete().
+ */
+function node_specifications_node_delete($node) {
+	node_specifications_delete_field_data(array('nid' => $node->nid));
+	_node_specifications_clear_caches();
+}
+
+/**
+ * Implements hook_block_info()
+ */
+function node_specifications_block_info() {
+	$blocks = array();
+	$blocks['node_compare'] = array(
+		'info' => t('Nodes compare block'),
+		'status' => TRUE,
+		'region' => 'sidebar_first',
+		'cache' => DRUPAL_NO_CACHE,
+	);
+
+	$blocks['node_filters'] = array(
+		'info' => t('Node filters'),
+		'status' => TRUE,
+		'region' => 'sidebar_first',
+		'cache' => DRUPAL_CACHE_PER_PAGE,
+	);
+
+	$blocks['filter_presets'] = array(
+		'info' => t('Filter presets'),
+		'status' => TRUE,
+		'region' => BLOCK_REGION_NONE,
+		'cache' => DRUPAL_CACHE_PER_ROLE,
+	);
+
+	return $blocks;
+}
+
+/**
+ * Implements hook_block_view()
+ */
+function node_specifications_block_view($delta = '') {
+	$block = array();
+
+	switch ($delta) {
+
+		case 'node_filters':
+			//-show only on catalog pages;
+			//-only for nodes;
+			//-if catalog showing 'sellable' nodes, regardlessly load block (price filter)
+			if (module_exists('catalog') && arg(0) === 'catalog' && is_numeric(arg(1)) && !path_is_admin(current_path())) {
+				$catalog_object = catalog_object_load(arg(1));
+				if ($catalog_object && !empty($catalog_object->current_params) && $catalog_object->entity_type === 'node') {
+					if ($nids = _node_specifications_get_catalog_queried_nids()) {
+            $nsids = db_query('SELECT DISTINCT nsid FROM {node_specifications_fields_data} WHERE nid IN (:nids)', array(':nids' => $nids))->fetchCol();
+						//$tids = !empty($catalog_object->current_params['term']) ? array($catalog_object->current_params['term']->tid) : array();
+						//$vids = !empty($catalog_object->current_params['vocabulary']) ? array($catalog_object->current_params['vocabulary']->vid) : array();
+						//$nsids = array_keys(_node_specifications_load_by_indexes($catalog_object->current_params['bundle']->type, $tids, $vids));
+						if ($nsids || (module_exists('shop') && shop_get_info('entity_types', 'node', $catalog_object->bundle))) { // @TODO: this is shop crutches ?
+							module_load_include('inc', 'node_specifications', 'inc/node_specifications.blocks');
+							$block['subject'] = t('Filters');
+							$block['content']['form'] = drupal_get_form('node_specifications_filters_block', $nids, $nsids ? $nsids : array(0));
+						}
+					}
+				}
+			}
+		break;
+
+		case 'node_compare':
+			if (!empty($_COOKIE['compare_list']) && arg(0) . '/' . arg(1) !== 'node/compare') {
+				module_load_include('inc', 'node_specifications', 'inc/node_specifications.blocks');
+				$form = drupal_get_form('node_specifications_compare_block');
+				if (!empty($form['nids']['#value'])) {
+					$block['subject'] = l(t('Comparing'), 'node/compare');
+					$block['content']['form'] = $form;
+				}
+			}
+		break;
+
+		case 'filter_presets':
+			if (arg(0) == 'catalog') {
+				$filter_presets = node_specifications_filter_preset_load_by_base_uri($_GET['q']);
+				if ($filter_presets) {
+					$content['filter_presets'] = array(
+						'#type' => 'container',
+						'#attributes' => array('class' => array('container-inline')),
+					);
+
+					$current_query_params = drupal_get_query_parameters(NULL, array('q', 'page',));
+					$current_uri = url($_GET['q'], array('query' => $current_query_params));
+
+					//avoid "active" class on all filter preset links
+					$orig_q = $_GET['q'];
+					$_GET['q'] = '';
+					foreach ($filter_presets as $id => $filter_preset) {
+						//set active link "manualy"
+						$uri = drupal_parse_url($filter_preset['base_uri'] . '?' . $filter_preset['query_params']);
+						$uri = url($uri['path'], array('query' => $uri['query']));
+						$_GET['q'] = $uri == $current_uri ? $orig_q : '';
+
+						$content['filter_presets'][] = node_specifications_filter_preset_view($filter_preset);
+					}
+					$_GET['q'] = $orig_q;
+				}
+
+				if (user_access('administer specifications')) {
+					if (array_intersect_key(_node_specifications_get_filter_query_symbols(), $_GET)) {
+						$content['add_new_link']['#markup'] = l(
+							t('Create filter preset'),
+							'node_specifications_filter_presets/add',
+							array(
+								'query' => drupal_get_destination(),
+								'attributes' => array('class' => array('form-submit', 'default-submit',),),
+							)
+						);
+					}
+				}
+				if (!empty($content)) {
+					$block['subject'] = t('Filter presets');
+					$block['content'] = $content;
+				}
+
+			}
+		break;
+    
+	}
+	return $block;
+}
+
+/**
+ * Implements hook_block_configure
+ */
+function node_specifications_block_configure($delta = '') {
+	$form = array();
+
+	if ($delta == 'node_filters') {
+		module_load_include('inc', 'node_specifications', 'inc/node_specifications.blocks');
+		$form = array('node_specifications_form' => node_specifications_block_configure_form());
+	}
+	elseif ($delta == 'filter_presets') {
+		module_load_include('inc', 'node_specifications', 'inc/node_specifications.blocks');
+		$form = array('node_specifications_filter_presets_form' => node_specifications_filter_presets_form());
+	}
+
+	return $form;
+}
+
+/**
+ * Implements hook_block_save
+ */
+function node_specifications_block_save($delta = '', $edit = array()) {
+	if ($delta == 'node_filters') {
+		variable_set('specifications_filter_block_display_options', $edit['node_specifications_form']);
+	}
+	elseif ($delta == 'filter_presets') {
+		if (!empty($edit['node_specifications_filter_presets_form']['filter_presets'])) {
+			foreach ($edit['node_specifications_filter_presets_form']['filter_presets'] as $id => $weight) {
+				if (!empty($weight['weight'])) {
+          $preset = node_specifications_filter_preset_load($id);
+          $preset['weight'] = $weight['weight'];
+          node_specifications_filter_preset_save($preset);
+				}
+			}
+		}
+	}
+}
+
+/**
+ * Implements hook_query_TAG_alter()
+ */
+function node_specifications_query_catalog_select_entities_alter(QueryAlterableInterface $query) {
+	$catalog_object = $query->getMetaData('catalog_object');
+	if (empty($catalog_object)) {
+		return;
+	}
+	if ($catalog_object->entity_type !== 'node' || $catalog_object->is_block || $query->hasTag('node_specifications_do_not_alter')) {
+		return;
+	}
+
+	//select and cache queried by catalog nids
+	static $nids_cache = NULL;
+	if (!isset($nids_cache)) {
+		if ($cached = cache_get(_node_specifications_cache_id())) {
+			$nids_cache = $cached->data;
+		}
+		else {
+			$query->addTag('node_specifications_do_not_alter');
+			$new_q = clone($query);
+			if (get_class($query) == 'PagerDefault') {
+				// Get protected 'query' property. No other ways.
+				$new_q = (array) $new_q;
+				$new_q = $new_q["\0*\0query"];
+			}
+			$orderBy = &$new_q->getOrderBy();
+			$orderBy = array();
+			$expressions = &$new_q->getExpressions();
+			$expressions = array();
+			$new_q->range();
+			$nids_cache = $new_q->execute()->fetchCol();
+			cache_set(_node_specifications_cache_id(), $nids_cache);
+		}
+	}
+
+	//calculate filtered nids
+	if (array_intersect_key(_node_specifications_get_filter_query_symbols(), $_GET)) {
+		$cache = cache_get(_node_specifications_cache_id('node_specifications_filter_'));
+		if ($cache) {
+			$filtered_nids = $cache->data;
+		}
+		else {
+			$nids[] = $filtered_nids = $nids_cache;
+
+			//specification fields filter
+			if (!empty($_GET['f']) && is_array($_GET['f'])) {
+				foreach (array_filter($_GET['f']) as $nsid => $fields) {
+					foreach ((array)$fields as $delta => $data) {
+						$q = db_select('node_specifications_fields_data', 'nsfd');
+						$q->fields('nsfd', array('nid'))
+							->condition('nsfd.nsid', $nsid)
+							->condition('nsfd.delta', $delta);
+
+						if (is_array($data)) {
+							if (isset($data['min']) && isset($data['max'])) {
+								$q->condition('nsfd.var_id', array($data['min'], $data['max']), 'BETWEEN');
+							}
+							elseif (isset($data['l'])) {
+								$q->condition('nsfd.var_id', $data['l']);
+							}
+							elseif ($ids = array_filter($data)) {
+								$q->condition('nsfd.var_id', $ids);
+							}
+						}
+
+						$nids[] = $q->execute()->fetchCol();
+					}
+				}
+			}
+
+			//shop filters
+			if ((!empty($_GET['p']) || !empty($_GET['in_stock'])) && module_exists('shop')) {
+				$q = db_select('shop_index', 'si')
+					->fields('si', array('entity_id'))
+					->condition('si.entity_type', 'node');
+
+				//price
+				if (isset($_GET['p']['min']) && isset($_GET['p']['max'])) {
+					$q->condition('si.price', array($_GET['p']['min'], $_GET['p']['max']), 'BETWEEN');
+				}
+
+				//in_stock
+				if (!empty($_GET['in_stock'])) {
+					$q->condition(db_or()->isNull('si.qty')->condition('si.qty', 0, '>'));
+				}
+
+				$nids[] = $q->execute()->fetchCol();
+			}
+
+			//taxonomy filter
+			if (!empty($_GET['t']) && is_array($_GET['t'])) {
+				foreach (taxonomy_term_load_multiple($_GET['t']) as $term) {
+					$filtered_tids = array($term->tid);
+					foreach (taxonomy_get_tree($term->vid, $term->tid) as $t) {
+						$filtered_tids[] = $t->tid;
+					}
+					$nids[] = db_select('taxonomy_entity_index', 'tei')
+						->fields('tei', array('entity_id'))
+						->condition('entity_type', 'node')
+						->condition('tid', $filtered_tids)
+						->execute()->fetchCol();
+				}
+			}
+
+			//resulting intersect
+			foreach ($nids as $nid_array) {
+				$filtered_nids = array_intersect($filtered_nids, $nid_array);
+			}
+			cache_set(_node_specifications_cache_id('node_specifications_filter_'), $filtered_nids);
+		}
+		//filter catalog query
+		$query->condition('base.nid', empty($filtered_nids) ? -1 : $filtered_nids);
+	}
+}
+
+/**
+ * Implements hook_exit()
+ */
+function node_specifications_exit($destination = NULL) {
+	$clear_spec_caches = &drupal_static('node_specifications_clear_cache');
+	if (!empty($clear_spec_caches)) {
+		cache_clear_all('node_specifications', 'cache', TRUE);
+		cache_clear_all('product_price', 'cache', TRUE);
+	}
+}
+
+/**
+ * Implements hook_seo_robots_txt().
+ * Defined in seo.module -->> seo_robots_txt()
+ * Add own lines into dynamycally generated robots.txt
+ * return array of strings
+ */
+function node_specifications_seo_robots_txt() {
+	$result = array();
+	foreach (_node_specifications_get_filter_query_symbols() as $symbol) {
+		$result[] = 'Disallow: *?' . $symbol . '=';
+		$result[] = 'Disallow: *&' . $symbol . '=';
+	}
+
+	return $result;
+}
+
+/**
+ * Implements hook_query_TAG_alter()
+ *
+ * @see seo_page_alter()
+ */
+// DEPRECATED (logic was moved to node_specifications_entity_view_alter())function node_specifications_query_seo_page_alter_meta_query_alter(QueryAlterableInterface $query) {
+// DEPRECATED (logic was moved to node_specifications_entity_view_alter())	$conditions = &$query->conditions();
+// DEPRECATED (logic was moved to node_specifications_entity_view_alter())	foreach ($conditions as $idx => $condition) {
+// DEPRECATED (logic was moved to node_specifications_entity_view_alter())		if (is_array($condition)) {
+// DEPRECATED (logic was moved to node_specifications_entity_view_alter())			if (is_scalar($condition['field']) && $condition['field'] == 'id' && $condition['value'] == 0) {
+// DEPRECATED (logic was moved to node_specifications_entity_view_alter())				unset($conditions[$idx]);
+// DEPRECATED (logic was moved to node_specifications_entity_view_alter())				continue;
+// DEPRECATED (logic was moved to node_specifications_entity_view_alter())			}
+// DEPRECATED (logic was moved to node_specifications_entity_view_alter())		}
+// DEPRECATED (logic was moved to node_specifications_entity_view_alter())	}
+// DEPRECATED (logic was moved to node_specifications_entity_view_alter())
+// DEPRECATED (logic was moved to node_specifications_entity_view_alter())	$query->condition(
+// DEPRECATED (logic was moved to node_specifications_entity_view_alter())		db_or()
+// DEPRECATED (logic was moved to node_specifications_entity_view_alter())			->condition('id', 0)
+// DEPRECATED (logic was moved to node_specifications_entity_view_alter())			->condition(db_and()->condition('id', 0, '!=')->condition('entity_type', 'node_specification_filter_presets'))
+// DEPRECATED (logic was moved to node_specifications_entity_view_alter())	);
+// DEPRECATED (logic was moved to node_specifications_entity_view_alter())}
+
+
+/**
+ * Implements hook_node_type_update()
+ */
+function node_specifications_node_type_update($info) {
+	if (!empty($info->old_type) && $info->old_type !== $info->type) {
+		db_update('node_specifications')
+			->fields(array('node_type' => $info->type))
+			->condition('node_type', $info->old_type)->execute();
+		drupal_static_reset('node_specifications_load_indexes');
+	}
+}
+
+
+/**
+ * Implements hook_form_FORM_ID_alter()
+ */
+function node_specifications_form_doc_import_preset_form_alter(&$form, &$form_state, $form_id) {
+	form_load_include($form_state, 'inc', 'node_specifications', 'inc/node_specifications.doc_import');
+	_node_specifications_form_doc_import_preset_form_alter($form, $form_state, $form_id);
+}
+
+
+function node_specifications_get_names() {
+	$names = &drupal_static(__FUNCTION__, NULL);
+	if (is_null($names)) {
+    $names = array();
+		$names = db_query('SELECT nsid, type, name FROM {node_specifications}')->fetchAllAssoc('nsid');
+	}
+	return $names;
+}
+
+function node_specifications_load($nsid) {
+	$specifications = node_specifications_load_multiple(array($nsid));
+	return reset($specifications);
+}
+
+function node_specifications_load_multiple($nsids = array(), $conditions = array()) {
+
+  // Temporary check to avoid DB exceptions, remove it after global update on prod. server
+  if (system_list('module_enabled')['node_specifications']->schema_version < 7019) {
+    return array();
+  }
+
+
+  return entity_load('node_specifications', $nsids ? $nsids : FALSE, $conditions);
+}
+
+function node_specifications_machine_name_load($machine_name) {
+	$specifications = node_specifications_load_multiple(FALSE, array('type' => $machine_name));
+	return reset($specifications);
+}
+
+function node_specifications_save($specification) {
+  
+
+  // Temporary check to avoid DB exceptions, remove it after global update on prod. server
+  if (system_list('module_enabled')['node_specifications']->schema_version < 7019) {
+    return array();
+  }
+  
+  
+  
+  
+	$is_new = empty($specification->nsid);
+	if ($result = drupal_write_record('node_specifications', $specification, !$is_new ? 'nsid' : array())) {
+    $nsid = $specification->nsid;
+
+    //indexes
+    db_delete('node_specifications_index')->condition('nsid', $nsid)->execute();
+    if (!empty($specification->tids)) {
+      $q = db_insert('node_specifications_index')->fields(array('nsid', 'tid',));
+      foreach ($specification->tids as $value) {
+        $q->values(array('nsid' => $nsid, 'tid' => $value,));
+      }
+      $q->execute();
+    }
+    drupal_static_reset('node_specifications_load_indexes');
+
+    //fields
+    node_specifications_save_fields($specification->fields, $nsid);
+    cache_clear_all();
+    module_invoke_all($is_new ? 'node_specifications_insert' : 'node_specifications_update', $specification);
+	}
+  drupal_static_reset('node_specifications_node_load');
+	return $result;
+}
+
+
+function node_specifications_delete($specification) {
+	if (!$specification) {
+		drupal_set_message('Specification does not exist', 'error');
+	}
+  else {
+    module_invoke_all('node_specifications_delete', $specification);
+    $nsid = $specification->nsid;
+    db_delete('node_specifications')->condition('nsid', $nsid)->execute();
+    drupal_static_reset('node_specifications_node_load');
+    node_specifications_delete_field_data(array('nsid' => $nsid));
+    db_delete('node_specifications_fields')->condition('nsid', $nsid)->execute();
+    db_delete('node_specifications_fields_variants')->condition('nsid', $nsid)->execute();
+    db_delete('node_specifications_index')->condition('nsid', $nsid)->execute();
+    drupal_static_reset('node_specifications_load_indexes');
+    cache_clear_all();
+  }
+}
+
+/**
+ * @param $nids
+ *  Array of node ids
+ *
+ * @return array
+ *  Array grouped by [nid][nsid][delta] of specification fields data
+ *
+ */
+function node_specifications_load_field_data($nids) {
+	$result = array();
+  if ($nids) {
+    $nsids = array();
+    foreach (db_query('SELECT * FROM {node_specifications_fields_data} WHERE nid IN (:nids)', array(':nids' => $nids)) as $r) {
+      //field_type text stores data in "text" column with var_id == 0
+      if ($r->var_id == 0 && !empty($r->text)) {
+        $result[$r->nid][$r->nsid][$r->delta] = $r->text;
+      }
+      else {
+        $result[$r->nid][$r->nsid][$r->delta][$r->var_id] = $r->var_id;
+      }
+      $nsids[$r->nsid] = $r->nsid;
+    }
+
+    $specifications = node_specifications_load_multiple($nsids); //check for multiple fields
+
+    //make output array nicer
+    foreach ($result as $nid => $specification_data) {
+      foreach ($specification_data as $nsid => $fields) {
+        foreach ($fields as $delta => $value) {
+          if (empty($specifications[$nsid]->fields[$delta]['multiple']) && is_array($value) && count($value) == 1) {
+            $result[$nid][$nsid][$delta] = reset($value);
+          }
+        }
+      }
+    }
+  }
+	return $result;
+}
+
+function node_specifications_update_field_data($node) {
+	node_specifications_delete_field_data(array('nid' => $node->nid));
+	if (!empty($node->specifications_data)) {
+    foreach ($node->specifications_data as $nsid => $fields) {
+      if (!empty($fields) && is_numeric($nsid) && !is_scalar($fields)) {
+        foreach ($fields as $delta => $values) {
+          if ($values && (!is_array($values) || reset($values) !== '')) {
+
+            $specification_field = !empty($node->specifications[$nsid]->fields[$delta]) ? $node->specifications[$nsid]->fields[$delta] : node_specifications_load_field($nsid, $delta);
+            if ($specification_field) {
+
+              $values = (array) $values;
+              foreach (array_filter($values) as $var_id) {
+                $record = array(
+                  'nsid' => $nsid,
+                  'delta' => $delta,
+                  'nid' => $node->nid,
+                  'var_id' => $var_id,
+                  'text' => $var_id,
+                );
+                if ($specification_field['field_type'] === 'color_select') {
+                  if (isset($specification_field['vars'][$var_id]['var_data'])) {
+                    $record['text'] = $specification_field['vars'][$var_id]['var_data'];
+                  }
+                }
+                elseif ($specification_field['field_type'] === 'list_text') {
+                  if (!empty( $specification_field['vars'][$var_id]['var_value'])) {
+                    $record['text'] = $specification_field['vars'][$var_id]['var_value'];
+                  }
+                }
+                elseif ($specification_field['field_type'] === 'text') {
+                  $record['var_id'] = 0;
+                }
+
+                drupal_write_record('node_specifications_fields_data', $record);
+              }
+            }
+          }
+        }
+      }
+    }
+	}
+}
+
+function node_specifications_delete_field_data($conditions) {
+	if (!empty($conditions)) {
+    $query = db_delete('node_specifications_fields_data');
+    foreach ($conditions as $key => $condition) {
+      if ($condition) {
+        $query->condition($key, $condition);
+      }
+    }
+    $query->execute();
+	}
+}
+
+/**
+ * @return array of field names keyed by nsid, and values are pair of nsid/delta => field_name ordered by weight
+ */
+function _node_specifications_get_field_names() {
+	$result = &drupal_static(__FUNCTION__, NULL);
+	if (is_null($result)) {
+    $result = array();
+		foreach (db_query('SELECT nsid, delta, title FROM {node_specifications_fields} ORDER BY delta ASC') as $r) {
+			$result[$r->nsid][$r->nsid . '/' . $r->delta] = $r->title;
+		}
+	}
+	return $result;
+}
+
+function node_specifications_save_fields(&$fields, $nsid) {
+	$max_values = db_query('SELECT MAX(nsf.delta) AS delta, MAX(nsf.weight) AS weight FROM {node_specifications_fields} nsf WHERE nsid = :nsid', array(':nsid' => $nsid))->fetchAssoc();
+
+	db_delete('node_specifications_fields')->condition('nsid', $nsid)->execute();
+
+	foreach ($fields as &$field) {
+		if (empty($field['delta'])) {
+			$field['delta'] = ++$max_values['delta'];
+		}
+
+		if (empty($field['weight'])) {
+			$field['weight'] = ++$max_values['weight'];
+		}
+
+		if (isset($field['vars'])) {
+			node_specifications_save_field_variants($field['vars'], $nsid, $field['delta']);
+		}
+		$field['nsid'] = $nsid;
+		$field['unit_id'] = isset($field['unit_id']) ? $field['unit_id'] : NULL;
+
+		drupal_write_record('node_specifications_fields', $field);
+	}
+}
+
+function node_specifications_save_field_variants($variants, $nsid, $delta) {
+  drupal_static_reset('node_specifications_load_field');
+	$max_var_id = db_query('SELECT MAX(var_id) FROM {node_specifications_fields_variants} WHERE nsid = :nsid AND delta = :delta', array(':nsid' => $nsid, ':delta' => $delta,))->fetchField();
+	db_delete('node_specifications_fields_variants')->condition('nsid', $nsid)->condition('delta', $delta)->execute();
+	$var_weight = 0;
+	if ($variants) {
+		foreach ($variants as $idx => $variant) {
+			$variant = (array) $variant;
+			if (empty($variant['var_id'])) {
+				$variant['var_id'] = ++$max_var_id;
+			}
+			$variant['nsid'] = $nsid;
+			$variant['delta'] = $delta;
+			$variant['var_weight'] = $var_weight;
+			drupal_write_record('node_specifications_fields_variants', $variant);
+			$var_weight++;
+      $variants[$idx] = $variant;
+		}
+	}
+	return $variants;
+}
+
+function node_specifications_load_field($nsid, $delta) {
+	$fields = &drupal_static(__FUNCTION__, array());
+  if (!isset($fields[$nsid][$delta])) {
+		$query = db_select('node_specifications_fields', 'nsf')
+			->fields('nsf')
+			->condition('nsid', $nsid)
+			->condition('delta', $delta);
+		$field = $query->execute()->fetchAssoc();
+
+		if (!empty($field['field_type']) && $field['field_type'] == 'list_text' || $field['field_type'] == 'color_select') {
+			$query = db_select('node_specifications_fields_variants', 'nsfv')
+				->fields('nsfv')
+				->condition('nsid', $nsid)
+				->condition('delta', $delta);
+			foreach ($query->execute() as $result) {
+				$field['vars'][$result->var_id] = (array) $result;
+			}
+		}
+		$fields[$nsid][$delta] = $field;
+  }
+
+	return $fields[$nsid][$delta];
+}
+
+/**
+ * @param object $node
+ * @param        $nsid
+ * @param        $delta
+ *
+ * @return array|string|null field value
+ */
+function node_specifications_get_field_value($node, $nsid, $delta) {
+	$result = NULL;
+	$field = node_specifications_load_field($nsid, $delta);
+
+	if ($field && isset($node->specifications_data[$nsid][$delta])) {
+		$field_data = $node->specifications_data[$nsid][$delta];
+		$field_vars = !empty($field['vars']) ? $field['vars'] : array();
+
+		switch ($field['field_type']) {
+			case 'color_select':
+				if ($field['multiple']) {
+					foreach ($field_data as $var_id) {
+						if (isset($field_vars[$var_id]['var_value']) && isset($field_vars[$var_id]['var_data'])) {
+							$result[$field_vars[$var_id]['var_value']] = $field_vars[$var_id]['var_data'];
+						}
+					}
+				}
+				elseif (isset($field_vars[$field_data]['var_value'])) {
+					$result = $field_vars[$field_data]['var_value'];
+				}
+				break;
+			case 'list_text':
+				if ($field['multiple']) {
+					foreach ($field_data as $var_id) {
+						if (isset($field_vars[$var_id]['var_value'])) {
+							$result[$var_id] = $field_vars[$var_id]['var_value'];
+						}
+					}
+				}
+				elseif (isset($field_vars[$field_data]['var_value'])) {
+					$result = $field_vars[$field_data]['var_value'];
+				}
+				break;
+			case 'logic':
+				$result = $field_data == 1 ? t('No') : t('Yes');
+				break;
+			default:
+				$result = $field_data;
+				break;
+		}
+	}
+
+	return $result;
+}
+
+/**
+ * Callback for: node/compare/add/%node
+ */
+function node_specifications_compare_add($node) {
+	if (!empty($_COOKIE['compare_list']) && ($compare_list = explode(',', $_COOKIE['compare_list']))) {
+		$compare_list = explode(',', $_COOKIE['compare_list']);
+		if (!in_array($node->nid, $compare_list)) {
+			$compare_list[] = $node->nid;
+			setcookie('compare_list', implode(',', $compare_list), NULL, '/');
+		}
+	}
+
+	drupal_goto();
+}
+
+/**
+ * Callback for: node/compare/remove/%node
+ */
+function node_specifications_compare_delete($node) {
+	if (!$node) {
+		drupal_not_found();
+    drupal_exit();
+	}
+
+	if (!empty($_COOKIE['compare_list'])) {
+		$compare_list = explode(',', $_COOKIE['compare_list']);
+		foreach ($compare_list as $idx => $nid) {
+			if ($node->nid == $nid) {
+				unset($compare_list[$idx]);
+			}
+		}
+		setcookie('compare_list', implode(',', $compare_list), NULL, '/');
+	}
+
+	drupal_goto();
+}
+
+/**
+ * Callback for: node/compare/clear
+ */
+function node_specifications_compare_clear() {
+	setcookie('compare_list', '', REQUEST_TIME - 3600, '/');
+	drupal_goto();
+}
+
+/**
+ * Title callback for filter presets.
+ */
+function node_specifications_filter_preset_title_callback($filter_preset) {
+	return $filter_preset['title'];
+}
+
+function node_specifications_filter_preset_load($id) {
+	return db_select('node_specifications_filter_presets', 'nsfp')
+		->fields('nsfp')
+		->condition('id', $id)
+		->execute()->fetchAssoc();
+}
+
+function node_specifications_filter_preset_load_multiple() {
+	$presets = array();
+	foreach (db_select('node_specifications_filter_presets', 'nsfp')
+		->fields('nsfp')
+		->orderBy('weight')
+		->execute() as $result) {
+		$presets[$result->id] = (array) $result;
+	}
+
+	return $presets;
+}
+
+function node_specifications_filter_preset_load_by_base_uri($base_uri) {
+	$results = array();
+
+	$q = db_select('node_specifications_filter_presets', 'nsfp')
+		->fields('nsfp')
+		->condition('base_uri', $base_uri)
+		->orderBy('weight');
+	foreach ($q->execute() as $result) {
+		$results[$result->id] = (array) $result;
+	}
+
+	return $results;
+}
+
+function node_specifications_filter_preset_save($preset) {
+	if (empty($preset['weight'])) {
+		$preset['weight'] = db_query('SELECT MAX(weight) FROM {node_specifications_filter_presets}')->fetchField() + 1;
+	}
+	$result = drupal_write_record('node_specifications_filter_presets', $preset, !empty($preset['id']) ? 'id' : array());
+
+	return $result ? $preset : FALSE;
+}
+
+function node_specifications_filter_preset_delete($preset, $redirect = TRUE) {
+	if (!empty($preset['id'])) {
+		db_delete('node_specifications_filter_presets')->condition('id', $preset['id'])->execute();
+	}
+
+	//seo stuff
+	if (module_exists('seo')) {
+		db_delete('seo_meta')
+			->condition('entity_type', 'node_specification_filter_presets')
+			->condition('id', $preset['id'])
+			->execute();
+	}
+	//
+
+	if ($redirect) {
+		drupal_goto();
+	}
+}
+
+function node_specifications_filter_preset_view($preset) {
+	$uri = drupal_parse_url($preset['base_uri'] . '?' . $preset['query_params']);
+
+	//@todo: to make #contextual_links work, write themed output. @see contextual_links_example.module
+	return array(
+		'#markup' => '<div style="padding-right:1em;">' . l($preset['title'], $uri['path'], array('query' => $uri['query'])) . '</div>',
+		'#contextual_links' => array(
+			'node_specifications' => array(
+				'node_specifications_filter_presets',
+				array($preset['id']),
+			),
+		),
+	);
+}
+
+
+/**
+ * @return string cache_id
+ */
+function _node_specifications_cache_id($name = 'node_specifications_nodes_', $expanded = TRUE) {
+	return $name . sha1($GLOBALS['user']->uid . '_' . ($expanded ? serialize($_GET) : serialize($_GET['q'])));
+}
+
+function _node_specifications_get_field_unit_symbol(&$field) {
+	$unit_symbol = '';
+	$_field_types = array('number_integer', 'list_text', 'number_integer',);
+	if (isset($field['unit_id']) && !empty($field['unit_symbol']) && in_array($field['field_type'], $_field_types)) {
+		$unit_symbol = t($field['unit_symbol']);
+	}
+
+	return $unit_symbol;
+}
+
+function _node_specifications_clear_caches() {
+	$clear_spec_caches = &drupal_static('node_specifications_clear_cache');
+	$clear_spec_caches = TRUE;
+}
+
+function _node_specifications_title_callback($specification) {
+	return $specification->name;
+}
+
+function _node_specifications_get_filter_query_symbols() {
+	return array('p' => 'p', 'f' => 'f', 't' => 't', 'in_stock' => 'in_stock');
+}
+
+function _node_specifications_get_catalog_queried_nids() {
+	$nids = array();
+	if (isset($_GET['destination'])) {
+		$original_get = $_GET;
+		$q = array('q' => $_GET['destination']);
+		unset($_GET['nsids'], $_GET['destination'], $_GET['q']);
+		$_GET = array_merge($_GET, $q);
+	}
+
+	if ($cache = cache_get(_node_specifications_cache_id())) {
+		$nids = $cache->data;
+	}
+
+	if (isset($original_get)) {
+		$_GET = $original_get;
+	}
+
+	return $nids;
+}
+
+
+/**
+* Implements hook_taxonomy_term_delete()
+*/
+function node_specifications_taxonomy_term_delete($term) {
+  db_query('DELETE FROM {node_specifications_index} WHERE tid = :tid', array(':tid' => $term->tid));
+}
+
+
+/**
+* Implements hook_taxonomy_vocabulary_delete()
+*/
+function node_specifications_taxonomy_vocabulary_delete($vocabulary) {
+  db_query('UPDATE {node_specifications} SET vid = NULL WHERE (NOT vid IS NULL) AND (vid = :vid)', array(':vid' => $vocabulary->vid,));
+}
+
+
+function node_specifications_init() {
+  
+}
+
+
+/// OLD ::function _node_specifications_load_indexes() {
+/// OLD ::	$indexes = &drupal_static(__FUNCTION__, array());
+/// OLD ::	if (!$indexes) {
+/// OLD ::		foreach (db_query('SELECT * FROM {node_specifications_index}') as $index) {
+/// OLD ::      if ($index->tid) {
+/// OLD ::        $indexes[$index->nsid][$index->tid] = $index->tid;
+/// OLD ::      }
+/// OLD ::		}
+/// OLD ::	}
+/// OLD ::	return $indexes;
+/// OLD ::}
+
+/**
+*
+*/
+function _node_specifications_load_by_indexes($node_type, $tids = array(), $vids = array()) {
+  $vids = (array)$vids;
+  sort($vids);
+  $tids = (array)$tids;
+  sort($tids);
+
+  $results = &drupal_static(__FUNCTION__, array());
+  $key = $node_type . ':' . implode('-', $tids) . ':' . implode('-', $vids);
+
+  if (!isset($results[$key])) {
+    $results[$key] = array();
+    // attempt 3:
+    foreach (node_specifications_load_multiple(FALSE, array('node_type' => $node_type)/* + ($vids ? array('vid' => $vids) : array())*/) as $nsid => $specification) {
+      if ($tids) {
+        if ($specification->tids) {
+          if (array_intersect($specification->tids, $tids)) {
+            $results[$key][$nsid] = $specification;
+          }
+          elseif ($specification->go_deep) {
+            foreach (taxonomy_term_load_multiple($specification->tids) as $term) {
+              foreach (taxonomy_get_tree($term->vid, $term->tid) as $t) {
+                if (in_array($t->tid, $tids)) {
+                  $results[$key][$nsid] = $specification;
+                  break 2;
+                }
+              }
+            }
+          }
+        }
+        elseif (!$specification->vid) {
+          $results[$key][$nsid] = $specification;
+        }
+      }
+      elseif (!$vids || in_array($specification->vid, $vids)) {
+        $results[$key][$nsid] = $specification;
+      }
+
+
+      //attemt 2 if (!$specification->tids && !$specification->vid) {
+      //attemt 2   $results[$key][$nsid] = $specification;
+      //attemt 2 }
+      //attemt 2 elseif ($specification->vid && $vids && in_array($specification->vid, $vids)) {
+      //attemt 2   $results[$key][$nsid] = $specification;
+      //attemt 2 }
+      //attemt 2 elseif ($specification->tids && $tids && array_intersect($specification->tids, $tids)) {
+      //attemt 2    $results[$key][$nsid] = $specification;
+      //attemt 2 }
+      //attemt 2 elseif ($specification->go_deep && $specification->tids && $vids && in_array($specification->vid, $vids)) {
+      //attemt 2   foreach (taxonomy_term_load_multiple($specification->tids, array('vid' => $specification->vid)) as $term) {
+      //attemt 2     foreach (taxonomy_get_tree($term->vid, $term->tid) as $t) {
+      //attemt 2       if (!$tids || in_array($t->tid, $tids)) {
+      //attemt 2         $results[$key][$nsid] = $specification;
+      //attemt 2         break 2;
+      //attemt 2       }
+      //attemt 2     }
+      //attemt 2   }
+      //attemt 2 }
+    }
+
+    // OLD:
+    /// OLD : foreach (_node_specifications_load_indexes() as $nsid => $index) {
+    /// OLD :   if (!empty($index['node_type'][$node_type])) {
+    /// OLD :     //if taxonomy related index settings is empty, then attach specification to whole node type
+    /// OLD :     if (empty($index['tid']) && empty($index['vid'])) {
+    /// OLD :       $nsids[$nsid] = $nsid;
+    /// OLD :     }
+    /// OLD :     //check vocabulary index settings
+    /// OLD :     elseif (!empty($index['vid']) && $vids && array_intersect($index['vid'], $vids)) {
+    /// OLD :       $nsids[$nsid] = $nsid;
+    /// OLD :     }
+    /// OLD :     //check term index settings
+    /// OLD :     elseif (!empty($index['tid']) && $tids && array_intersect($index['tid'], $tids)) {
+    /// OLD :       $nsids[$nsid] = $nsid;
+    /// OLD :     }
+    /// OLD :     //check for go_deep index settings
+    /// OLD :     elseif (!empty($index['go_deep']) && !empty($index['tid']) && $vids && ($v = array_intersect($index['go_deep'], $vids))) {
+    /// OLD :
+    /// OLD :       /* OLD tarabarshina:
+    /// OLD :       foreach ($index['tid'] as $tid) {
+    /// OLD :         if (empty($terms[$tid])) {
+    /// OLD :           $terms[$tid] = taxonomy_term_load($tid);// vids = array_keys($index['go_deep'])
+    /// OLD :         }
+    /// OLD :         if (!empty($terms[$tid]->vid) && !empty($index['go_deep'][$terms[$tid]->vid])) {
+    /// OLD :           $tree = taxonomy_get_tree($terms[$tid]->vid, $tid);
+    /// OLD :           foreach ($tree as $t) {
+    /// OLD :             if (in_array($t->tid, $tids)) {
+    /// OLD :               $nsids[$nsid] = $nsid;
+    /// OLD :               continue;
+    /// OLD :             }
+    /// OLD :           }
+    /// OLD :         }
+    /// OLD :       }*/
+    /// OLD :       // New tarabarshina:
+    /// OLD :       foreach (taxonomy_term_load_multiple($index['tid'], array('vid' => $v)) as $term) {
+    /// OLD :         foreach (taxonomy_get_tree($term->vid, $term->tid) as $t) {
+    /// OLD :           if (!$tids || in_array($t->tid, $tids)) {
+    /// OLD :             $nsids[$nsid] = $nsid;
+    /// OLD :             break 2;
+    /// OLD :           }
+    /// OLD :         }
+    /// OLD :       }
+    /// OLD :     }
+    /// OLD :   }
+    /// OLD : }
+
+  }
+  return $results[$key];
+}
+
+/**
+ * @param $node
+ *
+ * @return array tids from $node
+ */
+// OLD : function _node_specifications_node_get_terms($node) {
+// OLD :   // old:
+// OLD :   //$tids = array();
+// OLD : 	//foreach (field_info_instances('node', $node->type) as $instance) {
+// OLD : 	//	$field = field_info_field($instance['field_name']);
+// OLD : 	//	if ($field['type'] === 'taxonomy_term_reference') {
+// OLD : 	//		$items = field_get_items('node', $node, $field['field_name']);
+// OLD : 	//		if ($items) {
+// OLD :   //      foreach ($items as $item) {
+// OLD :   //        if (!empty($item['tid'])) {
+// OLD :   //          $tids[$item['tid']] = $item['tid'];
+// OLD :   //        }
+// OLD :   //      }
+// OLD : 	//		}
+// OLD :   //
+// OLD : 	//	}
+// OLD : 	//}
+// OLD :   //
+// OLD : 	//return $tids;
+// OLD : }
+
+/**
+ * Helper function
+ *
+ * @return array of field type options
+ */
+function _node_specifications_get_fieldtype_names() {
+	return array(
+		'text' => t('Text field'),
+		'number_integer' => t('Integer digit field'),
+		'list_text' => t('Text select'),
+		'color_select' => t('Color select'),
+		'logic' => t('Logic field'),
+		'image' => t('Image field'),
+	);
+}

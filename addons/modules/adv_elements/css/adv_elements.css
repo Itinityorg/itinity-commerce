@@ -1,0 +1,34 @@
+.js-opts-wrapper {
+	padding: 0;
+	background-color: Window;
+	overflow: auto;
+  
+}
+.js-opts-wrapper, .container-inline div.js-opts-wrapper, .js-opts-wrapper label   {
+	display:block;
+  
+}
+
+.js-opts-wrapper.error {
+	background-image: none;
+	background-color: transparent;
+	border-width: 2px;
+}
+
+
+.js-opts-wrapper label.selected {
+	background-color: Highlight;
+}
+.js-opts-wrapper label {
+	border:1px solid transparent;
+}
+.js-opts-wrapper label.focused {
+	border:1px dotted #777;
+}
+
+.js-opts-wrapper label {
+  color: inherit !important;
+}
+.js-opts-wrapper label.selected {
+  color: HighlightText !important;
+}

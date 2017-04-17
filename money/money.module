@@ -1,0 +1,920 @@
+<?php //$Id: money.module, v 1.0 2015/05/07 17:44:52 itinity Exp $
+/**
+ * Copyright 2015-2017 Itinity Ltd. (itinity.ru). All rights reserved.
+ * Licensed under the GNU General Public License, version 2 or later.
+ */
+
+/**
+ * This module implements money transaction entity type, API for payment systems, interaction beetween money sources/recipients, cash account routines and other stuff for work with moneys
+ */
+
+
+require_once dirname(__FILE__) . '/money.transaction.inc';
+require_once dirname(__FILE__) . '/money.theme.inc';
+require_once dirname(__FILE__) . '/money.pages.inc';
+
+
+/**
+ * Implements hook_menu()
+ */
+function money_menu() {
+  $items['admin/config/money'] = array(
+    'title' => 'Commerce',
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('money_config_form'),
+    'access arguments' => array('administer site configuration'),
+    'file' => 'money.admin.inc',
+  );
+  $items['admin/config/money/config'] = array(
+    'title' => 'Configuration',
+    'type' => MENU_DEFAULT_LOCAL_TASK,
+    'weight' => -10,
+  );
+
+  /**
+   * IKW переместить в раздел "Коммерция" -> "Оплаты"
+   * ex admin/config/money
+   */
+  $items['admin/config/money/payment'] = array(
+    'title' => 'Payment',
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('money_payment_config_form'),
+    'access arguments' => array('administer site configuration'),
+    'file' => 'money.admin.inc',
+    'type' => MENU_LOCAL_TASK,
+    'weight' => 5,
+  );
+
+  $items['admin/config/money/transactions'] = array(
+    'title' => 'Money transactions',
+    'page callback' => 'money_transactions_overview_page',
+    'access arguments' => array('administer moneys'),
+    'file' => 'money.pages.inc',
+    'type' => MENU_LOCAL_TASK,
+  );
+
+  $items['admin/config/money/transactions/%money_source_info'] = array(
+    'title' => 'Money transactions',
+    'page callback' => 'money_transactions_overview_page',
+    'page arguments' => array(4),
+    'access arguments' => array('administer moneys'),
+    'file' => 'money.pages.inc',
+    'type' => MENU_CALLBACK,
+  );
+
+
+  $items['money/payment/%/%'] = array(
+    'title' => 'Payment',
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('money_payment_form', 2, 3, 4, 5, 6,),
+    //'access callback' => 'money_execute_access',
+    'access arguments' => array('access content'),//array(2, 3, 4, 5, 6,),
+    'type' => MENU_CALLBACK,
+    'file' => 'money.forms.inc',
+  );
+
+  $items['money/transaction/%money_transaction'] = array(
+    'title' => 'Money transaction',
+    'title callback' => 'money_transaction_label',
+    'title arguments' => array(2, 'money_transaction'),
+    'page callback' => 'money_transaction_view',
+    'page arguments' => array(2,),
+    'access callback' => 'money_transaction_view_access',
+    'access arguments' => array(2,),
+    'type' => MENU_CALLBACK,
+  );
+  return $items;
+}
+
+
+/**
+ * Implements hook_permission()
+ */
+function money_permission() {
+  return array(
+    'administer moneys' => array(
+      'title' => t('Administer finances'),
+    ),
+  );
+}
+
+
+/**
+ * Implements hook_trigger_info().
+ */
+function money_trigger_info() {
+  $trigger = array();
+
+  foreach (money_operations_info() as $operation => $operation_info) {
+    $trigger['money_transaction']['money_transaction_' . $operation . '_insert'] = array(
+      'label' => t('After saving new %operation_title transaction', array('%operation_title' => $operation_info['title'])),
+    );
+//    $trigger['money_transaction']['money_transaction_' . $operation . '_update'] = array(
+//      'label' => t('After updating existing %operation_title transaction', array('%operation_title' => $operation_info['title'])),
+//    );
+  }
+
+  return $trigger;
+}
+
+
+/**
+ * Calls action functions for money transactions.
+ * @see _trigger_node()
+ *
+ * @param $node
+ *   Node object.
+ * @param $hook
+ *   Hook to trigger.
+ * @param $a3
+ *   Additional argument to action function.
+ * @param $a4
+ *   Additional argument to action function.
+ */
+function _money_transaction_trigger($money_transaction, $hook, $a3 = NULL, $a4 = NULL) {
+  if (!module_exists('trigger')) {
+    return; // do nothing
+  }
+
+  // Keep objects for reuse so that changes actions make to objects can persist.
+  static $objects;
+  // Prevent recursion by tracking which operations have already been called.
+  static $recursion;
+
+  $aids = trigger_get_assigned_actions($hook);
+
+  if (!$aids) {
+    return;
+  }
+
+  if (isset($recursion[$hook])) {
+    return;
+  }
+
+  $recursion[$hook] = TRUE;
+
+  $context = array(
+    'group' => 'money_transaction',
+    'hook' => $hook,
+  );
+
+  // We need to get the expected object if the action's type is not 'money_transaction'.
+  // We keep the object in $objects so we can reuse it if we have multiple actions
+  // that make changes to an object.
+  foreach ($aids as $aid => $info) {
+    $type = $info['type'];
+    if ($type != 'money_transaction') {
+      if (!isset($objects[$type])) {
+        $objects[$type] = _money_transaction_trigger_normalize_context($type, $money_transaction);
+      }
+      // Since we know about the money_transaction, we pass that info along to the action.
+      $context['money_transaction'] = $money_transaction;
+      $result = actions_do($aid, $objects[$type], $context, $a3, $a4);
+    }
+    else {
+      actions_do($aid, $money_transaction, $context, $a3, $a4);
+    }
+  }
+
+  unset($recursion[$hook]);
+}
+
+
+/**
+ * @see _trigger_normalize_node_context()
+ */
+function _money_transaction_trigger_normalize_context($type, $money_transaction) {
+  if ($type == 'user') {
+    return user_load($money_transaction->uid);
+  }
+  elseif (money_operations_info($money_transaction->operation, $money_transaction->operation_key, 'entity_type') == $type) {
+    if ($entity_id = money_operations_info($money_transaction->operation, $money_transaction->operation_key, 'entity_id')) {
+      $entity = entity_load($type, array($entity_id));
+      return $entity[$entity_id];
+    }
+  }
+}
+
+
+/**
+ * Load callback for overview money transactions pages
+ */
+function money_source_info_load($source, $source_key = NULL) {
+  $money_sources_info = money_sources_info($source, $source_key);
+  return $money_sources_info ? $money_sources_info : FALSE;
+}
+
+
+/**
+ * Access callback for /money/transaction/%
+ */
+function money_transaction_view_access($money_transaction) {
+  $uid = $GLOBALS['user']->uid;
+  if (user_access('administer moneys')) {
+    return TRUE;
+  }
+  if ($uid) {
+    if ($money_transaction->uid == $uid) {
+      return TRUE;
+    }
+    if ($money_transaction->source === 'user' && $money_transaction->source_key == $uid) {
+      return TRUE;
+    }
+    if ($money_transaction->recipient === 'user' && $money_transaction->recipient_key == $uid) {
+      return TRUE;
+    }
+  }
+  return FALSE;
+}
+
+
+/**
+ * Renderable link(button) for goto payment page
+ */
+function money_payment_widget($operation, $operation_key, $sum = NULL, $source = NULL) {
+  $build = array();
+
+  if (money_execute_access($operation, $operation_key, $sum, is_array($source) ? $source : NULL, TRUE, $m)) {
+    $sources = is_array($source) ? array($source) : array();
+
+    if (!$sources) {
+      foreach (money_sources_info() as $source_info) {
+        if (!$source || $source_info['source'] === $source) {
+          if (money_execute_access($operation, $operation_key, $sum, $source_info, TRUE, $m)) {
+            $sources[] = $source_info;
+          }
+        }
+      }
+    }
+
+    $args = array(
+      'money/payment/' . $operation . '/' . $operation_key,
+    );
+    if ($sources) {
+      if (count($sources) == 1) {
+        $args[] = ($sum ? $sum : '') . '/' . $sources[0]['source'] . ($sources[0]['key'] ? '/' . $sources[0]['key'] : '');
+      }
+      elseif ($sum) {
+        $args[] = $sum;
+      }
+
+      $build = array(
+        '#operation' => $operation,
+        '#operation_key' => $operation_key,
+        '#sum' => $sum,
+        '#source' => count($sources) == 1 ? $sources[0] : NULL,
+        '#type' => 'link',
+        '#title' => money_operations_info($operation, $operation_key, 'title'),
+        '#href' => implode('/', $args),
+        '#options' => array(
+          'query' => drupal_get_destination(),
+          'html' => TRUE,
+        ),
+        '#attributes' => array(
+          'class' => array('form-submit',),
+        ),
+        '#id' => "$operation-$operation_key-payment-widget",
+      );
+    }
+  }
+  else {
+//   uncomment line below for debug
+//    dpm($m);
+  }
+
+  $context = array(
+    'operation' => $operation,
+    'operation_key' => $operation_key,
+    'sum' => $sum,
+    'source' => $source,
+    'error_messages' => $m,
+  );
+
+  drupal_alter('money_payment_widget', $build, $context);
+
+  return $build;
+}
+
+/**
+ * Clear money internal static caches
+ */
+function money_reset_static() {
+  drupal_static_reset('money_get_holded');
+  drupal_static_reset('money_get_balance');
+  drupal_static_reset('money_operation_result');
+}
+
+
+/**
+ * Get summary paid money count for given operation.
+ */
+function money_operation_result($operation, $operation_key = NULL) {
+  $results = &drupal_static(__FUNCTION__, array());
+  $key = $operation . ':' . $operation_key;
+  if (!array_key_exists($key, $results)) {
+    $query = db_select('money_transactions', 'mt');
+    $query->addExpression('SUM(sum)', 'sum');
+    $query->condition('mt.operation', $operation);
+    if ($operation_key) {
+      $query->condition('mt.operation_key', $operation_key);
+    }
+    $results[$key] = $query->execute()->fetchField();
+  }
+  return $results[$key];
+}
+
+
+/**
+ * Get summary money count by cash account($source) and optional specific operation
+ */
+function money_get_balance($source_info, $operation = NULL, $operation_key = NULL) {
+  $results = &drupal_static(__FUNCTION__, array());
+  $key = $source_info['source'] . ':' . $source_info['key'] . ':op-' . $operation . ':key-' . $operation_key;
+  if (!array_key_exists($key, $results)) {
+    $query = db_select('money_transactions', 'mt');
+    $query->where('(source = :s AND source_key = :k) OR (recipient = :s AND recipient_key = :k)', array(':s' => $source_info['source'], ':k' => $source_info['key']));
+    $query->addExpression('SUM(IF(mt.recipient = :s AND recipient_key = :k, mt.sum, -mt.sum))', 'sum', array(':s' => $source_info['source'], ':k' => $source_info['key']));
+    if ($operation) {
+      $query->condition('mt.operation', $operation);
+      if ($operation_key) {
+        $query->condition('mt.operation_key', $operation_key);
+      }
+    }
+    $results[$key] = $query->execute()->fetchField();
+  }
+  return $results[$key];
+}
+
+
+/**
+ * Get summary holded money by cash account($source) or(and) specific operation
+ */
+function money_get_holded($source_info, $operation = NULL, $operation_key = NULL) {
+  $results = &drupal_static(__FUNCTION__, array());
+  $key = $source_info['source'] . ':' . $source_info['key'] . ':op-' . $operation . ':key-' . $operation_key;
+  if (!array_key_exists($key, $results)) {
+    $query = db_select('money_hold', 'mh');
+    $query->addExpression('SUM(mh.sum)', 'sum');
+    $query->condition('mh.source', $source_info['source']);
+    $query->condition('mh.source_key', $source_info['key']);
+    if ($operation) {
+      $query->condition('mh.operation', $operation);
+      if ($operation_key) {
+        $query->condition('mh.operation_key', $operation_key);
+      }
+    }
+    $results[$key] = $query->execute()->fetchField();
+  }
+  return $results[$key];
+}
+
+
+/**
+ * Get summary funds on cash account for any new money operations
+ * Pass operation + key pair if you planned execute transaction vith this operation + key
+ */
+function money_get_available($source_info, $operation = NULL, $operation_key = NULL) {
+  $holded = money_get_holded($source_info);
+  if ($operation && $operation_key) {
+    $holded -= money_get_holded($source_info, $operation, $operation_key);
+  }
+  $available = money_get_balance($source_info) - $holded;
+
+
+  $context = array(
+    'source_info' => $source_info,
+    'operation' => $operation,
+    'operation_key' => $operation_key,
+  );
+
+  drupal_alter('money_get_available', $available, $context);
+
+  return $available > 0 ? $available : 0;
+}
+
+
+/**
+ * Hold moneys for specified operation. Holded moneys will automatically unhold at new transaction saved
+ * @see also money_transaction_save()
+ * @see also money_unhold()
+ */
+function money_hold($operation, $operation_key, $sum, $source_info) {
+  money_reset_static();
+  money_unhold($operation, $operation_key, $source_info);
+  db_query('INSERT INTO {money_hold} SET operation = :op, operation_key =:key, 	source = :src, source_key = :src_key, sum = :sum, uid = :uid, timestamp = :t', array(
+    ':op' => $operation,
+    ':key' => $operation_key ? $operation_key : '',
+    ':src' => $source_info['source'],
+    ':src_key' => $source_info['key'],
+    ':sum' => $sum,
+    ':uid' => $GLOBALS['user']->uid,
+    ':t' => REQUEST_TIME,
+  ));
+  if ($source_info['source'] === 'user') {
+    module_invoke('admin_menu', 'flush_caches', $source_info['key']);
+  }
+}
+
+
+/**
+ * Unhold previously holded moneys.
+ * @see also money_transaction_save()
+ * @see also money_hold()
+ */
+function money_unhold($operation, $operation_key, $source_info = NULL) {
+  money_reset_static();
+  $query = db_delete('money_hold');
+  $query->condition('operation', $operation);
+  $query->condition('operation_key', $operation_key);
+  if ($source_info) {
+    $query->condition('source', $source_info['source'])
+      ->condition('source_key', $source_info['key']);
+  }
+  $query->execute();
+  if ($source_info['source'] === 'user') {
+    module_invoke('admin_menu', 'flush_caches', $source_info['key']);
+  }
+}
+
+
+/**
+ * Implements hook_init()
+ */
+function money_init() {
+
+}
+
+
+/**
+ * Implements hook_money_operation_get_recipient()
+ */
+function money_money_operation_get_recipient($operation, $operation_key) {
+  if ($operation === 'refuel') {
+    if ($operation_key === 'site') {
+      return 'site';
+    }
+    else {
+      return array('user', $operation_key);
+    }
+  }
+}
+
+
+/**
+ * Find money recipient cash account that can recieve the moneys by specified operation
+ */
+function money_operation_get_recipient($operation, $operation_key) {
+  $recipient = NULL;
+  if (($module = money_operations_info($operation, $operation_key, 'module')) && function_exists($fn = $module . '_money_operation_get_recipient')) {
+    if ($recipient = $fn($operation, $operation_key)) {
+      $recipient = array_values((array) $recipient);
+      $recipient += array(1 => NULL);
+      // @todo delete never used invocation of hook_money_operation_get_recipient_alter() ?
+      drupal_alter('money_operation_get_recipient', $recipient[0], $recipient[1]); // hook_money_operation_get_recipient_alter($recipient, $recipient_key);
+      return money_sources_info($recipient[0], $recipient[1]);
+    }
+  }
+}
+
+
+/**
+ * Find operation customer user
+ * @return user object
+ * @todo documentation
+ */
+function money_operation_get_customer($operation, $operation_key) {
+  global $user;
+  $customer = NULL;
+
+  if ($module = money_operations_info($operation, $operation_key, 'module')) {
+    if (module_hook($module, __FUNCTION__)) {
+      $customer = user_load(module_invoke($module, __FUNCTION__, $operation, $operation_key));
+    }
+  }
+
+  if (is_null($customer)) {
+    $customer = user_load($user->uid);
+  }
+
+  return $customer;
+}
+
+
+/**
+ * Implements hook_money_operations_info()
+ */
+function money_money_operations_info($operation = NULL, $operation_key = NULL) {
+  $result = array(
+    'refuel' => array(
+      'title' => ($operation === 'refuel' && $operation_key === 'site') ? t('Refuel site cash account') : t('Refuel personal balance'),
+    ),
+  );
+
+  return $result;
+}
+
+
+/**
+ * Enum all possible money operations
+ */
+function money_operations_info($operation = NULL, $operation_key = NULL, $property = NULL) {
+  $result = array();
+
+  foreach (module_implements('money_operations_info') as $module) {
+    $fn = $module . '_money_operations_info';
+    if ($info = $fn($operation, $operation_key)) {
+      foreach ($info as $key => $data) {
+        $data += array(
+          'operation' => $key,
+          'operation_key' => $operation_key,
+          'module' => $module,
+          'sources' => array('any'),
+        );
+        $result[$key] = $data;
+      }
+    }
+  }
+
+  $context = array(
+    'operation' => $operation,
+    'operation_key' => $operation_key,
+    'property' => $property
+  );
+
+  drupal_alter('money_operations_info', $result, $context);
+
+  if ($property) {
+    $result = array_column($result, $property, 'operation');
+  }
+
+  return !empty($operation) ? (isset($result[$operation]) ? $result[$operation] : NULL) : $result;
+}
+
+
+/**
+ * Implements hook_money_sources_info()
+ */
+function money_money_sources_info($source = NULL, $source_key = NULL) {
+  return array(
+    'site' => array(
+      'title' => t('Site'),
+      'description' => variable_get('site_name'),
+      'enabled' => TRUE,
+    ),
+  );
+}
+
+
+/**
+ * Enum all possible money sources or return specific information by passed optional $source and $property params
+ */
+function money_sources_info($source = NULL, $source_key = NULL, $property = NULL) {
+  $result = array();
+  $money_payment_systems_settings = variable_get('money_payment_systems_settings', array());
+  foreach ($money_payment_systems_settings as $key => $data) {
+    $result[$key] = array();
+  }
+  foreach (module_implements('money_sources_info') as $module) {
+    $fn = $module . '_money_sources_info';
+    if ($data = $fn($source, $source_key)) {
+      foreach ($data as $id => $item) {
+        $item['source'] = $id;
+        $item['key'] = isset($item['key']) ? $item['key'] : ($source_key ? $source_key : '');
+        $item += array(
+          'title' => NULL,
+          'module' => $module,
+          'description' => '',
+          'external' => FALSE,
+          'online' => TRUE,
+          'icon_url' => NULL,
+        );
+
+
+        if (!empty($money_payment_systems_settings[$id]['description'])) {
+          $item['description'] = $money_payment_systems_settings[$id]['description'];
+        }
+        if (!empty($money_payment_systems_settings[$id]['title'])) {
+          $item['title'] = $money_payment_systems_settings[$id]['title'];
+        }
+        if ($item['description'] === $item['title']) {
+          //$item['description'] = '';
+        }
+        if ($item['icon_url']) {
+          $item['icon_url'] = drupal_get_path('module', $module) . '/' . $item['icon_url'];
+        }
+        
+
+//        if ($item['external']) { // is payment system
+        $item['enabled'] = !isset($money_payment_systems_settings[$id]['enabled']) || $money_payment_systems_settings[$id]['enabled'];
+        $item += array('settings' => array());
+        $item['settings'] = isset($money_payment_systems_settings[$id]['settings']) ? $money_payment_systems_settings[$id]['settings'] : $item['settings'];
+//        }
+        $result[$id] = $item;
+      }
+    }
+  }
+  drupal_alter('money_sources_info', $result, $source, $source_key, $property);
+  $result = array_filter($result);
+  if ($property) {
+    $args = func_get_args();
+    unset($args[0], $args[1]);
+    foreach ($result as $idx => $data) {
+      $result[$idx] = drupal_array_get_nested_value($data, $args);
+    }
+  }
+  if ($source) {
+    $result = isset($result[$source]) ? $result[$source] : NULL;
+  }
+  return $result;
+}
+
+
+/**
+ * Implements hook_money_execute_access()
+ */
+function money_money_execute_access($operation, $operation_key, $sum = NULL, $source_info = NULL, $before_insert = FALSE, &$error_messages = NULL) {
+  if ($source_info && $source_info['source'] === 'site' && !user_access('administer moneys')) {
+    $error_messages[] = t('Only for admins');
+    return FALSE;
+  }
+  // IKW
+  if ($operation === 'refuel') {
+    if ($operation_key === 'site') {
+      return FALSE;
+    }
+  }
+}
+
+/**
+ * Determine that money operation can be executed.
+ * Returns boolean.
+ *
+ * @param $operation - module-defined machine name of operation @see hook_money_operations_info()
+ * @param $operation_key - unique identifier of current operation
+ * @param $sum - sum to transact
+ * @param $source_info - module-defined money source array , @see hook_money_sources_info()
+ * @param $before_insert - bool, needed for advanced checking of execution access. Set to TRUE if your module provides payment method that allows to user choose payment method but not allows execution transaction.
+ * If is = FALSE, user will see access denied on final payment page.
+ * @param $error_messages - reference to temporary errors storage array, may be used for display to users or debugging (example: if (!money_execute_access($op, $key, $sum, $src, $before_insert, $err)) { drupal_set_message(implode('; ', $err), 'error') }
+ */
+function money_execute_access($operation, $operation_key, $sum = NULL, $source_info = NULL, $before_insert = FALSE, &$error_messages = NULL) {
+//  $context1 = get_defined_vars();
+  $context1 = array(
+    'operation' => $operation,
+    'operation_key' => $operation_key,
+    'sum' => $sum,
+    'source_info' => $source_info,
+    'before_insert' => $before_insert,
+    'error_messages' => $error_messages,
+  );
+
+  $error_messages = array();
+  // Deny anonymous operations
+  //if (!$GLOBALS['user']->uid) { //!!!???
+  //  $error_messages[] = l(t('Only for registered users'), 'user', array('query' => drupal_get_destination()));
+  //  return FALSE;
+  //}
+  $sum *= 1;
+  // Deny negative sum; database max restricton
+  if ($sum < 0 || $sum > 99999999.99) {
+    $error_messages[] = t('Incorrect sum');
+    return FALSE;
+  }
+
+  $operation_info = money_operations_info($operation, $operation_key);
+
+  // Operation must be defined in hook
+  if (!$operation_info) {
+    $error_messages[] = t('Operation @op is not supported', array('@op' => $operation));
+    return FALSE;
+  }
+
+  // Operation must be available with source
+  if ($source_info && !array_intersect(array($source_info['source'], 'any'), $operation_info['sources'])) {
+    $error_messages[] = t('Operation @op is not available with source @source', array(
+      '@op' => $operation_info['title'],
+      '@source' => $source_info['title']
+    ));
+    return FALSE;
+  }
+
+  if (!($recipient = money_operation_get_recipient($operation, $operation_key))) {
+    $error_messages[] = t('Can not find recipient');
+    return FALSE;
+  }
+  // Deny operation if recipient is external (is payment system)
+  if (money_sources_info($recipient['source'], $recipient['key'], 'external')) {
+    $error_messages[] = t('Payout is denied');
+    return FALSE;
+  }
+  // Deny operations if source equals to recipient
+  if ($source_info) {
+    if ($recipient && $source_info['source'] === $recipient['source'] && $source_info['key'] == $recipient['key']) {
+      $error_messages[] = t('Source is equals to recipient');
+      return FALSE;
+    }
+  }
+
+  if (!$source_info) {
+    // Find possible sources
+    $possible_found = FALSE;
+    foreach (money_sources_info() as $info) {
+      if (money_execute_access($operation, $operation_key, $sum, $info, $before_insert, $error_messages)) {
+        $possible_found = TRUE;
+        // break;
+      }
+    }
+    if (!$possible_found) {
+      $error_messages[] = t('Money sources not found');
+      return FALSE;
+    }
+  }
+  // Source and recipient must be defined in core
+  elseif (!money_sources_info($source_info['source'], $source_info['key'])) {
+    $error_messages[] = t('Money source is not defined');
+    return FALSE;
+  }
+  else { // money source is specified in params and defined in core:
+    // if source is external (payment system) then it must be enabled
+    if (money_sources_info($source_info['source'], $source_info['key'], 'external')) {
+      if (!money_sources_info($source_info['source'], $source_info['key'], 'enabled')) {
+        $error_messages[] = t('Payment system %name is disabled at current time.', array('%name' => money_sources_info($source_info['source'], $source_info['key'], 'title')));
+        return FALSE;
+      }
+    }
+  }
+
+  // Call global hook
+  $result = TRUE;
+  $modules_support = FALSE;
+  foreach (module_implements('money_execute_access') as $module) {
+    $fn = $module . '_money_execute_access';
+    $m = array();
+    if (!is_null($access = $fn($operation, $operation_key, $sum, $source_info, $before_insert, $m))) { // result of $fn() is FALSE/0
+      $modules_support = TRUE;
+      $result = $result && $access;
+      if (!$access) {
+        if (!$m) {
+          $error_messages[] = t('Module %name is not permit this money operation', array('%name' => $module));
+        }
+        else {
+          foreach ($m as $m) {
+            $error_messages[] = $m . (user_access('administer modules') ? ' (' . t('module') . ' ' . $module . ')' : '');
+          }
+        }
+//        break; // One or more modules already deny access to operation - break cycle
+      }
+    }
+  }
+  // Deny operation if no modules supports it.
+  if (!$error_messages && !$modules_support && user_access('administer modules')) {
+    $error_messages[] = t('Modules not implements hook_money_execute_access() for this operation.');
+  }
+
+  $context1['error_messages'] = &$error_messages;
+  drupal_alter('money_execute_access', $result, $context1);
+  return $result;
+}
+
+
+/**
+ * Get currency information
+ *
+ * @params NULL, NULL
+ *  Returns full list of world currencies
+ * @param $currency
+ *  Returns information about specified currency
+ * @param $property = NULL|title|symbol|reduction|full|decimals|country
+ *  Return list of currencies contains only required property; or returns only required property of specified $currency
+ */
+function money_currency_info($currency = NULL, $property = NULL) {
+  module_load_include('inc', 'money', 'money.currencies');
+  return _money_currency_info($currency, $property);
+}
+
+
+/**
+ * Helper function. Convert free typed currency (e.g. 'руб') to standard (e.g. 'RUB')
+ *
+ * @param $currency - currency string
+ * @param $strong - finally check that currency is exists in standard list (@see money_currency_info())
+ */
+function money_fix_currency($currency, $strong = FALSE) {
+  $currency = $currency ? $currency : NULL;
+  if ($currency && preg_match('/[^A-Z]/', $currency)) {
+    if (module_exists('transliteration')) {
+      $currency = transliteration_get($currency);
+    }
+    $currency = drupal_strtoupper(preg_replace('/[^a-z]/ui', '', $currency));
+  }
+  $currency = $currency ? substr($currency, 0, 3) : NULL;
+  if ($strong && $currency && !money_currency_info($currency)) {
+    $currency = NULL;
+  }
+  return $currency;
+}
+
+
+/**
+ * Converts rubles to kopeks, dollars to cents, euros to eurocents, pounds to pennies etc.
+ *
+ * @param $sum -- float
+ * @param $currency -- string or NULL
+ *
+ * @return int -- sum in monetary units
+ */
+function money_convert_to_monetary_unit($sum, $currency = NULL) {
+  $currency = !is_null($currency) ? $currency : variable_get('money_default_currency', 'RUB');
+  $decimals = money_currency_info($currency, 'decimals');
+  return round($sum * pow(10, $decimals));
+}
+
+
+/**
+ * @see money_convert_to_monetary_unit
+ */
+function money_convert_from_monetary_unit($sum, $currency = NULL) {
+  $currency = !is_null($currency) ? $currency : variable_get('money_default_currency', 'RUB');
+  $decimals = money_currency_info($currency, 'decimals');
+  return $sum / pow(10, $decimals);
+}
+
+
+/**
+ * Implements hook_module_implements_alter().
+ * money_form_money_payment_form_alter() в конец очереди
+ */
+function money_module_implements_alter(&$implementations, $hook) {
+  if ($hook == 'form_alter' && isset($implementations['money'])) {
+    $money_implementation = $implementations['money'];
+    unset($implementations['money']);
+    $implementations['money'] = $money_implementation;
+  }
+}
+
+
+/**
+ * ex cash_account_balance_widget()
+ */
+function money_balance_widget($source_info) {
+  $balance = money_get_balance($source_info) * 1;
+  $holded = money_get_holded($source_info) * 1;
+  $available = money_get_available($source_info) * 1;
+
+  if ($balance != $available) { // show 'balance' only if if $balance != $available
+    $build['balance'] = array(
+      '#type' => 'item',
+      '#title' => t('Balance'),
+      '#inline' => TRUE,
+      '#markup' => theme('price', array('price' => $balance)),
+    );
+  }
+
+  if ($holded) { // don't show 'holded' if $holded == 0
+    $price_holded = theme('price', array('price' => $holded));
+
+    $markup = ($source_info['source'] === 'user' && $source_info['key'])
+      ? l($price_holded, 'user/' . $source_info['key'] . '/money/holded', array('html' => TRUE,))
+      : $price_holded;
+
+    $build['holded'] = array(
+      '#type' => 'item',
+      '#title' => t('Holded'),
+      '#inline' => TRUE,
+      '#markup' => $markup,
+    );
+  }
+
+  $build['available'] = array(
+    '#type' => 'item',
+    '#title' => t('Available funds'),
+    '#inline' => TRUE,
+    '#markup' => theme('price', array('price' => $available)),
+  );
+
+  return $build;
+}
+
+
+/**
+ * Helper function
+ * use it to get the list of available sources for given $operation, $operation_key and $sum
+ * @see usage in money_payment_form()
+ * @see usage in _order_payment_method_form()
+ */
+function _money_available_sources($operation, $operation_key, $sum = NULL, $before_insert = FALSE) {
+  $available_sources = array();
+  
+  foreach (money_sources_info() as $idx => $info) {
+    if ($info['enabled'] && money_execute_access($operation, $operation_key, $sum, $info, $before_insert, $msgs)) {
+      $available_sources[$idx] = $info;
+    }
+  }
+
+  return $available_sources;
+}
+
+
+
+
+

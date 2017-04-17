@@ -1,0 +1,203 @@
+msgid ""
+msgstr ""
+"Project-Id-Version: PROJECT VERSION\n"
+"POT-Creation-Date: 2012-01-26 18:25+0300\n"
+"PO-Revision-Date: 2012-01-26 18:25+0300\n"
+"Last-Translator: NAME <EMAIL@ADDRESS>\n"
+"Language-Team: Russian <EMAIL@ADDRESS>\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=utf-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=3; plural=((((n%10)==1)&&((n%100)!=11))?(0):(((((n%10)>=2)&&((n%10)<=4))&&(((n%100)<10)||((n%100)>=20)))?(1):2));\n"
+
+msgctxt "product"
+msgid "Name"
+msgstr "Наименование"
+
+msgctxt "product"
+msgid "Request"
+msgstr "Заявка"
+
+msgid "Qty in stock"
+msgstr "Кол-во на складе"
+
+msgid "Your discount"
+msgstr "Ваша скидка"
+
+msgid "Not in stock"
+msgstr "Нет в наличии"
+
+msgid "In stock"
+msgstr "В наличии"
+
+msgid "Submit request"
+msgstr "Оставить заявку"
+
+msgid "Your request has been saved."
+msgstr "Ваш запрос был сохранён."
+
+msgid "Needed"
+msgstr "Нужно"
+
+msgid "Product requests"
+msgstr "Заявки"
+
+msgid "Mark as processed"
+msgstr "Пометить как обработанные"
+
+msgid "Disabled due synchronization with 1C"
+msgstr "Отключено из-за синхронизации с 1С"
+
+msgid "Most required products"
+msgstr "Наиболее востребованные"
+
+msgid "Unprocessed requests"
+msgstr "Не обработано заявок"
+
+msgid "Buy form"
+msgstr "Форма покупки"
+
+msgid "Secondary buy form"
+msgstr "Дублирующая форма покупки"
+
+msgid "In product list"
+msgstr "В списке товаров"
+
+msgid "Products"
+msgstr "Товары"
+
+msgid "You can !edit some field viewing settings for this list"
+msgstr "Вы можете !edit нектороые настройки отображения полей в этом списке"
+
+msgid "Deals"
+msgstr "Сделки"
+
+msgid "Sales volume"
+msgstr "Объем продаж"
+
+msgid "Proceeds"
+msgstr "Выручка"
+
+msgid "Sales"
+msgstr "Продажи"
+
+msgid "Sales by category"
+msgstr "Продажи по категориям"
+
+msgid "Manage price"
+msgstr "Управление ценой"
+
+
+msgid "Updated 1 good."
+msgid_plural "Updated @count goods."
+msgstr[0] "@count товар был обновлён."
+msgstr[1] "@count товара было обновлёно."
+msgstr[2] "@count товаров было обновлено."
+
+
+msgid "Reduction"
+msgstr "Сокращение"
+
+msgid "Qty with +/- buttons"
+msgstr "Кол-во с кнопками +/-"
+
+
+msgid "Buttons position"
+msgstr "Расположение кнопок"
+
+msgid "The form has become outdated. Please reload this page."
+msgstr "Данные устарели. Пожалуйста, перезагрузите эту страницу."
+
+
+msgid "Show old strikethrough price"
+msgstr "Показывать старую перечеркнутую цену"
+
+msgid "Show actual price"
+msgstr "Показывать актуальную цену"
+
+msgid "Show old price"
+msgstr "Показывать старую цену"
+
+msgid "Show \"You save\" text"
+msgstr "Показывать поле \"Вы экономите\""
+
+msgid "Number of digits after comma"
+msgstr "Количество знаков после запятой"
+
+msgid "Delivery conditions"
+msgstr "Условия доставки"
+
+msgid "More delivery methods"
+msgstr "Ещё способы доставки"
+
+
+msgid "today"
+msgstr "сегодня"
+
+msgid "tomorrow"
+msgstr "завтра"
+
+msgid "Here you can to indicate a order of placing elements."
+msgstr "Здесь вы можете указать последовательность размещения элементов."
+
+msgid "For example"
+msgstr "Например"
+
+msgid "[:Your:][:price:][:%:][:discount:]"
+msgstr "[:Ваша:][:price:][:%:][:скидка:]"
+
+msgid "After render"
+msgstr "После обработки"
+
+msgid "Your 182 rub -10% discount"
+msgstr "Ваша 182 руб. -10% скидка"
+
+msgid "[:Your discount::][:price:][:%:]"
+msgstr "[:Ваша скидка::][:price:][:%:]"
+
+msgid "Your discount: 182 rub - 10%"
+msgstr "Ваша скидка: 182 руб. -10%"
+
+msgid "All text in this field will be processed as follows"
+msgstr "Весь текст из этого поля будет обработан следующим образом"
+
+msgid "Simple text will take in this case: [:Simple text, here you can to write any text:]"
+msgstr "Простой текст будет взять в таком случае: [:Просто текст, здесь вы можете писать любой текст:]"
+
+msgid "Simple text, here you can to write any text"
+msgstr "Просто текст, здесь вы можете писать любой текст"
+
+msgid "For indicate place for a price product with currency, you need to write like here: [:price:]"
+msgstr "Для размещения цены продукта с валютой, вам нужно написать как здесь: [:price:]"
+
+msgid "182 rub"
+msgstr "182 руб."
+
+msgid "For indicate percents like this: [:%:]"
+msgstr "Для указания процентов, вот так: [:%:]"
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

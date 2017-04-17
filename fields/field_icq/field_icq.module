@@ -1,0 +1,180 @@
+<?php //$Id: field_icq.module, v 1.0 2011/03/30 12:02:00 Ivan Demenkov Exp $
+/**
+ * Copyright 2011-2017 Itinity Ltd. (itinity.ru). All rights reserved.
+ * Licensed under the GNU General Public License, version 2 or later.
+ */
+
+
+/**
+ * Implements hook_field_info().
+ */
+function field_icq_field_info() {
+  return array(
+    'icq' => array(
+      'label' => t('ICQ'),
+      'description' => t('This field stores and renderes icq number.'),
+      'default_widget' => 'icq',
+      'default_formatter' => 'icq',
+    ),
+  );
+}
+
+
+/**
+ * Implements hook_content_is_empty().
+ */
+function field_icq_field_is_empty($item, $field) {
+  return empty($item['icq']);
+}
+
+
+/**
+ * Implements hook_field_settings_form(). Added for field permissions module.
+ */
+function field_icq_field_settings_form($field, $instance, $has_data) {
+  $form = array();
+  return $form;
+}
+
+
+/**
+ * Implements hook_field_formatter_info().
+ *
+ */
+function field_icq_field_formatter_info() {
+  $formats = array(
+    'icq' => array(
+      'label' => t('ICQ'),
+      'field types' => array('icq'),
+    ),
+  );
+  return $formats;
+}
+
+
+/**
+ * Implements hook_field_formatter_view().
+ */
+function field_icq_field_formatter_view($object_type, $object, $field, $instance, $langcode, $items, $display) {
+  $element = array();
+  foreach ($items as $delta => $item) {
+    $element[$delta] = array(
+      '#theme' => 'icq',
+      '#icq' => $item['icq'],
+    );
+  }
+  return $element;
+}
+
+
+/**
+ * Implements hook_field_widget_info().
+ */
+function field_icq_field_widget_info() {
+  return array(
+    'icq' => array(
+      'label' => t('ICQ'),
+      'field types' => array('icq'),
+    ),
+  );
+}
+
+
+/**
+ * Implements hook_field_widget_form().
+ */
+function field_icq_field_widget_form(&$form, &$form_state, $field, $instance, $langcode, $items, $delta, $element) {
+  $element += array(
+    '#type' => 'textfield',
+    '#default_value' => isset($items[$delta]['icq']) ? _field_format_icq($items[$delta]['icq']) : NULL,
+    '#size' => 20,
+  );
+  return array('icq' => $element);
+}
+
+
+/**
+* Implements hook_field_validate()
+*/
+function field_icq_field_validate($entity_type, $entity, $field, $instance, $langcode, $items, &$errors) {
+  foreach ($items as $delta => $item) {
+    if (!empty($item['icq'])) {
+      if ($icq = trim($item['icq'])) {
+        $icq = preg_replace('/[^\d]/u', '', $item['icq']);
+        if (!$icq || preg_match('/[^\d\s\-]/u', $item['icq'], $m) || strlen($icq) > 10 || strlen($icq) < 5) {
+          $errors[$field['field_name']][$langcode][$delta][] = array(
+            'error' => 'field_icq_invalid',
+            'message' => t('"%uin" is not valid ICQ.', array('%uin' => $item['icq'])),
+          );
+        }
+      }
+
+    }
+  }
+}
+
+
+/**
+* Implements hook_field_presave()
+*/
+function field_icq_field_presave($entity_type, $entity, $field, $instance, $langcode, &$items) {
+  foreach ($items as $delta => $item) {
+    if ($icq = preg_replace('/[^\d]/u', '', $item['icq'])) {
+      $items[$delta]['icq'] = $icq;
+    }
+    else {
+      unset($items[$delta]);
+    }
+  }
+}
+
+
+/**
+* Implements hook_theme()
+*/
+function field_icq_theme() {
+  return array(
+    'icq' => array(
+      'variables' => array('icq' => NULL, ),
+      'function' => 'field_icq_icq_theme',
+    ),
+  );
+}
+
+
+function field_icq_icq_theme($variables) {
+  if (!empty($variables['icq'])) {
+    $icq = _field_format_icq($variables['icq']);
+    return '<span class="icq"><img class="icq-status" width="16" height="16" src="//web.icq.com/whitepages/online?icq=' . $variables['icq'] . '&img=27" alt="' . check_plain(t('Status of ICQ user @uin', array('@uin' => $icq, ))) . '" />&thinsp;<span class="icq-uin">' . $icq . '</span></span>';
+  }
+}
+
+
+/**
+* Helper function.
+* Convert 1234567 to 123-45-67
+*/
+function _field_format_icq($icq) {
+  $icq = rtrim(preg_replace('/\d{3}/', '$0-', $icq), '-'); // 1234567 -->> 123-456-7
+  $icq = preg_replace('/(\d)-(\d)$/', '-$1$2', $icq); // 123-456-7 -->> 123-45-67
+  return $icq;
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

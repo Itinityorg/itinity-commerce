@@ -1,0 +1,44 @@
+/* Element style */
+.slider-container {
+    width : 100%;
+}
+
+.slider table,
+.slider tbody,
+.ui-slider.ui-slider-horizontal.ui-widget.ui-widget-content.ui-corner-all {
+    border : 0;
+}
+
+.slider table {
+    margin-bottom: .5em;
+    padding : 0;
+    width   : 100%;
+}
+
+.ui-slider .ui-slider-handle {
+    z-index : 2;
+    width   : .4em;
+    height  : 1.2em;
+    cursor  : w-resize;
+}
+
+.ui-slider .ui-slider-range {
+    z-index : 1;
+    display : block;
+    border  : 0;
+}
+
+.ui-slider-horizontal {
+    height : .5em;
+}
+
+.ui-slider-horizontal .ui-slider-range {
+    top    : 0;
+    height : 100%;
+}
+
+.ui-slider-horizontal .ui-slider-handle {
+    border      : 0;
+    margin-left : -0.2em;
+    top         : -0.4em;
+}

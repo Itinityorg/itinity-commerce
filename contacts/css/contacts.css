@@ -1,0 +1,150 @@
+/*.contacts-page-col-1*/
+.page-contacts #site-contacts-map {
+	width:	100%;
+	height:	800px;
+}
+
+
+
+.site-contacts-working-hour, .site-contacts-lunch-hour {
+	padding: 0 0.5em;
+}
+
+.page-contacts .site-contacts-working-time {
+  padding-left: 0.5em;
+}
+
+.site-contacts-working-time  .site-contacts-working-days,
+.site-contacts-working-time  .site-contacts-working-day,
+.site-contacts-working-time  .site-contacts-working-hour,
+.site-contacts-working-time  .site-contacts-lunch-hour {
+  display: inline-block;
+  vertical-align: middle;
+}
+
+.site-contacts-working-days .site-contacts-working-day {
+  margin: 0 0.2em;
+  padding: 0 0.2em;
+}
+
+.site-contacts-working-days .site-contacts-working-day:first-child {
+  margin-left: 0;
+  padding-left: 0;
+}
+
+.additional-detailed {
+	padding-left: 0.5em;
+}
+
+.site-contacts-address-wrapper {
+	width: 100%;
+}
+
+.site-contacts-address-wrapper img {
+	float: left;
+	padding-right: 1em;
+}
+
+.site-contacts-address-wrapper img:hover {
+	cursor: -webkit-zoom-in;
+	cursor: -moz-zoom-in;
+	cursor: zoom-in;
+}
+
+#edit-contact-site-map label {
+	clear: both;
+	padding: 1em 0;
+}
+
+#contacts-form {
+	padding: 0;
+}
+
+.no-sidebars .contacts-page-col-1, .one-sidebar .contacts-page-col-1 {
+	width: 45%;
+	float: right;
+	margin-top: 0.5em;
+}
+
+.no-sidebars .contacts-page-col-2, .one-sidebar .contacts-page-col-2 {
+	width: 55%;
+	float: left;
+}
+
+.contacts-page-col-2 fieldset .fieldset-wrapper {
+  padding-right: 0;  
+}
+
+.contacts-page-col-1 #names, .content .contacts-page-col-1 h2 {
+	margin-top: 0;
+}
+
+.contacts-page-col-1 .fieldset-wrapper, .contact-cell-wrapper {
+	line-height: 1.4em;
+}
+
+@media all and (max-width:1160px) {
+	.no-sidebars .contacts-page-col-1, .one-sidebar .contacts-page-col-1, .no-sidebars .contacts-page-col-2, .one-sidebar .contacts-page-col-2  {
+		width: 100%;
+		float: none;
+	}
+
+	.page-contacts #site-contacts-map {
+		height:	600px;
+	}
+}
+
+.page-contacts #contacts-form .form-item:not(.form-type-textarea), .contact-cell-wrapper {
+	display: inline-block;
+	vertical-align: top;
+}
+
+.page-contacts #contacts-form .form-item:not(.form-type-textarea) {
+  margin-right: 0.5em;
+}
+
+/*style for block contact contacts*/
+.block-contacts input.form-text {
+	width: 100%;
+	-webkit-box-sizing: border-box;
+	-moz-box-sizing: border-box;
+	box-sizing: border-box;
+}
+
+.block-contacts .inline-block-wrapper-3 .pictogram-wrapper, .sidebar  .block-contacts div[class*="inline-block-wrapper"] .pictogram-wrapper {
+  width: 100%;
+}
+
+.block-contacts #names h2 {
+	margin-top: 0.7em;
+}
+
+.block-contacts  fieldset .fieldset-wrapper {
+	padding-left: 0;
+}
+
+.sidebar .block-contacts div[class*="inline-block-wrapper"] {
+	width: 100%;
+  padding-left: 0 !important;
+  padding-right: 0 !important;
+}
+
+.sidebar .block-contacts .site-contacts-working-time {
+  margin: 0;
+  padding: 0;
+}
+
+.block-contacts  {
+	padding-right: 0;
+	padding-left: 0;
+}
+
+.block-contacts div[class*="inline-block-wrapper"] #contacts-form .form-item,
+.block-contacts div[class*="inline-block-wrapper"] #names {
+	margin-top: 0;
+}
+
+
+.contact-person>.form-item {
+	display: inline;
+}

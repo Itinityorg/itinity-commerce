@@ -1,0 +1,127 @@
+<?php //$Id: anonymous_tracker.install, v 1.0 2016/05/05 16:45:42 itinity Exp $
+
+
+/**
+ * Implements hook_install()
+ */
+function anonymous_tracker_install() {
+	
+}
+
+/**
+ * Implements hook_uninstall()
+ */
+function anonymous_tracker_uninstall() {
+	
+}
+
+/**
+ * Implements hook_schema()
+ */
+function anonymous_tracker_schema() {
+	$schema = array();
+  $schema['anonymous_tracker'] = array(
+    'description' => 'Store anonymous tracking number and attach it to logged in users',
+    'fields' => array(
+      'id' => array(
+        'description' => 'Unique tracking ID',
+        'type' => 'serial',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+      ),
+      'uid' => array(
+        'description' => '{users}.uid',
+        'type' => 'int',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+        'default' => 0,
+      ),
+      'updated' => array(
+        'description' => 'Usage flag. Updated in next cases: first time = 0; second time or assign anonymous IDs to logged in user  = TIMESTAMP',
+        'type' => 'int',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+        'default' => 0,
+      ),
+      'ip' => array(
+        'description' => 'IP address',
+        'type' => 'varchar',
+        'length' => 40,
+        'not null' => TRUE,
+        'default' => '',
+      ),
+      'ua' => array(
+        'description' => 'User agent',
+        'type' => 'varchar',
+        'length' => 255,
+        'not null' => TRUE,
+        'default' => '',  
+      ),
+      'logged_in' => array(
+        'description' => 'Logged in flag',
+        'type' => 'int',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+        'default' => 0,      
+      ),
+    ),
+    'primary key' => array('id'),
+    'foreign keys' => array(
+      'uid' => array(
+        'table' => 'users',
+        'columns' => array('uid' => 'uid'),
+      ),
+    ),
+  );
+	return $schema;
+}
+
+/**
+* Delete invalid records from {shop_cart_items} (@see bugfix 7d0cb14475586bfb6c2b9c7e8743db4295390a6f in shop_anonymous_tracking_record_delete())
+*/
+function anonymous_tracker_update_7001() {
+  foreach (db_query('SELECT *, sci.cart_id AS sci_cart_id FROM {shop_cart_items} sci LEFT JOIN {shop_cart} sc ON sc.cart_id = sci.cart_id WHERE sc.cart_id IS NULL') as $r) {
+    $ids[$r->sci_cart_id] = $r->sci_cart_id;
+  }
+  if (!empty($ids)) {
+    db_query('DELETE FROM {shop_cart} WHERE cart_id IN (:ids)', array(':ids' => $ids));
+    return 'Deleted ' . count($ids) . 'obsolete cart ids.';
+  }
+}
+
+
+/**
+* Add ip and user agent columns
+*/
+function anonymous_tracker_update_7002() {
+  db_add_field('anonymous_tracker', 'ip', array(
+    'description' => 'IP address',
+    'type' => 'varchar',
+    'length' => 40,
+    'not null' => TRUE,
+    'default' => '',  
+  ));
+  db_add_field('anonymous_tracker', 'ua', array(
+    'description' => 'User agent',
+    'type' => 'varchar',
+    'length' => 255,
+    'not null' => TRUE,
+    'default' => '',  
+  ));
+}
+
+/**
+* Add logged_in status flag
+*/
+function anonymous_tracker_update_7003() {
+  db_add_field('anonymous_tracker', 'logged_in', array(
+    'description' => 'Logged in flag',
+    'type' => 'int',
+    'unsigned' => TRUE,
+    'not null' => TRUE,
+    'default' => 0,     
+  ));  
+}
+
+
+

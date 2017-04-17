@@ -1,0 +1,82 @@
+<?php //$Id: cash.module, v 1.0 2015/08/13 13:07:26 itinity Exp $
+/**
+ * Copyright 2015-2017 Itinity Ltd. (itinity.ru). All rights reserved.
+ * Licensed under the GNU General Public License, version 2 or later.
+ */
+
+/**
+ * Provides execute payments in cash for site administrators.
+ */
+
+/**
+ * Implements hook_money_sources_info()
+ */
+function cash_money_sources_info($source = NULL, $source_key = NULL) {
+  return array(
+    'cash' => array(
+      'title' => t('Cash on receipt'),
+      'external' => TRUE,
+      'online' => FALSE,
+      'description' => t('Payment at pickup or courier'),
+      'icon_url' => 'img/cash.png'
+    ),
+  );
+}
+
+
+/**
+ * Implements hook_money_execute_access()
+ */
+function cash_money_execute_access($operation, $operation_key, $sum = NULL, $source_info = NULL, $before_insert = FALSE, &$error_messages = NULL) {
+  if ($source_info) {
+    if ($source_info['source'] === 'cash') {
+      if (!($result = !$before_insert || user_access('administer moneys'))) {
+        $error_messages[] = t('Only for site administrators.');
+      }
+      return $result;
+    }
+  }
+}
+
+
+/**
+ * Implements hook_payment_form_callback()
+ */
+function cash_payment_form_callback($operation, $operation_key, $sum, $source_info) {
+  if ($source_info['source'] === 'cash') {
+    $form = array(
+      'info' => array(
+        '#type' => 'container',
+        '#inline' => TRUE,
+        '#parents' => array('data'),
+        'datetime' => array(
+          '#type' => 'datetime',
+          '#title' => t('When the money has been credited'),
+          '#time' => TRUE,
+          '#default_value' => REQUEST_TIME,
+        ),
+      ),
+      'comment' => array(
+        '#title' => t('Comment'),
+        '#type' => 'textarea',
+        '#rows' => 3,
+      ),
+    );
+    return $form;
+  }
+}
+
+
+/**
+ * Implements hook_form_FORM_ID_alter().
+ */
+function cash_form__order_payment_method_form_alter(&$form, &$form_state, $form_id) {
+  if (isset($form['actions']['cash']['payment'])) {
+    if (user_access('administer moneys')) {
+      $form['actions']['cash']['payment']['#title'] = t('Make payment');
+    }
+    else {
+      $form['actions']['cash']['payment']['#title'] = t('Pay order');
+    }
+  }
+}

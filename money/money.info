@@ -1,0 +1,6 @@
+; $Id: money.info, v 1.0 2015/05/07 17:44:52 itinity Exp $
+name = Money
+;description = 
+package = ITK/Money
+version = "7.x-1.0"
+core = "7.x"

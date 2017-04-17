@@ -1,0 +1,12 @@
+; $Id: order.info, v 1.0 2011/07/02 12:37:12 ITKLD Exp $
+name = Order
+description = Add order node type.
+package = ITK/Shop
+version = "7.x-dev"
+core = 7.x
+
+dependencies[] = shop
+dependencies[] = addons
+dependencies[] = field_phone
+dependencies[] = field_email
+dependencies[] = changelog

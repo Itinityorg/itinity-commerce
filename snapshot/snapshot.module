@@ -1,0 +1,468 @@
+<?php
+/**
+ * Copyright 2016-2017 Itinity Ltd. (itinity.ru). All rights reserved.
+ * Licensed under the GNU General Public License, version 2 or later.
+ */
+/**
+ * Created by PhpStorm.
+ * User: mpatrin
+ * Date: 18.05.16
+ * Time: 14:22
+ *
+ *
+ * Snapshot API
+ * Позволяет разработчикам сохранять снимки сущностей (снэпшоты)
+ * на определенный момент времени в общую таблицу БД 'snapshot'.
+ *
+ * Чтобы использовать snapshot api, модуль должен реализовывать 3 хука:
+ *
+ * hook_snapshot_info()
+ * Регистрирует информацию о снэпшотах. Хук должен вернуть массив вида:
+ *    array(
+ *       'mymodule_snapshot' => array(
+ *         'label' => t('MyModule Snapshot'),
+ *       ),
+ *    );
+ *
+ *
+ * hook_snapshot_data($snapshot_bundle, $type, $id, $context = array())
+ *    Получает тип снэпшота (из hook_snapshot_info()), тип сущности, id сущности и контекст.
+ *    В контекст может быть передана любая инфорамция в момент создания снэпшота (см. snapshot_create()).
+ *    Возвращает массив $data, который будет хранится в сериализованном виде в снэпшоте.
+ *
+ *
+ * hook_snapshot_render($snapshot_bundle, $type, $id, $context)
+ *    Получает тип снэпшота (из hook_snapshot_info()), тип сущности, id сущности и контекст.
+ *    В контекст может быть передана любая инфорамция в момент создания снэпшота (см. snapshot_create()).
+ *    Возвращает строку, которая содержит в себе отображение (разметку) сущности
+ *    снэпшота. Можно возвращать пустую строку.
+ *
+ *
+ * Snapshot API представляет из себя набор функций:
+ *
+ * snapshot_create($bundle, $type, $id, $lifetime = 0, $frozen = 0, $context = array());
+ *    Создает объект \Snapshot() типа $bundle (из hook_snapshot_info()) для сущности $type с идентификатором $id.
+ *    $lifetime - время жизни снэпшота (в секундах), по истечении которого он будет удален (@todo реализовать)
+ *    $frozen - "заморозка" снэшпота, запрет на любую его модификацию (@todo реализовать)
+ *    $context - массив с любыми данными, которые могут использоваться в mymodule_snapshot_data() и mymodule_snapshot_render()
+ *
+ *    Возвращает объект типа \Snapshot.
+ *    ОБЪЕКТ, СОЗДАННЫЙ С ПОМОЩЬЮ snapshot_create() ЕЩЕ НЕ СОХРАНЕН В БД!
+ *    Для сохранения снэпшота используется функция
+ *
+ * snapshot_save($snapshot)
+ *    Сохраняет \Snapshot в БД, возвращает snapshot id, на который можно ссылаться из своего модуля.
+ *
+ * snapshot_load($sid) и snapshot_load_multiple($sids)
+ *    Загружает снэпшоты
+ *
+ * snapshot_delete($sid) и snapshot_delete_multiple($sids)
+ *    Удаляет снэпшоты
+ *
+ */
+
+
+/**
+ * Implements hook_menu().
+ */
+function snapshot_menu() {
+  $items = array();
+
+  $items['snapshot/%snapshot'] = array(
+    'type' => MENU_CALLBACK,
+    'page callback' => 'snapshot_view',
+    'page arguments' => array(1),
+    'access arguments' => array('administer site configuration'),
+  );
+
+  $items['admin/config/system/snapshot'] = array(
+    'title' => t('Snapshots'),
+    'description' => t('Snapshot module settings'),
+    'page callback' => 'snapshot_admin',
+    'access arguments' => array('administer content types'),
+    'type' => MENU_NORMAL_ITEM,
+    'file' => 'snapshot.admin.inc',
+  );
+
+  $items['admin/config/system/snapshot/manage/%snapshot_bundle'] = array(
+    'title' => 'Manage snapshot',
+    'access arguments' => array('administer content types'),
+    'type' => MENU_CALLBACK,
+  );
+
+  return $items;
+}
+
+
+/**
+ * Implements hook_entity_info().
+ */
+function snapshot_entity_info() {
+  $info = array(
+    'snapshot' => array(
+      'label' => t('Snapshot Entity'),
+      'controller class' => 'SnapshotController',
+      'base table' => 'snapshot',
+      'load hook' => 'snapshot_load',
+      'uri callback' => 'snapshot_uri',
+      'fieldable' => TRUE,
+      'entity keys' => array(
+        'id' => 'sid',
+        'bundle' => 'bundle',
+      ),
+      'static cache' => FALSE,
+      'bundles' => array(),
+      'view modes' => array(
+        'full' => array(
+          'label' => t('Snapshot'),
+          'custom settings' => FALSE,
+        ),
+      ),
+    ),
+  );
+
+  foreach (module_invoke_all('snapshot_info') as $bundle => $bundle_info) {
+    $info['snapshot']['bundles'][$bundle] = array(
+      'label' => $bundle_info['label'],
+      'admin' => array(
+        'path' => 'admin/config/system/snapshot/manage/%snapshot_bundle',
+        'real path' => 'admin/config/system/snapshot/manage/' . $bundle,
+        'bundle argument' => 5,
+        'access arguments' => array('administer content types'),
+      ),
+    );
+
+  }
+
+  return $info;
+}
+
+
+/**
+ * Implements hook_field_extra_fields().
+ */
+function snapshot_field_extra_fields() {
+  $extra = array();
+
+  foreach (module_invoke_all('snapshot_info') as $bundle => $bundle_info) {
+    $extra['snapshot'][$bundle]['display'] = array(
+      'type' => array(
+        'label' => t('Type'),
+        'description' => t('Entity type'),
+        'weight' => 1,
+        'label_display' => TRUE,
+      ),
+      'id' => array(
+        'label' => t('Id'),
+        'description' => t('Entity id'),
+        'weight' => 2,
+        'label_display' => TRUE,
+      ),
+      'timestamp' => array(
+        'label' => t('Timestamp'),
+        'description' => t('Timestamp'),
+        'weight' => 3,
+        'label_display' => TRUE,
+      ),
+      'lifetime' => array(
+        'label' => t('Lifetime'),
+        'description' => t('Lifetime'),
+        'weight' => 4,
+        'label_display' => TRUE,
+      ),
+      'frozen' => array(
+        'label' => t('Frozen'),
+        'description' => t('Frozen'),
+        'weight' => 5,
+        'label_display' => TRUE,
+      ),
+      'markup' => array(
+        'label' => t('Markup'),
+        'description' => t('Markup'),
+        'weight' => 6,
+        'label_display' => TRUE,
+      ),
+    );
+  }
+
+  return $extra;
+}
+
+
+/**
+ * Wildcard for snapshot_menu()
+ */
+function snapshot_bundle_load($bundle) {
+  $bundles = module_invoke_all('snapshot_info');
+  return isset($bundles[$bundle]) ? $bundle : FALSE;
+}
+
+/**
+ * Implements the uri callback.
+ */
+function snapshot_uri($snapshot) {
+  return array(
+    'path' => 'snapshot/' . $snapshot->sid,
+  );
+}
+
+
+#region CRUD
+function snapshot_create($bundle, $type, $id, $lifetime = 0, $frozen = 0, $context = array()) {
+  return entity_get_controller('snapshot')->create($bundle, $type, $id, $lifetime, $frozen, $context);
+}
+
+
+function snapshot_load($sid = NULL, $reset = FALSE) {
+  $sids = (isset($sid) ? array($sid) : array());
+  $snapshot = snapshot_load_multiple($sids, array(), $reset);
+  return $snapshot ? reset($snapshot) : FALSE;
+}
+
+
+function snapshot_load_multiple($sids = FALSE, $conditions = array(), $reset = FALSE) {
+  return entity_load('snapshot', $sids, $conditions, $reset);
+}
+
+
+function snapshot_save($snapshot) {
+  $snapshot->commit();
+  return $snapshot->sid;
+}
+
+
+function snapshot_delete($sid) {
+  $sid = is_object($sid) ? $sid->sid : $sid;
+  snapshot_delete_multiple(array($sid));
+}
+
+
+function snapshot_delete_multiple($sids) {
+  $transaction = db_transaction();
+
+  if (!empty($sids)) {
+    try {
+      db_delete('snapshot')->condition('sid', $sids)->execute();
+    } catch (Exception $e) {
+      $transaction->rollback();
+      watchdog_exception('snapshot', $e);
+      throw $e;
+    }
+
+    // Clear the page and block and feedback_load_multiple caches.
+    entity_get_controller('snapshot')->resetCache();
+  }
+}
+
+#endregion
+
+
+/**
+ * Implements hook_view().
+ */
+function snapshot_view($snapshot, $view_mode = 'full') {
+  $snapshot->content = array();
+
+  $snapshot->content['type'] = array(
+    '#type' => 'item',
+    '#markup' => $snapshot->type,
+  );
+
+  $snapshot->content['id'] = array(
+    '#type' => 'item',
+    '#markup' => $snapshot->id,
+  );
+
+  $snapshot->content['timestamp'] = array(
+    '#type' => 'item',
+    '#markup' => format_date($snapshot->timestamp, 'medium'),
+  );
+
+  $snapshot->content['lifetime'] = array(
+    '#type' => 'item',
+    '#markup' => $snapshot->lifetime ? format_date($snapshot->lifetime, 'medium') : t('endless'),
+  );
+
+  $snapshot->content['frozen'] = array(
+    '#type' => 'item',
+    '#markup' => $snapshot->frozen ? t('Yes') : t('No'),
+  );
+
+  $snapshot->content['markup'] = array(
+    '#type' => 'item',
+    '#markup' => $snapshot->markup,
+  );
+
+  field_attach_prepare_view('snapshot', array($snapshot->sid => $snapshot), $view_mode);
+  entity_prepare_view('snapshot', array($snapshot->sid => $snapshot));
+
+  $snapshot->content += field_attach_view('snapshot', $snapshot, $view_mode);
+
+  $build = $snapshot->content;
+  unset($snapshot->content);
+
+  $build += array(
+    '#element' => $snapshot,
+    '#view_mode' => $view_mode,
+    '#language' => LANGUAGE_NONE,
+  );
+
+  $build['#prefix'] = '<div class="snapshot-wrapper" id="feedback-' . $snapshot->sid . '">';
+  $build['#suffix'] = '</div>';
+
+  drupal_alter(array('snapshot_view', 'entity_view'), $build, $snapshot->bundle);
+
+  return $build;
+}
+
+interface SnapshotControllerInterface extends DrupalEntityControllerInterface {
+  public function create($bundle, $type, $id, $lifetime = 0, $frozen = 0, $context = array());
+
+  public function commit();
+}
+
+
+class SnapshotController extends DrupalDefaultEntityController implements SnapshotControllerInterface {
+  private $sid;
+  private $bundle;
+  private $type;
+  private $id;
+  private $data;
+  private $lifetime;
+  private $frozen;
+  private $context;
+
+  private function init() {
+    $this->sid = NULL;
+    $this->bundle = NULL;
+    $this->type = NULL;
+    $this->id = 0;
+    $this->data = NULL;
+    $this->lifetime = 0;
+    $this->frozen = 0;
+  }
+
+  public function create($bundle, $type, $id, $lifetime = 0, $frozen = 0, $context = array()) {
+    $this->init();
+
+    $this->bundle = $bundle;
+    $this->type = $type;
+    $this->id = $id;
+    $this->lifetime = $lifetime;
+    $this->frozen = $frozen;
+    $this->context = $context;
+
+    $data = module_invoke_all('snapshot_data', $bundle, $type, $id, $context);
+    $snapshot_data_context = array('bundle' => $bundle, 'type' => $type, 'id' => $id, 'context' => $context);
+    drupal_alter('snapshot_data', $data, $snapshot_data_context);
+    $this->data = $data;
+
+    $this->check($bundle, $type, $id, $lifetime, $frozen);
+
+    return $this;
+  }
+
+
+  public function __get($name) {
+    return isset($this->{$name}) ? $this->{$name} : NULL;
+  }
+
+
+  public function __set($name, $value) {
+    if (in_array($name, array('sid', 'lifetime', 'frozen'))) {
+      $this->{$name} = $value;
+    }
+  }
+
+  private function getMarkup() {
+    $markup = module_invoke_all('snapshot_render', $this->bundle, $this->type, $this->id, $this->context);
+    return implode('', $markup);
+  }
+
+
+  public function commit() {
+    if ($this->sid) {
+      $this->update();
+    }
+    else {
+      $this->insert();
+    }
+
+    return $this;
+  }
+
+
+  private function getHash() {
+    return md5(serialize($this->data));
+  }
+
+
+  private function insert() {
+    $sid = db_insert('snapshot')
+      ->fields(array(
+        'bundle' => $this->bundle,
+        'type' => $this->type,
+        'id' => $this->id,
+        'timestamp' => REQUEST_TIME,
+        'lifetime' => $this->lifetime,
+        'hash' => $this->getHash(),
+        'data' => serialize($this->data),
+        'markup' => $this->getMarkup(),
+        'frozen' => $this->frozen,
+      ))->execute();
+
+    $this->sid = $sid;
+
+    return $this;
+  }
+
+
+  private function update() {
+    db_update('snapshot')
+      ->fields(array(
+        'bundle' => $this->bundle,
+        'type' => $this->type,
+        'timestamp' => REQUEST_TIME,
+        'lifetime' => $this->lifetime,
+        'hash' => $this->getHash(),
+        'data' => serialize($this->data),
+        'markup' => $this->getMarkup(),
+        'frozen' => $this->frozen,
+//        'timestamp' => REQUEST_TIME,
+//        'markup' => $this->getMarkup(),
+      ))->condition('sid', $this->sid)
+      ->execute();
+  }
+
+
+  /**
+   * @todo rename
+   */
+  private function check($bundle, $type, $id, $lifetime, $frozen) {
+    $snapshots = db_select('snapshot', 's')
+      ->condition('s.bundle', $bundle)
+      ->condition('s.type', $type)
+      ->condition('s.id', $id)
+//      ->condition('s.lifetime', $lifetime)
+//      ->condition('s.id', $frozen)
+      ->fields('s', array('sid', 'hash'))
+      ->execute()->fetchAllKeyed();
+
+    $hash = $this->getHash();
+
+    if (($sid = array_search($hash, $snapshots)) && ($sid !== FALSE)) {
+      $this->sid = $sid;
+    }
+
+    return $sid;
+  }
+
+
+  function attachLoad(&$queried_entities, $revision_id = FALSE) {
+    foreach ($queried_entities as $snapshot) {
+      $snapshot->data = unserialize($snapshot->data);
+    }
+
+    parent::attachLoad($queried_entities, $revision_id);
+  }
+}

@@ -1,0 +1,692 @@
+<?php //$Id: multifield.module, v 1.0 2011/02/17 23:34:34 ITKLD Exp $
+/**
+ * Copyright 2011-2017 Itinity Ltd. (itinity.ru). All rights reserved.
+ * Licensed under the GNU General Public License, version 2 or later.
+ */
+
+define("MULTIFIELD_TEST", 0);//ip_address() == '192.168.0.14');
+
+
+
+/////////////// TEST AREA ///////////////////////////////
+if (MULTIFIELD_TEST) {
+	function multifield_menu() {
+		$items['multifield_page'] = array(
+		  'title' => 'Multifield',
+		  'page callback' => 'drupal_get_form',
+		  'page arguments' => array('multifield_my_form'),
+		  'access arguments' => array('access content',),
+		  'type' => MENU_NORMAL_ITEM,
+		  'file' => 'multifield.test_form.inc',
+		);
+		return $items;
+	}
+}
+
+
+/**
+ * Implementation of hook_element_info().
+*/
+function multifield_element_info() {
+	$types = array();
+	$types['multifield_wrapper'] = array(
+		'#input' => TRUE,
+		'#process' => array('multifield_wrapper_process_element', 'ajax_process_form'),
+		'#element_validate' => array('multifield_wrapper_validate_element'),
+		'#theme' => 'multifield_wrapper',
+	);
+	return $types;
+}
+
+
+/**
+* Implementation of hook_form_alter()
+* Adding multifield stylesheet in forms
+*/
+function multifield_form_alter(&$form, &$form_state, $form_id) {
+	$form['#attached']['css'][] = drupal_get_path('module', 'multifield').'/css/multifield.css';
+}
+
+/**
+* Ajax callback for add/delete buttons
+*/
+function _multifield_ajax($form, $form_state) {
+	return drupal_array_get_nested_value($form, $form_state['triggering_element']['#ajax']['element_address']);
+}
+
+/**
+* Main processing function
+*/
+function multifield_wrapper_process_element($element, &$form_state, &$complete_form) {
+	$element += array(
+		// Add specific initial public properties (set defaults):
+		'#max' => 50,// Max limit of fields count
+		'#min' => 1,// Min limit of fields count
+		'#clonable' => FALSE, // Insert 'clone' button in each field
+		'#delete_button' => decode_entities('&#x2718;'), //theme('pictogram', array('icon' => 'skype',));
+    '#clear_button' => TRUE, // Add 'clear' button (@see js) for every row
+		'#clone_button' => t('Clone'), // Clone subgroup with all embedded data
+		'#add_button' => t('Add field'),
+		'#update_button' => t('Update'), // Recommended where ajax not enabled. Button for applying and continue.
+		'#group_title' => '', // Main title for every subgroup
+		'#group_title_show_delta' => FALSE, // Show delta number in each subgroup title
+		'#visible_type' => 'fieldset',// fieldset, item, markup, form_element
+		'#draggable' => TRUE, //Enable/disable groups mouse dragging
+		'#use_ajax' => TRUE, // Enable/disable ajax features in this element
+		'#titles' => array(), // Optional array of custom titles of sub elements (structure like '#default_value')
+		'#elements_to_cells' => TRUE, //Move title of each sub-element to main table header and place each element in personal cell of table
+		// Initialize other standard options
+		'#title' => '',
+		'#prefix' => '',
+		'#suffix' => '',
+		// Parents of any form element to be wrapped by multifield element ajax-wrapper, for better interactivity. 
+		// Use #array_parents property, NOT #parents! Default is $element['#array_parents'].
+		// For global main form wrapping, specify an empty array.
+		'#ajax_element_address' => $element['#array_parents'],
+		'#header_hidden' => FALSE,
+		'#locked' => array(), // keys of fields that not allowed to delete
+		'#post_process' => array(), // array of funcions called at end of multifield_wrapper_process_element(). Args: $element, &$form_state, &$complete_form
+	);
+  $element['#locked'] = (array)$element['#locked'];
+	$element['#elements_to_cells'] = $element['#titles'] ? FALSE : $element['#elements_to_cells'];
+	// Initial fixes:
+	$element['#visible_type'] = !empty($element['#theme']) && $element['#theme'] != 'multifield_wrapper' ? $element['#theme'] : $element['#visible_type'];
+	$element['#max'] = $element['#max'] > 1000 ? 1000 : $element['#max'];
+	$element['#min'] = $element['#min'] < 0 ? 1 : $element['#min'];
+	$element['#max'] = $element['#max'] < $element['#min'] ? $element['#min'] : $element['#max'];
+	$element['#tree'] = TRUE;
+	
+	$element['#value'] = is_array($element['#value']) ? $element['#value'] : (is_object($element['#value']) ? (array)$element['#value'] : array($element['#value']));
+	
+	$element['#attributes']['class'][] = 'form-type-multifield-wrapper';
+  if ($element['#clear_button']) {
+    $element['#attributes']['class'][] = 'has-clear-btn';
+  }
+	
+	// Switch off ajax when is not required
+	if ($element['#use_ajax'] && $element['#max'] == $element['#min'] && count($element['#value']) == $element['#max']) {
+		$element['#use_ajax'] = FALSE;
+	}
+	// Ajax setup
+	if ($element['#use_ajax']) {
+		
+		// Lookup form element by his parents and apply ajax-wrapper div.
+		
+		if (!is_array($element['#ajax_element_address'])) {
+			$element['#ajax_element_address']	= $element['#ajax_element_address'] ? array($element['#ajax_element_address']) : array();
+		}
+		
+		if ($element['#array_parents'] != $element['#ajax_element_address']) {
+			// User specified ajax_element_address detected 
+			
+			$wrapped_element = drupal_array_get_nested_value($complete_form, $element['#ajax_element_address']);
+			
+			$element_wrapper_id = $wrapped_element['#id'] . '-ajax-multifield-wrapper';
+			if (empty($wrapped_element['#_multifield_wrappers'][$element_wrapper_id])) {
+				$wrapped_element['#_multifield_wrappers'][$element_wrapper_id] = $element_wrapper_id;
+				$wrapped_element += array(
+					'#prefix' => '',
+					'#suffix' => '',
+				);
+				$wrapped_element['#prefix'] = '<div class="multifield-ajax-wrapper" id="' . $element_wrapper_id . '">' . $wrapped_element['#prefix'];
+				$wrapped_element['#suffix'] .= '</div>';
+				drupal_array_set_nested_value($complete_form, $element['#ajax_element_address'], $wrapped_element);
+			}
+			
+		}
+    else {
+			$element_wrapper_id = $element['#id'].'-ajax-multifield-wrapper';
+			if (empty($element['#_multifield_wrappers'][$element_wrapper_id])) {
+				$element['#_multifield_wrappers'][$element_wrapper_id] = $element_wrapper_id;
+				$element['#prefix'] = '<div class="multifield-ajax-wrapper" id="' . $element_wrapper_id.'">' . $element['#prefix'];
+				$element['#suffix'] .= '</div>';
+			}
+		}
+		
+		$ajax = array(
+				'callback' => '_multifield_ajax',
+				'wrapper' => $element_wrapper_id,
+				'event' => 'click',
+				// Internal value, for using in _multifield_ajax()
+				'element_address' => $element['#ajax_element_address'],
+				'progress' => array(
+					'type' => 'throbber',
+					'message' => t('Please wait...'),
+				),
+			);
+	}
+  else {
+		//ajax is off
+		$ajax = array();
+	}
+
+	// Create template array
+	$sub_elements_group = array();
+	// Move chidren elements into template
+	foreach (element_children($element) as $key) {
+		if ($element[$key]) {
+			if (element_properties($element[$key])) {
+				$sub_elements_group[$key] = $element[$key];
+			}
+		} 
+		unset($element[$key]);
+	}
+  
+  // multifield #value can be passed as simple array( 0 => 1, 2 => 5, ) and sub-groups haves one childrens:
+  if (count(element_children($sub_elements_group)) == 1) {
+    $key = key($sub_elements_group);
+    foreach ($element['#value'] as $delta => $data) {
+      if (is_scalar($data) || !isset($data[$key])) {
+        $element['#value'][$delta] = array($key => $data);
+      }
+    }
+  }
+  
+  
+  $sub_elements_group['#_is_multifield_childgroup'] = TRUE;
+	// Detect clicked button and operate with element value
+
+	// Init internal storage array for information about last user action
+	$element['#_clicked_info'] = array(
+		'add' => NULL,
+		'delete' => NULL,
+		'clone' => NULL,
+	);
+	if (isset($form_state['triggering_element']['#_multifield_add']) && $form_state['triggering_element']['#_multifield_add'] == $element['#name']) {
+		$element['#_clicked_info']['add'] = TRUE;
+		$element['#value'][] = array();
+	}
+	if (isset($form_state['triggering_element']['#_multifield_delete'][$element['#name']])) {
+		$element['#_clicked_info']['delete'] = $form_state['triggering_element']['#_multifield_delete'][$element['#name']];
+		unset($element['#value'][$element['#_clicked_info']['delete']]);
+	}
+	if (isset($form_state['triggering_element']['#_multifield_clone'][$element['#name']])) {
+		$element['#_clicked_info']['clone'] = $form_state['triggering_element']['#_multifield_clone'][$element['#name']];
+		$element['#value'][] = $element['#value'][$element['#_clicked_info']['clone']];
+	}
+
+	// Remove internal artefacts from value
+	unset($element['#value']['_multifield_op_add'], $element['#value']['_multifield_op_update']);
+
+	// Fix minimum value size.
+	$element['#value'] = array_pad($element['#value'], $element['#min'], array());
+	
+	// Expand children group with element value keys and fill all generated sub-items values
+	$expanded = array();
+	//m(drupal_array_get_nested_value(), $form_state['input']['courier']['variants'], $form_state['values']['courier']['variants'], $element['#value']);
+
+	foreach ($element['#value'] as $delta => &$v_data) {
+		$expanded[$delta] = $sub_elements_group;
+		
+		foreach (element_children($expanded[$delta]) as $key) {
+			if (isset($expanded[$delta][$key]['#type']) && $expanded[$delta][$key]['#type'] == 'machine_name') {
+				$expanded[$delta][$key] += array('#machine_name' => array());
+				$expanded[$delta][$key]['#machine_name'] += array('source' => array(end($element['#parents']), $key_prev = 'name'),);
+				
+				if (($sk = array_search(end($element['#parents']), $expanded[$delta][$key]['#machine_name']['source'])) !== FALSE) {
+					$new_parents = $element['#parents'];
+					$new_parents[] = $delta;
+					foreach ($expanded[$delta][$key]['#machine_name']['source'] as $s_idx => $s) {
+						if ($s_idx > $sk) {
+							$new_parents[] = $s;
+						}
+					}
+					$expanded[$delta][$key]['#machine_name']['source'] = $new_parents;
+				}
+			} else {
+				$key_prev = $key;
+			}
+			// Process #states. Replace '%' token to $delta
+			if (!empty($expanded[$delta][$key]['#states'])) {
+				foreach ($expanded[$delta][$key]['#states'] as $state => $actions) {
+					$new_actions = array();
+					foreach ($actions as $selector => $conds) {
+						$new_actions[str_replace('%', $delta, $selector)] = $conds;
+					}
+					$expanded[$delta][$key]['#states'][$state] = $new_actions;
+				}
+			}
+		}
+
+		if (is_array($v_data)) {
+			// Remove internal artefacts values
+			unset($v_data['_multifield_op_weight'], $v_data['_multifield_op_clone'], $v_data['_multifield_op_delete']);
+		}
+		utils_fill_form_defaults($expanded[$delta], $v_data, 'default_value');
+	}
+	
+	//kostyli...............
+	if (isset($element['#titles']) && is_array($element['#titles'])) {
+		foreach ($element['#titles'] as $delta => $t_data) {
+			if (isset($expanded[$delta])) {
+				if (is_array($t_data)) {
+					utils_fill_form_defaults($expanded[$delta], $t_data, 'title');
+				}
+			}
+		}
+	}
+	
+	// Insert controls elements
+	$itr = 0;
+	
+	foreach ($expanded as $delta => &$group) {
+		$itr++;
+		$group['#locked'] = in_array($delta, $element['#locked'], TRUE); // use strict comparison!
+		//if ($element['#draggable']) {
+			// Weight controller
+			$group['_multifield_op_weight'] = array(
+				'#type' => 'textfield',
+				'#size' => 3,
+				'#title' => $element['#draggable'] ? t('Weight') : '', //Bug with not draggable elements.
+				'#delta' => count($expanded),
+				'#default_value' => 0,
+				'#attributes' => array(
+					'class' => array(
+						'multifield-op-weight-' . drupal_html_class($element['#name']),
+						$element['#draggable'] ? '' : 'element-invisible',
+					),
+				),
+			);
+	
+			if ($element['#_clicked_info']['add'] && count($expanded) == $itr) {
+				$group['#_new'] = TRUE;
+				$group['_multifield_op_weight']['#default_value'] = count($expanded);//$group['_multifield_op_weight']['#delta'];
+			}
+			
+		//}
+		// Delete button. Only when fields count greather than #min.
+		if (count($expanded) > $element['#min']) {
+			$group += array(
+				'_multifield_op_delete' => array(
+					// Store several parameters in internal option for handling in triggering_element detection
+					'#_multifield_delete' => array($element['#name'] => $delta),
+					// Skip form validation on click
+					'#type' => 'button',
+					// Skip form validation on click
+					'#limit_validation_errors' => array(),
+					'#value' => $element['#delete_button'],
+					// Forced unique name of button. Override standard Drupal buttons 'op' naming
+					'#name' => drupal_clean_css_identifier($element['#name'].'-delete-'.$delta),
+					'#ajax' => $ajax,
+					'#attributes' => array(
+						'title' => t('Delete this field'),
+						'class' => array('pictogram',),
+					),
+					// Locked elements not deletable:
+					'#access' => !$group['#locked'],
+				),	
+			);
+			if ($ajax) {
+				$group['_multifield_op_delete']['#ajax']['progress']['message'] = '';
+			}
+		}
+		// Clone button. Only when fields count less than #max.
+		if ($element['#clonable'] && count($expanded) < $element['#max']) {
+			$group += array(
+				'_multifield_op_clone' => array(
+					'#_multifield_clone' => array($element['#name'] => $delta),
+					'#type' => 'button',
+					'#limit_validation_errors' => array(),
+					'#value' => $element['#clone_button'],
+					'#name' => drupal_clean_css_identifier($element['#name'].'-clone-'.$delta),
+					'#ajax' => $ajax,
+					'#attributes' => array(
+						'title' => t('Make copy of this field'),
+					),
+					'#prefix' => '<div class="container-inline">',
+					'#suffix' => '</div>',
+				),	
+			);
+		}
+	}
+	
+	// Add expanded subgroups into element body
+	$element += $expanded;
+	// 'Add' button. Only when fields count less than #max.
+	if (count($expanded) < $element['#max']) {
+		$element['_multifield_op_add'] = array(
+			'#type' => 'button',
+			'#limit_validation_errors' => array(),
+			'#value' => $element['#add_button'],
+			'#name' => drupal_clean_css_identifier($element['#name'].'-add'),
+			'#_multifield_add' => $element['#name'],
+			'#ajax' => $ajax,
+			// Place button into footer
+			'#weight' => PHP_INT_MAX - 0.000001,
+			
+			'#attributes' => array(
+				'title' => t('Add new field in this group'),
+			),
+		);
+	}
+	if (!$element['#use_ajax']) {
+		if ($element['#update_button']) {
+			$element['_multifield_op_update'] = array(
+				'#type' => 'button',
+				'#limit_validation_errors' => array(),
+				'#value' => $element['#update_button'],
+				'#name' => drupal_clean_css_identifier($element['#name'].'-update'),
+				'#id' => drupal_clean_css_identifier($element['#name'].'-update'),
+				'#attached' => array(
+					'js' => array(
+						array(
+							'type' => 'inline',
+							'scope' => 'footer',
+							'data' => // TODO: Optimize and move to behaviours .js file
+							'(function ($) {
+								$("#' . drupal_clean_css_identifier($element['#name'].'-update').'").hide();
+								$("#' . $element['#id'] . ' input, #' . $element['#id'] . ' select").change(function(){
+									$("#' . drupal_clean_css_identifier($element['#name'] . '-update') . '").fadeIn();
+								});
+							})(jQuery);',
+						),
+					),
+				),
+				'#weight' => PHP_INT_MAX,
+				'#attributes' => array(
+					'title' => t('Apply changed values to form current state'),
+				),
+			);
+		}
+	}
+	if (!empty($element['#post_process'])) {
+		foreach ($element['#post_process'] as $fn) {
+			$fn($element, $form_state, $complete_form);
+		}
+	}
+	$element['#attached']['js'][] = drupal_get_path('module', 'multifield') . '/js/multifield.js';
+	drupal_alter('multifield_process', $element, $form_state, $complete_form);
+	return $element;
+}
+
+/**
+* Remove multifield artefacts from submitted values.
+*/
+function _multifield_form_state_remove_artefacts(&$form_state_values) {
+	foreach ($form_state_values as $key => &$data) {
+		if (is_array($data)) {
+			unset($data['_multifield_op_add'], $data['_multifield_op_delete'], $data['_multifield_op_clone'], $data['_multifield_op_weight'], $data['_multifield_op_update']);
+			_multifield_form_state_remove_artefacts($data);
+		}
+	}
+}
+
+/**
+* Helper function. Recursive cleanup empty fields in submit/validation. 
+*/
+function _multifield_submitted_cleanup_values(&$value) {
+	if (is_array($value)) {
+		foreach ($value as $delta => $val) {
+			if (($val === '') || ($val === array()) || !isset($val)) {
+				unset($value[$delta]);
+				_multifield_submitted_cleanup_values($value);
+			} else {
+				_multifield_submitted_cleanup_values($value[$delta]);
+			}
+		}
+	}
+}
+
+/**
+* multifield_wrapper validation handler
+* Check for min/max allowed count, remove internal artefacts from submitted values.
+*/
+function multifield_wrapper_validate_element(&$element, &$form_state, $complete_form) {
+	if ($form_state['submitted']) {
+		$has_errors = FALSE;
+		// Clean form_state once (if form contains several multifields)
+		static $already_cleaned = array();
+		if (empty($already_cleaned[$element['#name']])) {
+			$already_cleaned[$element['#name']] = TRUE;
+			_multifield_form_state_remove_artefacts($form_state['values']);
+		}
+		$element['#value'] = $element['#value'] ? $element['#value'] : array();
+		// Cut off empty fields
+		
+		_multifield_submitted_cleanup_values($element['#value']);
+		//$element['#value'] = array_filter($element['#value']);
+		// Validations:
+		if (count($element['#value']) > $element['#max']) {
+			$i = 0;
+			foreach (element_children($element) as $key) {
+				if (!empty($element[$key]['#_is_multifield_childgroup'])) {
+					$i++;
+					if ($i > $element['#max']) {
+						$has_errors = TRUE;
+						form_error($element[$key], t('Maximum count of fields in %field is @count.', array('%field' => $element['#title'], '@count' => $element['#max'])));	
+					}
+				}
+			}
+		}
+		$submitted_value = drupal_array_get_nested_value($form_state['values'], $element['#parents']);
+		if (
+			(!isset($element['#access']) || (bool)$element['#access'])
+			&& 
+			(count($submitted_value) < $element['#min']
+			||
+			($element['#required'] && count(array_filter($submitted_value)) < $element['#min'])
+			)
+			) {
+			//m($element['#value'], $element['#parents'], $form_state['values']);
+			$has_errors = TRUE;
+			form_error($element, t('Minimum count of fields in %field is @count.', array('%field' => $element['#title'], '@count' => $element['#min'])));	
+		}
+		if (!$has_errors) {
+			$values = drupal_array_get_nested_value($form_state['values'], $element['#parents']);
+			_multifield_submitted_cleanup_values($values);
+			$values = array_filter($values);
+			drupal_array_set_nested_value($form_state['values'], $element['#parents'], $values);
+		}
+	} else {
+		/*$input = drupal_array_get_nested_value($form_state['input'], $element['#parents']);
+		foreach (drupal_array_get_nested_value($form_state['values'], $element['#parents']) as $idx => $item) {
+			if (is_array($item)) {
+				if (!empty($item['_multifield_op_delete'])) {
+					unset($input[$idx]);
+					m($item);
+				}
+			}
+		}
+		drupal_array_set_nested_value($form_state['input'], $element['#parents'], $input);*/
+	}
+}
+
+/**
+* Implementation of hook_theme()
+*/
+function multifield_theme($existing, $type, $theme, $path) {
+	return array(
+		'multifield_wrapper' => array(
+			'render element' => 'element',
+		),
+	);
+}
+
+/**
+* Element theme
+*/
+function theme_multifield_wrapper($variables) {
+	$element = $variables['element'];
+	$rows = array();
+	$itr = 0;
+
+	// CSS class for drupal_add_tabledrag
+	$table_drag_relationship = 'multifield-weight-' . $element['#id']; 
+	$header = array();
+	// Build table array
+	
+	foreach (element_children($element) as $key) {
+		// Each children groups
+		if (!empty($element[$key]['#_is_multifield_childgroup'])) {
+			if ($element['#elements_to_cells']) {
+				$header['0_dragger'] = array('data' => ($element['#elements_to_cells'] && $element['#group_title'] ? $element['#group_title'] : ''/*'&nbsp;'*/));
+			}
+
+			$row = array(
+				'0_dragger' => array(
+					'data' => ($element['#elements_to_cells'] ? '' : $element['#group_title']) . ($element['#group_title_show_delta'] ? (is_numeric($key) ? $key + 1 : $key) : ''), 
+					'class' => array('multifield-dragger'),
+					),
+				);
+			if ($element['#elements_to_cells']) {
+				//$row['0_dragger']['header'] = TRUE;
+			}
+			$element_chidrens = element_children($element[$key]);
+			foreach ($element_chidrens as $key2) {
+				$element[$key][$key2] += array(
+					'#type' => 'markup',
+				);
+				if ($element[$key][$key2]['#type'] != 'hidden' && $element[$key][$key2]['#type'] != 'value') {
+					$element_access = isset($element[$key][$key2]['#access']) ? (bool)$element[$key][$key2]['#access'] : TRUE;
+					if (!in_array($key2, array('_multifield_op_weight', '_multifield_op_delete', '_multifield_op_clone',))) {
+						$k = '1_' . ($element['#elements_to_cells'] ? 'element_'.$element[$key][$key2]['#weight'] . '____' . $key2 : 'element');
+						if (!isset($row[$k])) {
+							$row[$k] = array(
+								'data' => '',
+							);
+						}
+						if ($element['#elements_to_cells']) {
+							$element[$key][$key2] += array(
+								'#title' => '',
+								'#description' => '',
+							);
+							
+							
+							$data = '';//'&nbsp;';
+							if ($element_access) {
+								if ($element[$key][$key2]['#title_display'] != 'invisible') {
+									$data = $element[$key][$key2]['#title'];
+									if (!empty($element[$key][$key2]['#required'])) {
+										$data .= theme('form_required_marker', array()); 
+									}
+									$data .= $element[$key][$key2]['#description'] ? '<div class="in-header description">' . $element[$key][$key2]['#description'] . '</div>' : '';
+								}
+							}
+							
+							$header[$k] = array(
+								'class' => array(drupal_html_class('col-' . $key2)),
+								'data' => $data,
+								);
+							
+							$element[$key][$key2]['#title_display'] = 'invisible';
+							$element[$key][$key2]['#description'] = '';
+						}
+						$row[$k]['data'] .= $element_access ? drupal_render($element[$key][$key2]) : '&nbsp;';
+						$row[$k]['class'] = array(drupal_html_class('col-' . $key2));
+					} else {
+						if ($key2 == '_multifield_op_weight') {
+							//$element[$key][$key2]['#attributes']['class'][] = $table_drag_relationship;
+							if ($element['#elements_to_cells']) {
+								$element[$key][$key2]['#title_display'] = 'invisible';
+								$element[$key][$key2] += array(
+									'#title' => '',
+								);
+								$header['2' . $key2] = array('data' => $element_access ? $element[$key][$key2]['#title'] : ''/*'&nbsp;'*/, 'class' => array('tabledrag-hide'));
+							}
+							$row['2' . $key2] = array(
+								'data' => $element_access ? drupal_render($element[$key][$key2]) : '&nbsp;',
+								'class' => array('multifield-weight', 'tabledrag-hide', $table_drag_relationship),
+								);
+						} else {
+							$row['3' . $key2] = array(
+								'data' => $element_access ? drupal_render($element[$key][$key2]) : '&nbsp;',
+								'class' => array('multifield-buttons',),
+								);
+							if ($element['#elements_to_cells']) {
+								$header['3' . $key2] = array('data' => '');
+							}
+						}	
+					}					
+				}
+
+			}
+			// Add new row into array, keyed by subgroup weight + iterator for uniqueness
+			//ksort($row);
+			$element[$key]['#attributes']['class'][] = 'multifield-row';
+			$element[$key]['#attributes']['class'][] = $element['#draggable'] ? 'draggable' : '';
+      $element[$key]['#attributes']['class'][] = $element[$key]['#locked'] ? 'locked': 'not-locked';
+			$rows[(isset($element[$key]['_multifield_op_weight']['#value']) ? $element[$key]['_multifield_op_weight']['#value'].'_' : '').($itr)] = array(
+				'data' => $row,
+			) + $element[$key]['#attributes'];
+			++$itr;
+		}
+	}
+
+	if (count($rows) > 1) {
+		// Sort subgroups by his weights values
+		if (arg(0).'/'.arg(1) != 'system/ajax' && array_filter($element['#_clicked_info'])) {
+			ksort($rows, SORT_NUMERIC);
+		}
+		if ($element['#draggable']) {
+			drupal_add_tabledrag($element['#id'] . '-table', 'order', 'sibling', 'multifield-op-weight-' . drupal_html_class($element['#name']));
+		}
+	} else {
+		// Hide 'weight' cell #2 where subgroup is single
+		$keys = array_keys($rows);
+		$rows[reset($keys)]['data']['2_multifield_op_weight']['class'][] = 'element-invisible';
+		if ($element['#elements_to_cells']) {
+			$header['2_multifield_op_weight']['class'] = 'element-invisible';
+		}
+	}
+	if (empty($_COOKIE['Drupal_tableDrag_showWeight'])) {
+		$element['#attributes']['class'][] = 'hide-weight';	
+	}
+	$table_attributes = array('id' => $element['#id'] . '-table', 'class' => array('multifield-table'),);
+	if (!empty($element['#header_hidden'])) {
+		$table_attributes['class'][] = 'header-hidden';
+	}
+	if (arg(0) . '/' . arg(1) === 'system/ajax') {
+		$element['#children'] .= theme('status_messages');
+	}	
+	$element['#children'] .= theme('table', array('attributes' => $table_attributes, 'header' => $header, 'rows' => $rows,)).drupal_render_children($element); 
+	// Prevent fucking jumping of fucking always floating throbber.
+	$element['#children'] .= '<div style="clear:both"></div>';
+
+	if ($element['#visible_type'] == 'fieldset') {
+		$theme = 'fieldset';
+		
+		$element['#value'] = isset($element['#html']) ? $element['#html'] : '';
+	} else {
+		$theme = 'form_element';
+	}
+	unset($element['#value']);
+	$element['#attributes']['class'][] = drupal_html_class($element['#name']);
+	//$element['#type'] = $element['#visible_type'];	
+	
+	
+	return theme($theme, $element);
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

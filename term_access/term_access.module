@@ -1,0 +1,483 @@
+<?php //$Id: term_access.module, v 1.0 2013/10/14 10:23:45 itinity Exp $
+/**
+ * Copyright 2013-2017 Itinity Ltd. (itinity.ru). All rights reserved.
+ * Licensed under the GNU General Public License, version 2 or later.
+ */
+
+
+/**
+* Controls access to taxonomy terms view. Share API function for check access (like node_access(), @see taxonomy_term_view_access())
+*/
+
+
+/**
+* Implements hook_menu_alter()
+*/
+function term_access_menu_alter(&$menu) {
+	if (!empty($menu[$p = 'taxonomy/term/%taxonomy_term'])) {
+		// Override taxonomy term view items access callback
+		if ((empty($menu[$p]['access callback']) || $menu[$p]['access callback'] === 'user_access') && $menu[$p]['access arguments'] === array('access content')) {
+			$menu[$p]['access callback'] = 'taxonomy_term_view_access';
+			$menu[$p]['access arguments'] = array(2);
+		}
+	}
+}
+
+/**
+* Get access rights to view term and implements/invoke own global hook 'taxonomy_term_view_access' to ask other modules
+*/
+function taxonomy_term_view_access($term, $account = NULL) {
+	if (!$account) {
+		global $user;
+		$account = $user;
+	}
+  $results = &drupal_static(__FUNCTION__);
+  $tid = is_scalar($term) ? $term : $term->tid;
+  if (!isset($results[$tid][$account->uid])) {
+    $results[$tid][$account->uid] = TRUE;
+    if (!user_access('access content', $account)) { // default taxonomy/term/123 menu access arguments is array('access content')
+      $results[$tid][$account->uid] = FALSE;
+    }
+    if (!user_access('administer taxonomy', $account)) {
+      if (is_numeric($term)) {
+        $term = taxonomy_term_load($term);
+      }
+      if (!user_access("edit terms in $term->vid", $account)) {
+        foreach (module_implements($hook = 'taxonomy_term_view_access') as $module) {
+          $fn = $module . '_' . $hook;
+          if ($fn($term, $account) === FALSE) {
+            $results[$tid][$account->uid] = FALSE;
+            break;
+          }
+        }		
+      }
+    }    
+  }
+	return $results[$tid][$account->uid];
+}
+
+
+/**
+* Implements hook_entity_view()
+*/
+function term_access_entity_view($entity, $type, $view_mode, $langcode) {
+	// Supress hrefs in taxonomy links when view access is denied.
+	foreach ($entity as $key => $data) {
+		if ($data && is_array($data) && ($lang = field_language($type, $entity, $key, $langcode))) {
+			if (isset($entity->{$key}[$lang]) && ($field = reset($entity->{$key}[$lang]))) {
+				if (!empty($field['tid']) && !empty($entity->content[$key]) && ($info = field_info_field($key)) && $info['type'] == 'taxonomy_term_reference') {
+					foreach (element_children($entity->content[$key]) as $delta) {
+						if (!empty($entity->content[$key][$delta]['#options']['entity']) && !taxonomy_term_view_access($entity->content[$key][$delta]['#options']['entity'])) {
+							$entity->content[$key][$delta]['#type'] = 'item';
+						}
+					}
+				}
+			}
+		}
+	}
+}
+
+/**
+* Implements hook_user_cancel()
+*/
+function term_access_user_cancel($edit, $account, $method) {
+	if ($method === 'user_cancel_block_unpublish') {
+		// un-verify user created terms
+		db_query('UPDATE {taxonomy_term_data} SET verified = 0 WHERE NOT (uid IS NULL) AND uid = :uid AND verified', array(':uid' => $account->uid));
+	}
+	if ($method === 'user_cancel_reassign') {
+		// do nothing? 
+	}
+	if ($method === 'user_cancel_delete') {
+		// delete all not-verified terms created by user
+		foreach (db_query('SELCT tid FROM {taxonomy_term_data} WHERE NOT (uid IS NULL) AND uid = :uid AND NOT verified', array(':uid' => $account->uid)) as $r) {
+			taxonomy_term_delete($r->tid);
+		}
+	}
+  drupal_static_reset('taxonomy_term_view_access');
+}
+
+function term_access_init() {
+	
+}
+
+/**
+* Implements hook_entity_delete()
+*/
+function term_access_entity_delete($entity, $type) {
+
+	// Delete unverified terms attached only to this entity
+	
+	list($id, $vid, $bundle) = entity_extract_ids($type, $entity);
+	$tids = array();
+	// Build list of terms used by entity
+	foreach ($entity as $field_name => $data) {
+		if (($field_info_field = field_info_field($field_name)) && $field_info_field['type'] === 'taxonomy_term_reference') {
+			foreach ($data as $lang => $items) {
+				foreach ($items as $item) {
+					$tids[$item['tid']] = $item['tid'];
+				}
+			}
+		}
+	}
+	if ($tids) {
+		// Remove all verified terms from list
+		foreach (db_query('SELECT tid FROM {taxonomy_term_data} WHERE tid IN (:tids) AND verified', array(':tids' => $tids)) as $r) {
+			unset($tids[$r->tid]);
+		}
+	}
+	
+	if ($tids) { // <-- Unverified terms ids array used by current entity
+	
+		// Filter terms ids by using in other entities
+	
+		foreach (field_info_fields() as $field_name => $field_info) {
+			if ($field_info['type'] === 'taxonomy_term_reference') {
+				$table = 'field_data_' . $field_name;
+				$column = preg_replace('/^field_data_/', '', $table) . '_tid';
+				$query = db_select($table, $table);
+				$query->fields($table, array($column));
+				$query->condition($table . '.' . $column, $tids);
+				$query->condition(db_or()->condition($table . '.entity_id', $id, '<>')->condition($table . '.entity_type', $type, '<>'));
+				// Remove terms used in other entities from list
+				foreach ($query->execute()->fetchAllKeyed() as $tid) {
+					unset($tids[$tid]);
+				}
+			}
+		}
+	}
+	// Finally delete not verified terms used only in current entity
+	array_map('taxonomy_term_delete', $tids);
+  drupal_static_reset('taxonomy_term_view_access');
+}
+
+
+/**
+* Implements hook_entity_insert()
+*/
+function term_access_entity_insert($entity, $entity_type) {
+  drupal_static_reset('taxonomy_term_view_access');
+}
+
+/**
+* Implements hook_entity_update()
+*/
+function term_access_entity_update($entity, $entity_type) {
+  drupal_static_reset('taxonomy_term_view_access');
+}
+
+/**
+* Implements hook_form_alter()
+*/
+function term_access_form_alter(&$form, &$form_state, $form_id) {
+	
+	if ($form_id === 'taxonomy_overview_terms') {
+		drupal_add_css(drupal_get_path('module', 'term_access') . '/term_access.css');
+		// Add administer controls for verify/unverify terms
+		// Add additional information about account that create term
+		foreach (element_children($form) as $key) {
+			if (preg_match('/^tid:\d+/', $key)) {
+
+				if (!$form[$key]['#term']['verified'] || $form[$key]['#term']['uid']) {
+					$checkbox = array(
+						'#type' => 'checkbox',
+						'#title' => t('approve'),
+						'#default_value' => $form[$key]['#term']['verified'],
+						'#field_prefix' => $form[$key]['#term']['uid'] ? '<small>' . t('created by !username', array('!username' => theme('username', array('account' => user_load($form[$key]['#term']['uid']))))) . '</small>' : '',
+						'#parents' => array(
+							$key,
+							'verified',
+						),
+					);
+					if (!element_children($form[$key]['edit'])) {
+						$form[$key]['edit'] = array(
+							'edit' => $form[$key]['edit'],
+							'verified' => $checkbox,
+						);
+					}
+					else {
+						$form[$key]['edit']['verified'] = $checkbox;
+					}
+					if (!$form[$key]['#term']['verified']) {
+						$form[$key]['view']['#attributes']['class'][] = 'term-unpublished';
+					}
+				}
+			}
+		}
+		$form['#submit'][] = '_term_access_taxonomy_overview_terms_submit';
+	}
+	
+	
+	if ($form_id === 'taxonomy_form_term') {
+		$term = (object)$form['#term'];
+		if (!empty($term->tid)) {
+			// Add administer checkbox for verify/unverify term
+			// Add additional information about account that create term
+			if (!empty($term->uid) || empty($term->verified)) {
+				$form['term_access']['verified'] = array(
+						'#type' => 'checkbox',
+						'#title' => t('Verified'),
+						'#default_value' => !empty($term->verified),
+				);
+			}
+			if (!empty($term->uid)) {
+				$form['term_access']['uid'] = array(
+					'#type' => 'item',
+					'#title' => t('created by'),
+					'#inline' => TRUE,
+					'#markup' => theme('username', array('account' => user_load($term->uid))),
+				);
+			}
+			if (!empty($form['term_access'])) {
+				$form['term_access'] += array(
+					'#weight' => -10000,
+					'#type' => 'item',
+					'#inline' => TRUE,
+				);
+			}
+		}
+		if (!empty($form['relations']['parent']['#options'])) {
+			foreach (db_query('SELECT tid FROM {taxonomy_term_data} WHERE tid IN (:tids) AND NOT verified', array(':tids' => array_keys($form['relations']['parent']['#options']))) as $r) {
+				$form['relations']['parent']['#options'][$r->tid] .= ' (' . t('not verified') . ')';
+			}		
+		}
+
+	}
+
+	if ($form_id === 'field_ui_widget_type_form') {
+		// Add own settings for options_select widget
+		if (!empty($form['basic']['widget_type']['#options']['taxonomy_autocomplete'])) { // fast detect what widget is instance of taxonomy_term_reference field type
+			$field_info_field = field_info_field($form['#field_name']);
+			$field_info_instance = field_info_instance($form['#entity_type'], $form['#field_name'], $form['#bundle']);
+			$form['term_access_settings'] = array(
+				'#tree' => TRUE,
+				'#type' => 'item',
+				'#inline' => TRUE,
+				'#states' => array(
+					'visible' => array(
+						'select[name="widget_type"]' => array('value' => 'options_select',),
+					),
+				),
+				'allow_add' => array(
+					'#type' => 'checkbox',
+					'#title' => t('Allow add terms'),
+					'#default_value' => !empty($field_info_instance['settings']['term_access_settings']['allow_add']),
+				),
+				'level_min' => array(
+					'#type' => 'select',
+					'#options' => drupal_map_assoc(range(0, 5)),
+					'#default_value' => isset($field_info_instance['settings']['term_access_settings']['level_min']) ? $field_info_instance['settings']['term_access_settings']['level_min'] : NULL,
+					'#states' => array(
+						'visible' => array(
+							'input[name="term_access_settings[allow_add]"]' => array('checked' => TRUE,),
+						),
+					),
+					'#field_prefix' => t('between'),
+					'#field_suffix' => t('and'),
+				),
+				'level_max' => array(
+					'#type' => 'select',
+					'#options' => drupal_map_assoc(range(1, 15)),
+					'#default_value' => isset($field_info_instance['settings']['term_access_settings']['level_max']) ? $field_info_instance['settings']['term_access_settings']['level_max'] : 5,
+					'#states' => array(
+						'visible' => array(
+							'input[name="term_access_settings[allow_add]"]' => array('checked' => TRUE,),
+						),
+					),
+					'#field_suffix' => t('levels', array(), array('context' => 'inbetween')),
+				),
+				'verify' => array(
+					'#type' => 'checkbox',
+					'#field_prefix' => '<div class="clearfix"></div>',
+					'#title' => t('A new terms need to verify by administrator'),
+					'#default_value' => isset($field_info_instance['settings']['term_access_settings']['verify']) ? $field_info_instance['settings']['term_access_settings']['verify'] : TRUE,
+					'#states' => array(
+						'visible' => array(
+							'input[name="term_access_settings[allow_add]"]' => array('checked' => TRUE,),
+						),
+					),
+				),
+			);
+			$form['#submit'][] = '_term_access_field_ui_widget_type_form_submit';
+		}
+	}
+}
+
+
+/**
+* Additional submit allback for taxonomy_overview_terms form. @see term_access_form_alter()
+*/
+function _term_access_taxonomy_overview_terms_submit($form, &$form_state) {
+	foreach ($form_state['values'] as $key => $term) {
+		// Process 'verified' checkboxes changes
+		if (preg_match('/^tid:(\d+):/', $key)) {
+			// Compare initial status with submitted status and update term when not equal.
+			if (isset($term['verified']) && $form[$key]['#term']['verified'] != $term['verified']) {
+				db_query('UPDATE {taxonomy_term_data} SET verified = :verified WHERE tid = :tid', array(':verified' => $term['verified'], ':tid' => $term['tid']));
+			}
+		}
+	}
+}
+
+
+/**
+* Additional submit allback for field_ui_widget_type_form. @see term_access_form_alter()
+*/
+function _term_access_field_ui_widget_type_form_submit($form, &$form_state) {
+	$field_info_instance = field_info_instance($form['#entity_type'], $form['#field_name'], $form['#bundle']);
+	$field_info_instance['settings']['term_access_settings'] = $form_state['values']['term_access_settings'];
+	field_update_instance($field_info_instance);
+}
+
+
+/**
+* Implements hook_query_QUERY_TAG_alter(). @see class TaxonomyTermController, taxonomy_get_parents(), taxonomy_get_children() and taxonomy_get_tree()
+*/
+function term_access_query_term_access_alter(QueryAlterableInterface $query) {
+	// Give access to non-verified terms only for admins or user that create term
+	if (!user_access('administer taxonomy')) {
+		$tables = $query->getTables();
+		foreach ($tables as $key => $table) {
+			if ($table['table'] === 'taxonomy_term_data') {
+				// ... AND (verified OR (uid NOT NULL AND uid = :uid))
+				$or = db_or();
+				$or->condition($table['alias'] . '.verified', TRUE)->condition(db_and()->isNotNull($table['alias'] . '.uid')->where($table['alias'] . '.uid = :uid', array(':uid' => $GLOBALS['user']->uid)));
+				$query->condition($or);
+			}
+		}
+	}
+}
+
+
+/**
+* Implements hook_process_taxonomy_term()
+*/
+function term_access_process_taxonomy_term(&$variables) {
+	// Visualization of not-verified terms
+	drupal_add_css(drupal_get_path('module', 'term_access') . '/term_access.css');
+	if (!$variables['term']->verified) {
+		$variables['classes'] .= ' term-unpublished not-verified';
+		$variables['content']['not-verified']['#markup'] = '<small>' . t('Not verified') . '</small>';
+		$variables['term_name'] .= ' (' . t('not verified') . ')';
+	}
+}
+
+
+/**
+* Implements hook_field_widget_WIDGET_TYPE_form_alter()
+*/
+function term_access_field_widget_options_select_form_alter(&$element, &$form_state, $context) {
+	if ($context['field']['type'] === 'taxonomy_term_reference') {
+	
+		$element['#hierarchy_prefix'] = '-'; // @see _addons_process_select()
+		$element['#empty_option_key'] = '_none'; // @see _addons_process_select()
+    if (!empty($element['#options'])) {
+      foreach (db_query('SELECT tid FROM {taxonomy_term_data} WHERE tid IN (:tids) AND NOT verified', array(':tids' => array_keys($element['#options']))) as $r) {
+        $element['#options'][$r->tid] .= ' (' . t('not verified') . ')';
+      }
+    }
+		if (!empty($context['form']['#entity'])) {// && user_access('administer taxonomy')) {
+			$field_info_instance = field_info_instance($element['#entity_type'], $element['#field_name'], $element['#bundle']);
+			if (!empty($field_info_instance['settings']['term_access_settings']['allow_add'])/* || user_access('administer taxonomy')*/) {
+				// IN CONSTRUCTION
+				
+				$element['#new_value_key'] = 'new'; // @see _addons_process_select()
+				$element['#new_value_level_min'] = /*user_access('administer taxonomy') ? 0 :*/(isset($field_info_instance['settings']['term_access_settings']['level_min']) ? $field_info_instance['settings']['term_access_settings']['level_min'] : 0);
+				$element['#new_value_level_max'] = /*user_access('administer taxonomy') ? 10 : */(isset($field_info_instance['settings']['term_access_settings']['level_max']) ? $field_info_instance['settings']['term_access_settings']['level_max'] : 10);
+				//m($element);
+				if (!isset($element['#options']['_none'])) {
+					$element['#options'] = array('_none' => t('- None -'),) + $element['#options'];
+					$element['#required'] = FALSE;
+					array_unshift($element['#element_validate'], '_term_access_taxonomy_required_field_validate');
+					$element['#title'] = t('!title !required', array('!title' => $element['#title'], '!required' =>  theme('form_required_marker')));
+				}
+				array_unshift($element['#element_validate'], '_term_access_taxonomy_field_validate');
+			}
+
+		}
+	}
+}
+
+
+/**
+* Additional '#required' validator for modified taxonomy_term_reference widget. @see term_access_field_widget_options_select_form_alter()
+*/
+function _term_access_taxonomy_required_field_validate($element, &$form_state) {
+	$value = &drupal_array_get_nested_value($form_state['values'], $element['#parents']);
+	// Deny empty name
+	$name = isset($form_state['values'][$element['#field_name']][$element['#field_name'] . '_' . $element['#language'] . '_new']) ? trim($form_state['values'][$element['#field_name']][$element['#field_name'] . '_' . $element['#language'] . '_new']) : '';
+	if (!$value && empty($name)) {
+		if (!$name) {
+			form_error($element, t('!name field is required.', array('!name' => $element['#title'])));
+		}
+	}	
+}
+
+function _term_access_taxonomy_field_validate($element, &$form_state) {
+	$name = isset($form_state['values'][$element['#field_name']][$element['#field_name'] . '_' . $element['#language'] . '_new']) ? trim($form_state['values'][$element['#field_name']][$element['#field_name'] . '_' . $element['#language'] . '_new']) : '';
+	if ($name) {
+		$value = &drupal_array_get_nested_value($form_state['values'], $element['#parents']);
+		
+		//m($value, $form_state['values'][$element['#field_name']][$element['#field_name'] . '_' . $element['#language'] . '_new']);
+		//m($element['#field_name']);
+		$field_info_field = field_info_field($element['#field_name']);
+		$vocabulary = taxonomy_vocabulary_machine_name_load($field_info_field['settings']['allowed_values'][0]['vocabulary']);
+		foreach (taxonomy_get_tree($vocabulary->vid, $value ? $value : 0, 1) as $term) {
+			
+		}
+	}
+}
+
+/**
+* Implements hook_field_attach_submit()
+*/
+function term_access_field_attach_submit($entity_type, $entity, $form, &$form_state) {
+	$values = &drupal_array_get_nested_value($form_state['values'], $form['#parents']);
+	// Create new term by taxonomy_term_reference field form
+	foreach ($values as $field_name => $data) {
+		if ($field_info_field = field_info_field($field_name)) {
+			if ($field_info_field['type'] === 'taxonomy_term_reference') {
+				list($id, $vid, $bundle) = entity_extract_ids($entity_type, $entity);
+				$field_info_instance = field_info_instance($entity_type, $field_name, $bundle);
+				if ($field_info_instance['widget']['type'] === 'options_select') {
+					$langcode = field_language($entity_type, $entity, $field_name);
+					if (isset($data[$field_name .'_' . $langcode . '_new']) && $name = trim($data[$field_name .'_' . $langcode . '_new'])) {
+						$vocabulary = taxonomy_vocabulary_machine_name_load($field_info_field['settings']['allowed_values'][0]['vocabulary']);
+						$parent = !empty($data[$langcode][0]['tid']) ? $data[$langcode][0]['tid'] : 0;
+						$tree = taxonomy_get_tree($vocabulary->vid, $parent, 1);
+						$weight = 0;
+						foreach ($tree as $term) {
+							$weight = max($weight, $term->weight);
+						}
+						// Initialize new term object and try to save it
+						$new_term = (object)array(
+							'vid' => $vocabulary->vid, 
+							'name' => $name,
+							'parent' => $parent,
+							'weight' => $weight + 1,
+							'verified' => user_access('administer taxonomy') ? 1 : (!isset($field_info_instance['settings']['term_access_settings']['verify']) || $field_info_instance['settings']['term_access_settings']['verify'] ? 0 : 1),
+							'uid' => $GLOBALS['user']->uid,
+						);
+						// Add saved term id into entity field
+						if (taxonomy_term_save($new_term)) {
+							$entity->{$field_name}[$langcode][0]['tid'] = $new_term->tid;
+						}						
+					}
+				}
+			}
+		}
+	}
+}
+
+
+
+
+
+
+
+
+
+
+
+
+

@@ -1,0 +1,35 @@
+# $Id$
+#
+# Russian translation of Drupal (general)
+# Copyright YEAR NAME <EMAIL@ADDRESS>
+# Generated from files:
+#  adv_elements.module: n/a
+#  adv_elements.info: n/a
+#  js/fileupload.js: n/a
+#
+#, fuzzy
+msgid ""
+msgstr ""
+"Project-Id-Version: PROJECT VERSION\n"
+"POT-Creation-Date: 2013-05-27 15:02+0300\n"
+"PO-Revision-Date: 2013-05-27 15:02+0300\n"
+"Last-Translator: NAME <EMAIL@ADDRESS>\n"
+"Language-Team: Russian <EMAIL@ADDRESS>\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=utf-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=3; plural=((((n%10)==1)&&((n%100)!=11))?(0):(((((n%10)>=2)&&((n%10)<=4))&&(((n%100)<10)||((n%100)>=20)))?(1):2));\n"
+
+#: adv_elements.module:111
+msgid "Field %name contains incorrect value. Time must be in 24-hours format (hh:mm). Midnight is 00:00."
+msgstr "Поле %name содержит некорректное значение. Время должно быть в 24-часовом формате (чч:мм). Полночь - 00:00."
+
+#: adv_elements.info:0
+msgid "Lets users to unput data in nicer way and check time value for validity"
+msgstr ""
+
+msgid "Select all: Ctrl+A; unselect all: Esc"
+msgstr "Выбрать все: Ctrl+A; ничего: Esc"
+
+msgid "Choose file"
+msgstr "Выберите файл"

@@ -1,0 +1,7 @@
+; $Id: field_phone.info, v 1.0 2011/03/30 12:02:00 Ivan Demenkov Exp $
+name = Phone field
+description = Add phone field and widget type
+package = ITK/Fields
+version = 7.x
+core = 7.x
+dependencies[] = addons

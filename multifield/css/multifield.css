@@ -1,0 +1,76 @@
+.form-type-multifield-wrapper.hide-weight .tabledrag-toggle-weight-wrapper,
+.form-type-multifield-wrapper .tabledrag-changed-warning.messages.warning {
+	display: none !important;
+}
+
+html.js .form-type-multifield-wrapper.hide-weight th.tabledrag-hide, html.js .form-type-multifield-wrapper.hide-weight td.tabledrag-hide,
+html.js .tabledrag-toggle-weight {
+	display: none;
+}
+
+.form-type-multifield-wrapper table.header-hidden thead th {
+  padding-top: 0px !important;
+  padding-bottom: 0px !important;
+  border-bottom: none;
+  line-height: 0 !important;
+  visibility: hidden;
+}
+
+.form-type-multifield-wrapper table.header-hidden thead tr {
+  border-bottom-width: 1px;
+  border-bottom-style: solid;
+}
+/*
+tr.drag td {
+	background-color: #FFC;
+}*/
+
+.multifield-buttons, .multifield-weight, .multifield-dragger {
+	width: 1px;
+}
+.multifield-buttons, .fieldset-wrapper .multifield-buttons, .multifield-weight {
+  vertical-align: middle;
+}
+
+.form-type-multifield-wrapper .form-type-multifield-wrapper {
+  font-size: .95em;
+}
+
+.form-type-multifield-wrapper .form-type-multifield-wrapper .form-submit{
+  font-size: 1em;
+}
+
+.multifield-dragger a.tabledrag-handle {
+  /*padding:0 .3em;*/
+  margin: 0;
+}
+
+.multifield-dragger {
+  width: 1%;
+  padding: 0;
+  white-space: nowrap;
+}
+
+.multifield-dragger .warning{
+  display: none;
+}
+.form-type-multifield-wrapper>table>tbody>tr>td,.form-type-multifield-wrapper>table>thead>tr>th,
+.form-type-multifield-wrapper>.fieldset-wrapper>table>tbody>tr>td,.form-type-multifield-wrapper>.fieldset-wrapper>table>thead>tr>th {
+	vertical-align: top;	
+}
+
+table.multifield-table  {
+  width: 100%;
+}
+
+.multifield-buttons .form-submit {
+	background: none !important;
+	border: none;
+}
+
+
+
+
+
+
+

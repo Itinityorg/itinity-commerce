@@ -1,0 +1,7 @@
+; $Id: field_email.info, v 1.0 2011/03/30 11:57:02 Ivan Demenkov Exp $
+name = Email field
+;description = 
+package = ITK/Fields
+version = 7.x
+core = 7.x
+dependencies[] = addons

@@ -1,0 +1,10 @@
+name = Node specifications
+description = Specifications sets for nodes.
+package = ITK/Content
+core = 7.x
+version = VERSION
+dependencies[] = utils
+dependencies[] = addons
+dependencies[] = multifield
+dependencies[] = taxonomy
+dependencies[] = taxonomy_entity_index

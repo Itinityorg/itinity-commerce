@@ -1,0 +1,220 @@
+table.table-wrapper.supress-css th {
+	font-style: inherit;
+	padding:0;
+}
+table.table-wrapper caption {
+	text-align:left;
+}
+table.table-wrapper.supress-css thead {
+	background-color:inherit;
+}
+table.table-wrapper.supress-css {
+	border-collapse: collapse;
+}
+
+table.table-wrapper.supress-css, table.table-wrapper.supress-css tr, table.table-wrapper.supress-css th, table.table-wrapper.supress-css td {
+	border:none !important;
+	background-color: transparent !important;
+	padding:0;
+}
+
+
+
+table.table-wrapper .first-col label {
+	white-space:nowrap;
+}
+
+table.table-wrapper.supress-css  .form-item { 
+margin-top:.5em;
+margin-bottom:.5em;
+}
+
+
+
+.username-wrapper.with-picture.offline img, .user-picture-wrapper.offline img {
+	border-bottom:3px solid #888;
+}
+.username-wrapper.with-picture.online img, .user-picture-wrapper.online img {
+	border-bottom:3px solid #090;
+}
+.username-wrapper.with-picture.blocked img, .user-picture-wrapper.blocked img {
+	border-bottom:3px solid #000;
+}
+
+/* link with gear (like contextual links) */
+/*
+a.configure {
+	background: url('gear.png') no-repeat;
+	width:16px;
+	height:16px;
+	padding:0;
+	display:inline-block;
+	font-size: 0;
+	line-height: 0;
+	overflow: hidden;
+}
+*/
+
+.taxononmy-breadcrumbed-links.inline li {
+	padding:0;
+}
+
+
+/**
+* Like standard .element-invisible class but applied only in clients vith javascript.
+* This class is not equal .js-hide.
+*/
+html.js .js-invisible {
+	clip: rect(1px, 1px, 1px, 1px);
+	height: 1px;
+	overflow-x: hidden;
+	overflow-y: hidden;
+	position: absolute !important;
+}
+
+
+/**
+* Use this class for displaying elements ONLY in js-enabled clients.
+*/
+html .js-visible {
+	display: none;
+}
+
+
+html.js .js-visible {
+	display: inline;
+}
+
+html.js .js-visible div, html.js .js-visible input, html.js .js-visible select, html.js .js-visible textarea , html.js .js-visible table, html.js .js-visible fieldset {
+	display: block;
+}
+
+
+/**
+* @see _addons_process_fieldset()
+*/
+html.js fieldset.tabbed>legend {
+	display:none;
+}
+
+html.js fieldset.tabbed {
+	border-top:none;
+	margin-top:0;
+}
+
+
+.container-inline h2, .container-inline h3, .container-inline h4, .container-inline h5, .container-inline h6  {
+  display: inline;
+}
+
+html.js input.kb-fix.form-autocomplete {
+	background-image:none; /* @see _addons_process_textfield() */
+}
+
+html.js .form-radios.items-as-links  input.form-radio {
+	visibility: hidden;
+}
+
+/**
+ Overwrite misc/vertical-tabs.css rule for text fields placed in inline container
+*/
+.vertical-tabs .form-type-textfield.container-inline input, * html .vertical-tabs .form-type-textfield.container-inline, .container-inline>.form-type-textfield input {
+  width: auto;
+}
+
+.sortable-checkboxes-placeholder {
+	border: 1px dotted black;
+	margin: .3em;
+	padding:0 2.5em;
+	height: 1em;
+}
+
+ul.taxonomy-breadcrumb-links.inline li {
+	padding:0;
+}
+
+
+.form-type-checkbox label.option>.updown {
+	font-weight: 700;
+	font-size: 1.2em;
+	cursor: move;
+}
+
+
+.digit-element-buttons-wrapper {
+  white-space: nowrap;
+}
+
+.digit-element-buttons-wrapper .form-text.use-buttons {
+	border-radius: 0;
+}
+
+.digit-element-buttons-wrapper.vertical-view {
+	position: relative;
+	display: inline-block;
+	height: 100%;
+}
+
+.digit-element-buttons-wrapper .use-buttons {
+  position: relative;
+  z-index: 10;
+  margin: 0 -1px;
+  text-align: right;
+}
+
+.digit-element-buttons-wrapper.vertical-view .use-buttons {
+  padding-right: 36px !important;
+  margin: 0;
+}
+
+.digit-element-buttons-wrapper .digit-button {
+  cursor: pointer; 
+  text-align: center;
+  min-width: 10px;
+  max-width: 20px;
+  padding-left: 2px !important;
+  padding-right: 2px !important;
+  -moz-user-select: none;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+.digit-element-buttons-wrapper.vertical-view  .digit-button {
+  max-width: 32px;
+}
+
+.vertical-view .digit-button {
+	position: absolute;
+  z-index: 15;
+  height: 50%;
+	border: none;
+  display:inline-block;
+  right: 1px;
+	width: auto;
+	font-size: 13px;
+	min-width: 32px;
+	padding: 0 8px;
+	max-width: 32px;
+	-webkit-box-sizing: border-box;
+	-moz-box-sizing: border-box;
+	box-sizing: border-box;
+	text-align: center;
+	text-shadow: 0 1px 0 #FFFFFF;
+  border-left-width: 1px;
+  border-left-style: solid;
+}
+
+.vertical-view  .digit-button.digit-minus {
+	border-top-width: 1px;
+	border-top-style:solid;
+	bottom: 1px;
+	height: 49%;
+}
+
+.vertical-view .digit-button.digit-plus {
+	top: 1px;
+  z-index: 12;
+}
+
+
+

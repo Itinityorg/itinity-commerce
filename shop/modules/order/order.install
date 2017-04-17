@@ -1,0 +1,502 @@
+<?php
+/**
+* @file
+* Install file for product module.
+*/
+
+
+/**
+* Implements hook_install().
+* - Add the body field.
+* - Configure the body field.
+*/
+function order_install() {
+	$order_node_info = order_node_info();
+	$content_type = node_type_set_defaults($order_node_info['order']);
+
+	node_type_save($content_type);
+
+	variable_set('node_options_order', array('status'));
+	variable_set('node_preview_order', 0);
+
+}
+
+
+/**
+* Implementats hook_uninstall().
+*/
+function order_uninstall() {
+
+	// Gather all the example content that might have been created while this
+	// module was enabled.  Simple selects still use db_query().
+
+	$nids = array();
+	foreach (db_query('SELECT nid FROM {node} n WHERE n.type = :type', array(':type' => 'order')) as $row) {
+		$nids[] = $row->nid;
+	}
+
+	// Delete all the nodes at once
+	node_delete_multiple($nids);
+
+	// Delete our content type
+	node_type_delete('order');
+}
+
+
+/**
+* Implements hook_schema()
+*/
+function order_schema() {
+	$schema = array();
+	$schema['shop_orders'] = array(
+	  'description' => 'TODO: please describe this table!',
+	  'fields' => array(
+			'nid' => array(
+				'description' => 'TODO: please describe this field!',
+				'type' => 'int',
+				'unsigned' => TRUE,
+				'not null' => TRUE,
+			),
+			'order_num' => array(
+				'description' => 'TODO: please describe this field!',
+				'type' => 'serial',
+				'unsigned' => TRUE,
+				'not null' => TRUE,
+			),
+			'order_status' => array(
+				'description' => 'TODO: please describe this field!',
+				'type' => 'int',
+				'unsigned' => TRUE,
+				'not null' => FALSE,
+			),
+			'user_ip' => array(
+				'description' => 'Ip address of user that creates order',
+				'type' => 'varchar',
+				'length' => 255,
+				'default' => NULL,
+				'not null' => FALSE,
+			),
+      'tracking_id' => array(
+        'description' => 'Unique tracking ID',
+        'type' => 'int',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+        'default' => 0,
+      ),
+			'delivery_method' => array(
+				'description' => 'Delivery method',
+				'type' => 'varchar',
+				'length' => '64',
+				'not null' => FALSE,
+			),
+			'delivery_variant' => array(
+				'description' => 'User speciefed variant of delivery method',
+				'type' => 'int',
+				'unsigned' => TRUE,
+				'not null' => FALSE,
+			),
+      // @TODO: refactor IT:
+			'delivery_address' => array(
+				'type' => 'text',
+				'not null' => FALSE,
+				'size' => 'big', 
+				'description' => 'Delivery address (needs for courier method).',
+			),
+      'delivery_price' => array(
+        'description' => 'Frozen delivery cost for user chosed delivery method with params (only for completed orders)',
+        'type' => 'numeric',
+        'not null' => TRUE,
+        'default' => 0,
+        'precision' => '30',
+        'scale' => '2',
+      ),
+      'delivery_params' => array(
+        'description' => 'Serialized user data for delivery method (address, courier variant, warehouse point, postomat id, etc)',
+        'type' => 'blob',
+        'not null' => FALSE,
+      ),
+			'payment_method' => array(
+				'description' => 'Payment method',
+				'type' => 'varchar',
+				'length' => '64',
+				'not null' => FALSE,
+			),
+			'previous_state' => array(
+				'description' => 'TODO: please describe this field!',
+				'type' => 'blob',
+				'size' => 'big',
+				'not null' => FALSE,
+			),
+			'recipient_fields' => array(
+				 'type' => 'blob', 
+				 'not null' => FALSE,
+				 'size' => 'big', 
+				 'serialize' => TRUE,
+				 'description' => 'User fields'
+			),
+			'is_paid' => array(
+				'description' => 'Order is paid or not.',
+				'type' => 'int',
+				'unsigned' => TRUE,
+				'not null' => FALSE,
+				'default' => 0,
+			),
+			'payment_timestamp' => array(
+				'description' => 'Datetime of payment for order.',
+				'type' => 'int',
+				'unsigned' => TRUE,
+				'not null' => FALSE,
+				'default' => 0,			
+			),
+      'customer' => array(
+        'description' => '{users}.uid of the customer for which the order is created', // IKW
+				'type' => 'int',
+				'unsigned' => TRUE,
+				'not null' => FALSE,
+				'default' => NULL, // IKW: Can be guest (0) or NULL if not specified, or any user uid
+      ),
+			'order_discount' => array(
+				'description' => 'Order discount',
+				'type' => 'numeric',
+				'not null' => TRUE,
+				'default' => 0,
+				'precision' => '30',
+        'scale' => '2',
+      ),
+      'order_discount_text' => array(
+        'description' => 'Order discount text',
+        'type' => 'varchar',
+        'length' => 255,
+        'default' => NULL,
+        'not null' => FALSE,
+      ),
+    ),
+	  'primary key' => array('order_num'),
+		'unique keys' => array(
+			'nid' => array('nid')
+		),
+	  'indexes' => array(
+			'delivery_method' => array('delivery_method',),
+			'delivery_variant' => array('delivery_variant',),
+			'order_status' => array('order_status',),
+			'payment_method' => array('payment_method',),
+			'is_paid' => array('is_paid',),
+			'user_ip' => array('user_ip',),
+      'customer' => array('customer',),
+	  ),
+	);
+	return $schema;
+}
+
+
+/**
+* Implements hook_update_last_removed()
+*/
+function order_update_last_removed() {
+	return 7023;
+	/**
+	* 7023 annotation:
+	* All updates up to 7023 is obsolete.
+	* If you want to use old database dump, use shop_v7078_rev3741.zip (or get revision #3741 from SVN) instead of actual scripts.
+	* You must restore all files from archive (or revision #3741), run updates, revert back to latest version and run update again.
+	*/
+}
+
+
+/**
+ * Allow comments for order nodes
+ */
+function order_update_7024() {
+	if (module_exists('comment')) {
+		variable_set('comment_order', COMMENT_NODE_OPEN);
+	}
+
+	$nids = db_query('SELECT nid FROM {node} WHERE type = \'order\'')->fetchCol();
+	if ($nids) {
+		db_query('UPDATE {node} SET comment = :comment WHERE nid IN(:nids)', array(':comment' => COMMENT_NODE_OPEN, ':nids' => $nids));
+		db_query('UPDATE {node_revision} SET comment = :comment WHERE nid IN(:nids)', array(':comment' => COMMENT_NODE_OPEN, ':nids' => $nids));
+	}
+}
+
+
+/**
+* Update orders table
+*/
+function order_update_7027() {
+	db_drop_field('shop_orders', 'payer_type');
+	db_drop_field('shop_orders', 'payer_uid');
+
+	foreach (db_query('SELECT * FROM {shop_orders}') as $r) {
+		if ($r->recipient_fields) {
+			$update = FALSE;
+			$r->recipient_fields = @unserialize($r->recipient_fields);
+			if ($r->recipient_type === 'company') {
+				if (!empty($r->recipient_fields['name'])) {
+					$update = TRUE;
+					$r->recipient_fields['lfm'] = $r->recipient_fields['name'];
+				}
+			}
+			else {
+				if (empty($r->recipient_fields['lfm']) && !empty($r->recipient_fields['name'])) {
+					$update = TRUE;
+					$r->recipient_fields['lfm'] = $r->recipient_fields['name'];
+				}
+			}
+			if ($update) {
+				unset($r->recipient_fields['name']);
+				$r->recipient_fields = serialize($r->recipient_fields);
+				db_query('UPDATE {shop_orders} SET recipient_fields = :data WHERE order_num = :n', array(':data' => $r->recipient_fields, ':n' => $r->order_num));
+			}
+		}
+	}
+	
+	db_drop_field('shop_orders', 'recipient_type');
+	db_drop_field('shop_orders', 'payment_variant');
+	db_drop_field('shop_orders', 'debit_complete');
+}
+
+
+/**
+* merge order_delivery_address + order_details;
+* kill order_details field;
+* rename order_delivery_address to delivery_address
+*/
+function order_update_7028() {
+	foreach (db_query('SELECT * FROM {shop_orders}') as $r) {
+		if ($r->order_details) {
+			$delivery_address = ($r->order_delivery_address ? $r->order_delivery_address . " \n" : '') . $r->order_details;
+			db_query('UPDATE {shop_orders} SET order_delivery_address = :addr WHERE order_num = :order_num', array(':addr' => $delivery_address, ':order_num' => $r->order_num,));
+		}
+	}
+	db_drop_field('shop_orders', 'order_details');
+	db_change_field('shop_orders', 'order_delivery_address', 'delivery_address', array(
+		'type' => 'text', 
+		'not null' => FALSE,
+		'size' => 'big', 
+		'description' => 'Delivery address (needs for courier method).',
+	));
+}
+
+/**
+* Update {shop_orders} structure
+*/
+function order_update_7029() {
+	db_change_field('shop_orders', 'payment_method', 'payment_method', array(
+		'description' => 'Payment method',
+		'type' => 'varchar',
+		'length' => '64',
+		'not null' => FALSE,
+	));
+	db_change_field('shop_orders', 'delivery_method', 'delivery_method', array(
+		'description' => 'Delivery method',
+		'type' => 'varchar',
+		'length' => '64',
+		'not null' => FALSE,
+	));
+	db_drop_index('shop_orders', 'nid');
+	db_add_unique_key('shop_orders', 'nid', array('nid'));
+}
+
+
+/**
+* Update orders payment methods
+*/
+function order_update_7030() {
+	db_query('UPDATE {shop_orders} SET payment_method = \'shop\' WHERE (payment_method IS NULL) OR payment_method = \'\'');
+}
+
+
+/**
+* Update order extra fields placements
+*/
+function order_update_7031() {
+	$settings = variable_get('field_bundle_settings_node__order');
+
+	if (!empty($settings['extra_fields']['display'])) {
+		foreach ($settings['view_modes'] as $view_mode => $data) {
+			if (!empty($data['custom_settings'])) {
+				if (!empty($settings['extra_fields']['display']['owner'][$view_mode]['visible']) && empty($settings['extra_fields']['display']['author'][$view_mode]['visible'])) {
+					$settings['extra_fields']['display']['author'][$view_mode]['visible'] = TRUE;
+					$settings['extra_fields']['display']['author'][$view_mode]['weight'] = $settings['extra_fields']['display']['owner'][$view_mode]['weight'];	
+				}			
+			}
+		}
+
+		unset($settings['extra_fields']['display']['owner']);
+	}
+	variable_set('field_bundle_settings_node__order', $settings);
+}
+
+
+/**
+* Add user_ip column in {orders}
+*/
+function order_update_7032() {
+	db_add_field('shop_orders', 'user_ip', array(
+		'description' => 'Ip address of user that creates order',
+		'type' => 'varchar',
+		'length' => 255,
+		'default' => NULL,
+		'not null' => FALSE,
+	));
+	db_add_index('shop_orders', 'user_ip', array('user_ip'));
+}
+
+
+/**
+* Update old payment methods in orders
+*/
+function order_update_7033() {
+  $count = 0;
+  foreach (db_query('SELECT nid, payment_method FROM {shop_orders} WHERE NOT (payment_method IS NULL) AND payment_method <> \'\' AND (payment_method IN (:m) OR payment_method REGEXP \'^[0-9]+$\')', array(':m' => array('shop', 'sberbank', 'settlement_account',))) as $r) {
+    switch ($r->payment_method) {
+      case 'settlement_account': 
+      case 'sberbank': 
+      $r->payment_method = 'invoice';
+      break;
+      default:
+      $r->payment_method = 'cash';
+    }
+    $count++;
+    db_query('UPDATE {shop_orders} SET payment_method = :m WHERE nid = :n', array(':m' => $r->payment_method, ':n' => $r->nid,));
+  }
+  return $count . ' orders has been updated.';
+}
+
+
+/**
+* Delete obsolete settings
+*/
+function order_update_7034() {
+  variable_del('shop_orders_autoincrement');
+}
+
+
+/**
+* Update {shop_orders} structure
+*/
+function order_update_7035() {
+  db_add_field('shop_orders', 'delivery_price', array(
+    'description' => 'Frozen delivery cost for user chosed delivery method with params (only for completed orders)',
+    'type' => 'numeric',
+    'not null' => TRUE,
+    'default' => 0,
+    'precision' => '30',
+    'scale' => '2',  
+  ));
+  db_add_field('shop_orders', 'delivery_params', array(
+    'description' => 'Serialized user data for delivery method (address, courier variant, warehouse point, postomat id, etc)',
+    'type' => 'blob',
+    'not null' => FALSE,  
+  ));
+}
+
+
+/**
+* Add customer column in {shop_orders}
+*/
+function order_update_7036() {
+  db_add_field('shop_orders', 'customer', array(
+    'description' => '{users}.uid of the customer for which the order is created', // IKW
+    'type' => 'int',
+    'unsigned' => TRUE,
+    'not null' => FALSE,
+    'default' => NULL, // IKW: Can be guest (0) or NULL if not specified, or any user uid
+  ));
+  db_add_index('shop_orders', 'customer', array('customer',));
+}
+
+/**
+* Drop obsolete {shop_orders}.payer_fields
+*/
+function order_update_7037() {
+  db_drop_field('shop_orders', 'payer_fields');
+}
+
+/**
+* Move uids from {shop_orders}.recipient_uid to customer field and drop {shop_orders}.recipient_uid
+*/
+function order_update_7038() {
+  db_query('UPDATE {shop_orders} SET customer = recipient_uid WHERE recipient_uid > 0');
+  db_drop_field('shop_orders', 'recipient_uid');
+}
+
+
+/**
+* Bugfix for order_user_delete() see revision 14364
+*/
+function order_update_7039() {
+  db_query('UPDATE {shop_orders} SET customer = 0 WHERE customer NOT IN (:uids)', array(':uids' => db_query('SELECT uid FROM {users}')->fetchCol()));
+}
+
+
+/**
+ * Add `order_discount` & `order_discount_comment` field to `shop_orders` table
+ */
+function order_update_7040() {
+	if (!db_field_exists('shop_orders', 'order_discount')) {
+		db_add_field('shop_orders', 'order_discount', array(
+			'description' => 'Order discount',
+			'type' => 'numeric',
+			'not null' => TRUE,
+			'default' => 0,
+			'precision' => '30',
+			'scale' => '2',
+		));
+	}
+
+  if (!db_field_exists('shop_orders', 'order_discount_text')) {
+    db_add_field('shop_orders', 'order_discount_text', array(
+      'description' => 'Order discount text',
+      'type' => 'varchar',
+      'length' => 255,
+      'default' => NULL,
+      'not null' => FALSE,
+    ));
+  }
+
+  module_enable(array('changelog'));
+}
+
+
+/**
+* Split payment_widget extra field by two: payment_widget and new payment_status;
+* Inherit payment_status display settings from payment_widget if possible, and place new field after it.
+*/
+function order_update_7041() {
+  $settings = variable_get('field_bundle_settings_node__order', array());
+  if (!empty($settings['extra_fields']['display']['payment_widget'])) {
+    foreach ($settings['extra_fields']['display']['payment_widget'] as $view_mode => $data) {
+      $settings['extra_fields']['display']['payment_status'][$view_mode]['weight'] = $data['weight'];
+      $settings['extra_fields']['display']['payment_status'][$view_mode]['visible'] = $data['visible'];
+    }
+    variable_set('field_bundle_settings_node__order', $settings);
+  }
+}
+
+
+/**
+ * Clear zeroes from shop carts
+ */
+function order_update_7042() {
+  db_delete('shop_cart_items')->condition('qty', 0)->execute();
+}
+
+
+/**
+ * Add 'tracking_id' field to 'shop_orders' table
+ */
+function order_update_7043() {
+  if (db_table_exists('shop_orders')) {
+    if (!db_field_exists('shop_orders', 'tracking_id')) {
+      db_add_field('shop_orders', 'tracking_id', array(
+        'description' => 'Unique tracking ID',
+        'type' => 'int',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+        'default' => 0,
+      ));
+    }
+  }
+}
+

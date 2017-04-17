@@ -1,0 +1,387 @@
+<?php //$Id: anonymous_tracker.module, v 1.0 2016/05/05 16:45:42 itinity Exp $
+/**
+ * Copyright 2016-2017 Itinity Ltd. (itinity.ru). All rights reserved.
+ * Licensed under the GNU General Public License, version 2 or later.
+ */
+
+
+/**
+* Assign site visitors with internal uniquie identifer, store this information in cookies and database, attach tracking ID to logged in accounts
+* Basic usage: @see anonymous_tracker_track_user()
+* Works with 'tracking_record' object with simple structure:
+*  'id' - unique identifer
+*  'uid' - {users}.uid or 0
+*  'updated' - update timestamp. Always zero for new records. This value refreshes at second write attempt and once per hour
+*  'original' - copy of object at time when it loaded from database
+*
+* Defined hooks:
+*   hook_anonymous_tracking_record_insert($tracking_record)
+*   hook_anonymous_tracking_record_update($tracking_record)
+*   hook_anonymous_tracking_record_delete($tracking_record)
+*
+*/
+
+define('ANONYMOUS_TRACKING_LIFETIME', 3600 * 24 * 365 * 3); // Store cookie three years
+define('ANONYMOUS_TRACKER_DEBUG', TRUE); // Enable debuging using watchdog @see anonymous_tracker_debug()
+
+
+/**
+* Implements hook_cron();
+*/
+function anonymous_tracker_cron() {
+
+  // Database maintenance
+  // Find and delete non actual records
+  if ($last = db_query_range('SELECT * FROM {anonymous_tracker} WHERE updated > 0  AND updated < :t ORDER BY updated DESC', 0, 1, array(':t' => REQUEST_TIME - (3600 * 24)))->fetch()) {
+    $ids = array();
+    $anonymous_tracker_debug = variable_get('anonymous_tracker_debug', ANONYMOUS_TRACKER_DEBUG);
+    anonymous_tracker_debug('Process obsolete records started.');
+    $GLOBALS['conf']['anonymous_tracker_debug'] = FALSE;
+    drupal_set_time_limit(240);
+    foreach (db_query_range('SELECT id FROM {anonymous_tracker} WHERE uid = 0 AND updated = 0 AND id < :last', 0, 1000, array(':last' => $last->id)) as $r) {
+      if ($tracking_record = anonymous_tracker_tracking_record_load($r->id)) {
+        $ids[] = $r->id;
+        anonymous_tracker_tracking_record_delete($tracking_record);
+      }
+    }
+    $GLOBALS['conf']['anonymous_tracker_debug'] = $anonymous_tracker_debug;
+    if ($ids) {
+      anonymous_tracker_debug('Deleted @count obsolete tracking records. ID\'s: @from ~ @to', array('@count' => count($ids), '@from' => reset($ids), '@to' => end($ids)));
+    }
+  }
+  
+ // OLD: // Database maintenance
+ // OLD: // Find and delete non actual records  
+ // OLD: if ($max = db_query_range('SELECT id FROM {anonymous_tracker} WHERE updated > 0 AND updated <= :t ORDER BY updated ASC', 0, 1, array(':t' => REQUEST_TIME - ANONYMOUS_TRACKING_LIFETIME))->fetchField()) {
+ // OLD:   foreach (db_query('SELECT id FROM {anonymous_tracker} WHERE uid = 0 AND id <= :id AND (NOT updated OR updated <= :t)', array(':id' => $max, ':t' => REQUEST_TIME - ANONYMOUS_TRACKING_LIFETIME)) as $r) {
+ // OLD:     if ($tracking_record = anonymous_tracker_tracking_record_load($r->id)) {
+ // OLD:       anonymous_tracker_tracking_record_delete($tracking_record);
+ // OLD:     }
+ // OLD:   }
+ // OLD: }
+}
+
+
+
+///// CRUD ////
+
+/**
+* Create/update tracking record
+*/
+function anonymous_tracker_tracking_record_save(&$tracking_record) {
+  $is_array = is_array($tracking_record);
+  $tracking_record = (object) $tracking_record;
+  $is_new = empty($tracking_record->id) && empty($tracking_record->original->id);
+  $tracking_record->ua = substr($tracking_record->ua, 0, 255);
+  $result = drupal_write_record('anonymous_tracker', $tracking_record, !empty($tracking_record->id) ? 'id' : array());
+  module_invoke_all($is_new ? 'anonymous_tracking_record_insert' : 'anonymous_tracking_record_update', $tracking_record);
+  anonymous_tracker_debug($is_new ? 'Created new record !dump' : 'Update existing record !dump', array('!dump' => $tracking_record));
+  $tracking_record = $is_array ? (array) $tracking_record : $tracking_record;
+
+  return $result;
+}
+
+/**
+* Load tracking record from database
+*/
+function anonymous_tracker_tracking_record_load($id) {
+  if ($id && ($r = anonymous_tracker_tracking_record_load_multiple($id))) {
+    return reset($r);
+  }
+}
+
+
+/**
+* Load multiple records from database by conditions
+*/
+function anonymous_tracker_tracking_record_load_multiple($ids = NULL, $conditions = array()) {
+  $result = array();
+  $query = db_select('anonymous_tracker', 'at')->fields('at');
+  $conditions = $conditions ? $conditions : array();
+  foreach ($conditions as $idx => $val) {
+    $query->condition((strpos($idx, '.') === FALSE ? 'at.' : '' ). $idx, $val);
+  }
+  if ($ids) {
+    $query->condition('at.id', $ids);
+  }
+  foreach ($query->execute() as $id => $r) {
+    $r->original = clone $r;
+    $result[$r->id] = $r;
+  }
+  return $result;
+}
+
+
+require_once 'anonymous_tracker.hooks.inc';
+
+/**
+* Delete tracking record from database
+*/
+function anonymous_tracker_tracking_record_delete($tracking_record) {
+  module_invoke_all('anonymous_tracking_record_delete', $tracking_record);
+  db_query('DELETE FROM {anonymous_tracker} WHERE id = :id', array(':id' => $tracking_record->id));
+  anonymous_tracker_debug('Delete record !dump', array('!dump' => $tracking_record));
+}
+
+
+/**
+* Helper func fof generate protection check sum in anonymous_tracker_track_user()
+*/
+function _anonymous_tracker_cookie_checksum($cookie_tracking_id) {
+  static $results = array();
+  if (!isset($results[$cookie_tracking_id])) {
+    $results[$cookie_tracking_id] = drupal_hmac_base64($cookie_tracking_id, 'anonymous-tracking-id-' . drupal_get_private_key() . drupal_get_hash_salt());
+  }
+  return $results[$cookie_tracking_id];
+}
+
+
+/**
+* Read tracking ID from browser cookies
+*/
+function _anonymous_tracker_id_from_cookie() {
+  if (!empty($_COOKIE['tracking_id']) && !empty($_COOKIE['tracking_checksum'])) {
+    if ($_COOKIE['tracking_checksum'] === _anonymous_tracker_cookie_checksum($_COOKIE['tracking_id'])) {
+      return $_COOKIE['tracking_id'] * 1;
+    }
+    else {
+      anonymous_tracker_debug('Invalid checksum @sum for tracking ID #@id', array(
+        '@sum' => !empty($_COOKIE['tracking_checksum']) ? $_COOKIE['tracking_checksum'] : 'NULL',
+        '@id' => $_COOKIE['tracking_id'],
+      ));
+    }
+  }
+}
+
+
+/**
+* Put tracking ID to browser cookies
+*/
+function _anonymous_tracker_id_to_cookie($tracking_id) {
+  if ($tracking_id) {
+    module_invoke_all('anonymous_tracking_cookie_save', $tracking_id, isset($_COOKIE['tracking_id']) ? $_COOKIE['tracking_id'] : NULL);
+    $_COOKIE['tracking_id'] = $tracking_id;
+    $_COOKIE['tracking_checksum'] = _anonymous_tracker_cookie_checksum($tracking_id);
+    setrawcookie('tracking_id', $_COOKIE['tracking_id'], REQUEST_TIME + ANONYMOUS_TRACKING_LIFETIME, '/');
+    setrawcookie('tracking_checksum', $_COOKIE['tracking_checksum'], REQUEST_TIME + ANONYMOUS_TRACKING_LIFETIME, '/');
+  }
+}
+
+
+/**
+* Implements hook_module_implements_alter()
+* Place anonymous_tracker module at top of hook_init() queue
+*/
+function anonymous_tracker_module_implements_alter(&$implementations, $hook) {
+  if ($hook === 'init') {
+    $implementations = array('anonymous_tracker' => $implementations['anonymous_tracker']) + $implementations;
+  }
+}
+
+
+/**
+ * Implements of hook_init()
+ */
+function anonymous_tracker_init() {
+  anonymous_tracker_track_user();
+}
+
+
+/**
+* Get tracking ID of current user from database [ and from cookies if $account == current visitor];
+* Generates new tracking ID if not exists;
+* Store|Update tracking ID in cookies and database.
+* Returns tracking ID and add ID property in $account object.
+* @param $account - optional user object.
+* WARNING: This function modifies browser cookie if $account NOT specified OR $account->uid == client uid!
+*/
+function anonymous_tracker_track_user($account = NULL) {
+  global $user;
+  if (!$account) {
+    $account = $user;
+  }
+  if (!isset($account->tracking_id)) {
+    $account->tracking_id = 0;
+    // Desired $account is NOT current user - work only with database, without cookie
+    if ($account->uid != $user->uid) {
+      if ($account->uid) {
+        if ($r = anonymous_tracker_tracking_record_load_multiple(NULL, array('uid' => $account->uid))) {
+          $tracking_record = reset($r);
+          $account->tracking_id = $tracking_record->id;
+        }
+        else {
+          $tracking_record = (object) array('uid' => $account->uid);
+          if (anonymous_tracker_tracking_record_save($tracking_record)) {
+            $account->tracking_id = $tracking_record->id;
+          }
+        }
+      }
+    }
+    // $account === $user - work with database and cookie
+    elseif (drupal_save_session() && !variable_get('maintenance_mode', FALSE) && !drupal_is_cli() && !utils_is_robot()) {
+      $cookie_tracking_id = _anonymous_tracker_id_from_cookie();
+      $tracking_record = NULL;
+      // Anonymous:
+      if (!$account->uid) {
+        if ($cookie_tracking_id && !($tracking_record = anonymous_tracker_tracking_record_load($cookie_tracking_id))) {
+          anonymous_tracker_debug('Tracking ID #@id not found in database', array('@id' => $cookie_tracking_id));
+        }
+      }
+      // Logged in user:
+      elseif ($cookie_tracking_id) {// TODO: CHECK AND OPTIMIZE CODE IN THIS BLOCK:
+        if (!($tracking_record = anonymous_tracker_tracking_record_load($cookie_tracking_id))) {
+          anonymous_tracker_debug('Tracking id #@id is not found in database', array('@id' => $cookie_tracking_id,));
+        }
+        elseif ($tracking_record->uid) {
+          if ($tracking_record->uid != $account->uid) {
+            anonymous_tracker_debug('Tracking ID #@num is assigned to other account (uid #@uid), try to find record for current user (uid #@uid2)', array(
+              '@num' => $cookie_tracking_id,
+              '@uid' => $tracking_record->uid,
+              '@uid2' => $account->uid,
+            ));
+            $uid = $tracking_record->uid;
+            if ($id = db_query_range('SELECT id FROM {anonymous_tracker} WHERE id <> :id AND uid = :uid ORDER BY id ASC', 0, 1, array(':id' => $cookie_tracking_id, ':uid' => $account->uid,))->fetchField()) {
+              $tracking_record = anonymous_tracker_tracking_record_load($id);
+              anonymous_tracker_debug('Current anonymous tracking ID #@id1 replaced to #@id2 because ID #@id1 is already assigned to uid #@uid', array(
+                '@id1' => $cookie_tracking_id,
+                '@id2' => $tracking_record->id,
+                '@uid' => $uid,
+              ));
+            }
+            else {
+              $tracking_record->uid = $account->uid;
+              anonymous_tracker_debug('Tracking ID for current user (uid:@uid) is not found in database. Copy tracking record from #@id to new.', array('@uid' => $account->uid, '@id' => $tracking_record->id));
+              unset($tracking_record->id);
+            }
+          }
+        }// tracking_record loaded by id in COOKIES is assigned to anonymous user
+        elseif ($r = anonymous_tracker_tracking_record_load_multiple(NULL, array('uid' => $account->uid))) {
+          // Try to find existing record for current user and change tracking id
+          $alternative_record = reset($r);
+          $tracking_record = $alternative_record;
+          anonymous_tracker_debug('Found existing record for uid #@uid. Tracking ID was changed from #@id1 to #@id2', array(
+            '@uid' => $account->uid,
+            '@id1' => $cookie_tracking_id,
+            '@id2' => $alternative_record->id,
+          ));
+        }
+        else {
+          // Assign current anonymous tracking record to logged in uid
+          anonymous_tracker_debug('Assign anonymous tracking ID #@id to current user (uid #@uid)', array(
+            '@id' => $tracking_record->id,
+            '@uid' => $account->uid,
+          ));
+          $tracking_record->uid = $account->uid;
+          $tracking_record->updated = 0; // mark as needed for update existing record
+        }
+      }
+      // Cookies NOT contains tracking_id
+      elseif ($r = anonymous_tracker_tracking_record_load_multiple(NULL, array('uid' => $account->uid))) {
+        $tracking_record = reset($r);
+        anonymous_tracker_debug('Tracking id #@id was assigned to uid#@uid', array('@id' => $tracking_record->id, '@uid' => $account->uid,));
+      }
+      
+      $ip = ip_address();
+      drupal_alter('ip_address', $ip); // trick for geo ip and local using, this needed for local development. @see geo2_ip_address_alter().
+      
+      $ua = isset($_SERVER['HTTP_USER_AGENT']) ? $_SERVER['HTTP_USER_AGENT'] : '';
+      
+      $logged_in = $account->uid ? 1 : 0;
+      
+      $tracking_record = $tracking_record ? $tracking_record : (object) array('uid' => $account->uid, 'ip' => $ip, 'ua' => $ua, 'logged_in' => $logged_in);
+      
+      // Update in database
+      if (empty($tracking_record->id)) {
+        anonymous_tracker_tracking_record_save($tracking_record);
+      }
+      elseif (!$tracking_record->updated || $tracking_record->updated <= REQUEST_TIME - 3600 || $tracking_record->ip !== $ip || $tracking_record->ua !== $ua || $tracking_record->logged_in != $logged_in) {
+        $tracking_record->ip = $ip;
+        $tracking_record->ua = $ua;
+        $tracking_record->updated = REQUEST_TIME;
+        $tracking_record->logged_in = $logged_in;
+        anonymous_tracker_tracking_record_save($tracking_record);
+      }
+      if (!headers_sent()) { // Do not set cookie at pages like public://style/*.jpg, and others
+        // Update cookies
+        _anonymous_tracker_id_to_cookie($tracking_record->id);
+      }
+
+      // Modify user
+      $account->tracking_id = $tracking_record->id;
+    }
+  }
+  return $account->tracking_id;
+}
+
+
+/**
+* Log debugging messages, for development
+* @see ANONYMOUS_TRACKER_DEBUG constant
+*/
+function anonymous_tracker_debug($message, array $variables = array()) {
+  if (variable_get('anonymous_tracker_debug', ANONYMOUS_TRACKER_DEBUG)) {
+    $debug = debug_backtrace(DEBUG_BACKTRACE_IGNORE_ARGS, 2);
+    $file = preg_replace('/^' . preg_quote(DRUPAL_ROOT, '/') . '/', '', $debug[0]['file']);
+    foreach ($variables as $idx => $data) {
+      if (!is_scalar($data)) {
+        $data = var_export($data, TRUE);
+        $variables[$idx] = $idx[0] === '!' ? '<pre>' . check_plain($data) . '</pre>' : $data;
+      }
+    }
+    $variables['!_debug_information'] = 'function <em>' . $debug[1]['function'] . '()</em> at line <strong>' . $debug[0]['line'] . '</strong> in <em>' . $file . '</em>';
+    $message .= ' <br />(!_debug_information)';
+    watchdog('anonymous_tracker', $message, $variables, WATCHDOG_DEBUG);
+  }
+}
+
+
+/**
+* Implements hook_user_delete()
+*/
+function anonymous_tracker_user_delete($account) {
+  foreach (anonymous_tracker_tracking_record_load_multiple(NULL, array('uid' => $account->uid)) as $tracking_record) {
+    $tracking_record->uid = 0;
+    anonymous_tracker_tracking_record_save($tracking_record);
+  }
+}
+
+
+/**
+* Implements hook_user_view_alter()
+*/
+function anonymous_tracker_user_view_alter(&$build) {
+  if ($build['#account']->uid && user_access('administer users')) {
+      // Add extra information with tracking ID
+      $r = anonymous_tracker_tracking_record_load_multiple(NULL, array('uid' => $build['#account']->uid));
+      $tracking_record = $r ? reset($r) : NULL;
+      $build += array('admin_info' => array()); // Extra field in features module
+      $build['admin_info'] += array(
+        '#type' => 'item',
+        '#title' => t('Admin info'),
+      );
+      $build['admin_info']['tracking_id'] = array(
+        '#type' => 'item',
+        '#inline' => TRUE,
+        '#title' => t('Tracking ID'),
+        '#markup' => $tracking_record ? $tracking_record->id : t('Unassigned'),
+      );
+      $build['admin_info']['tracking_ip'] = array(
+        '#type' => 'item',
+        '#inline' => TRUE,
+        '#title' => t('Last IP'),
+        '#markup' => !empty($tracking_record->ip) ? check_plain($tracking_record->ip) : t('Unknown'),
+      );
+      $build['admin_info']['tracking_ua'] = array(
+        '#type' => 'item',
+        '#inline' => TRUE,
+        '#title' => t('Last browser user agent'),
+        '#markup' => !empty($tracking_record->ua) ? check_plain($tracking_record->ua) : t('Unknown'),
+      );
+  }
+
+}
+
+
+
+
+

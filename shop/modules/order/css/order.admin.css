@@ -1,0 +1,14 @@
+table#shop-orders-form  .filter-row {
+  fomt-size:.9em;
+}
+
+table#shop-orders-form  .filter-row .form-item  {
+  padding:0;
+  margin-left:0;
+  margin-right:0;
+}
+
+table#shop-orders-form  .filter-row .form-text, table#shop-orders-form  .filter-row .form-select {
+  width:100%;
+  margin:0;
+}

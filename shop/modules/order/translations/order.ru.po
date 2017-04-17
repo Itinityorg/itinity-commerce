@@ -1,0 +1,672 @@
+# $Id$
+#
+# Russian translation
+# Copyright YEAR NAME <EMAIL@ADDRESS>
+# Generated from files:
+#  order.admin.inc: n/a
+#  order.module, v 1.0 2011/07/02 12:37:27 ITKLD
+#  order.mail.inc: n/a
+#  order.info, v 1.0 2011/07/02 12:37:12 ITKLD
+#  js/order-form.js: n/a
+#
+#, fuzzy
+msgid ""
+msgstr ""
+"Project-Id-Version: PROJECT VERSION\n"
+"POT-Creation-Date: 2013-08-02 20:48+0300\n"
+"PO-Revision-Date: 2013-08-02 20:48+0300\n"
+"Last-Translator: NAME <EMAIL@ADDRESS>\n"
+"Language-Team: Russian <EMAIL@ADDRESS>\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=utf-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=3; plural=((((n%10)==1)&&((n%100)!=11))?(0):(((((n%10)>=2)&&((n%10)<=4))&&(((n%100)<10)||((n%100)>=20)))?(1):2));\n"
+
+#: order.admin.inc:15
+msgid "Time"
+msgstr "Время"
+
+#: order.admin.inc:20
+msgid "#"
+msgstr "№"
+
+#: order.module:246;974;1019
+msgid "Name"
+msgstr "Название"
+
+msgctxt "username"
+msgid "Name"
+msgstr "Имя"
+
+
+#: order.admin.inc:30
+msgctxt "count"
+msgid "Positions"
+msgstr "Позиций"
+
+#: order.admin.inc:34
+msgid "Sum"
+msgstr "Сумма"
+
+#: order.admin.inc:38
+msgid "Delivery"
+msgstr "Доставка"
+
+msgid "Delivery date"
+msgstr "Срок доставки"
+
+#: order.admin.inc:44 order.module:1145
+msgid "Status"
+msgstr "Статус"
+
+#: order.admin.inc:50;52 order.module:1138
+msgid "Paid"
+msgstr "Оплачен"
+
+#: order.admin.inc:54 order.module:504;885
+msgid "Customer"
+msgstr "Заказчик"
+
+#: order.admin.inc:138
+msgid "Change"
+msgstr "Изменить"
+
+#: order.admin.inc:138
+msgid "Edit"
+msgstr "Изменить"
+
+#: order.admin.inc:186
+msgid "Add order"
+msgstr "Добавить заказ"
+
+#: order.admin.inc:196
+msgid "Hide completed"
+msgstr "Скрыть завершенные"
+
+#: order.admin.inc:196
+msgid "Show completed"
+msgstr "Показать завершенные"
+
+#: order.mail.inc:8 order.module:444
+msgid "Save"
+msgstr "Сохранить"
+
+#: order.module:109 order.info:0
+msgid "Order"
+msgstr "Заказ"
+
+#: order.module:813;855
+msgid "Order status"
+msgstr "Статус заказа"
+
+#: order.module:94
+msgid "Cart is empty"
+msgstr "Корзина пуста"
+
+#: order.module:111
+msgid "Order content type for shop orders."
+msgstr "Тип содержимого заказ для создания заказов в магазине."
+
+#: order.module:195
+msgid "Edit %title"
+msgstr "Редактировать %title"
+
+#: order.module:207;935;942
+msgid "Content of order"
+msgstr "Содержимое заказа"
+
+#: order.module:213
+msgid "I'm"
+msgstr "Я"
+
+#: order.module:214
+msgid "Another man"
+msgstr "Другой человек"
+
+#: order.module:215
+msgid "Company"
+msgstr "Компания"
+
+#: order.module:236;968;1013
+msgid "Last First Middle"
+msgstr "Фамилия Имя Отчество"
+
+#: order.module:256;980;1025;1232
+msgid "Phone"
+msgstr "Телефон"
+
+#: order.module:266
+msgid "Email"
+msgstr "Email"
+
+#: order.module:276;992;1037
+msgid "Other contacts"
+msgstr "Прочие контакты"
+
+#: order.module:291;798;799;835;836;950
+msgid "Details and comments to the order"
+msgstr "Подробности и комментарии к заказу"
+
+#: order.module:310
+msgid "Order current status"
+msgstr "Текущее состояние заказа"
+
+#: order.module:444
+msgid "Previous step"
+msgstr "Предыдущий шаг"
+
+#: order.module:444;522
+msgid "Continue shopping"
+msgstr "Продолжить покупки"
+
+#: order.module:451
+msgid "Done"
+msgstr "Готово"
+
+#: order.module:457
+msgid "Checkout order"
+msgstr "Оформить заказ"
+
+msgid "Checkout without registration"
+msgstr "Оформить без регистрации"
+
+msgid "Confirm order"
+msgstr "Подтвердить заказ"
+
+#: order.module:457;477
+msgid "Next step"
+msgstr "Следующий шаг"
+
+#: order.module:469
+msgid "Saving order. Please wait...."
+msgstr "Сохранение заказа. Пожалуйста подождите..."
+
+#: order.module:503;886;1250
+msgid "Information about customer"
+msgstr "Информация о заказчике"
+
+#: order.module:516;519
+msgid "The field %field is required."
+msgstr "Поле %field обязательно для заполнения."
+
+#: order.module:529
+msgid "Contacts information is empty."
+msgstr "Контактная информация не заполнена."
+
+#: order.module:542
+msgid "@type %title has been created."
+msgstr "@type %title был создан."
+
+#: order.module:562
+msgid "An item %title has been added to shop cart."
+msgstr "Пункт %title был добавлен в корзину."
+
+#: order.module:631
+msgid "An item %title has been removed from shop cart."
+msgstr "Пункт %title был удален из корзины."
+
+#: order.module:669
+msgid "Shopping cart has been updated"
+msgstr "Корзина была обновлена"
+
+#: order.module:701;1131
+msgid "Issued"
+msgstr "Оформлен"
+
+#: order.module:702
+msgid "Prepared to delivery"
+msgstr "Готов к доставке"
+
+#: order.module:703
+msgid "Delivered"
+msgstr "Доставлен"
+
+#: order.module:794;831
+msgid "Shopping cart contents"
+msgstr "Содержимое корзины"
+
+#: order.module:803;845;965;1000
+msgid "Recipient"
+msgstr "Получатель"
+
+#: order.module:804;846
+msgid "Information about recipient"
+msgstr "Информация о получателе"
+
+
+#: order.module:814;856
+msgid "Current status of order"
+msgstr "Текущий статус заказа"
+
+#: order.module:818;1161
+msgid "Delivery method"
+msgstr "Способ доставки"
+
+#: order.module:819;861
+msgid "Products delivery method"
+msgstr "Способ доставки товаров"
+
+#: order.module:824;866
+msgid "Order payment method"
+msgstr "Способ оплаты заказа"
+
+#: order.module:840;957
+msgid "Ordered by"
+msgstr "Заказ оформил"
+
+#: order.module:841
+msgid "Information about who issued an order"
+msgstr "Информация о заказчике"
+
+#: order.module:860;1196
+msgid "Delivery info"
+msgstr "Информация о доставке"
+
+#: order.module:870
+msgid "Invoice"
+msgstr "Счёт"
+
+#: order.module:871
+# deprecated ? msgid "Invoice for payment"
+# deprecated ? msgstr "Счет на оплату"
+
+#: order.module:875;876
+msgid "Payment widget"
+msgstr "Виджет оплаты"
+
+#: order.module:926;30;39
+msgid "Orders"
+msgstr "Заказы"
+
+#: order.module:1055;1071
+msgid "Order is fully paid."
+msgstr "Заказ полностью оплачен."
+
+#: order.module:1071
+msgid "Transactions"
+msgstr "Переводы"
+
+#: order.module:1092
+msgid "Payment iformation"
+msgstr "Информация об оплате"
+
+#: order.module:1097
+msgid "Paid summ"
+msgstr "Оплаченная сумма"
+
+#: order.module:1109
+msgid "Required summ"
+msgstr "Требуемая сумма"
+
+#: order.module:1126;1729
+msgid "Canceled"
+msgstr "Отменён"
+
+#: order.module:1129
+msgid "Complete"
+msgstr "Исполнен"
+
+#: order.module:1155;1202
+msgid "Unknown"
+msgstr "Неизвестно"
+
+#: order.module:1168;1173
+msgid "from address !address"
+msgstr "с адреса !address"
+
+#: order.module:1170
+msgid "From store"
+msgstr "Из магазина"
+
+#: order.module:1283
+msgid "Order #@number"
+msgstr "Заказ №@number"
+
+msgid "Order #@number (order from Yandex.Market, ID = @ya_market_id)"
+msgstr "Заказ №@number (заказ с Яндекс.Маркета, ID = @ya_market_id)"
+
+#: order.module:1379
+msgid "Your order has been created and assigned the number <a href=\"@url\">@num</a>."
+msgstr "Ваш заказ создан и ему присвоен номер <a href=\"@url\">@num</a>."
+
+msgid "By security reasons access to order will provided for @time. To follow order execution, You must request for temporary access. "
+"For Your convenience, please <a class=\"ajax-popup\" href=\"@reg-url\">register</a> if You have not bought from us, "
+"or <a class=\"ajax-popup\" href=\"@login-url\">log in</a> if You already registede in our shop."
+msgstr "В целях безопасности доступ к заказу предоставляется на @time. Чтобы следить за исполнением заказов вам придётся запрашивать временный доступ. "
+"Для вашего удобства <a class=\"ajax-popup\" href=\"@reg-url\">зарегистрируйтесь</a>, если Вы ранее не покупали у нас, "
+"или <a class=\"ajax-popup\" href=\"@login-url\">авторизуйтесь</a> если Вы зарегистрированы в нашем магазине."
+
+#: order.module:1452
+msgid "#@number"
+msgstr "№@number"
+
+#: order.module:1561
+msgid "New order on a site @sitename"
+msgstr "Новый заказ на сайте @sitename"
+
+#: order.module:1564
+msgid "You have created an new order on site @sitename"
+msgstr "Вы создали новый заказ на сайте @sitename"
+
+#: order.module:1567
+msgid "Created new !order-link on site @sitename !username-link user"
+msgstr "Создан новый !order-link на сайте @sitename пользователем !username-link"
+
+#: order.module:1673
+msgid "Currency @curr not supported in @title"
+msgstr "Валюта @curr не поддерживается заказом @title"
+
+#: order.module:1683
+msgid "@title is allready paid"
+msgstr "@title уже оплачен"
+
+#: order.module:1690
+msgid "@title not found"
+msgstr "@title не найден"
+
+#: order.module:1693
+msgid "@title is unpublished"
+msgstr "@title снят с публикации"
+
+#: order.module:1696
+msgid "@title required summ is empty"
+msgstr "требуемая сумма пуста"
+
+#: order.module:1710
+msgid "New order"
+msgstr "Новый заказ"
+
+#: order.module:1711
+msgid "Notification when order created"
+msgstr "Оповещение о создании нового заказа"
+
+#: order.module:1729
+msgid "Accepted"
+msgstr "Принято"
+
+#: order.module:47
+msgid "Messages"
+msgstr "Сообщения"
+
+#: order.info:0
+msgid "Add order node type."
+msgstr "Добавляет тип материала \"заказ\""
+
+
+#: js/order-form.js:0
+msgid "Data in this form deprecated, try to reload page."
+msgstr "Данные в этой форме устарели, перезагружаем страницу."
+
+msgid "This elements is disabled because order is already paid"
+msgstr "Эти элементы отключены потому что заказ уже оплачен"
+
+msgid "Status changed to <b>@status</b>"
+msgstr "Статус изменён на <b>@status</b>"
+
+msgid "not specified"
+msgstr "не указано"
+
+msgid "In work"
+msgstr "В работе"
+
+msgid "Not paid"
+msgstr "Не оплачен"
+
+msgid "By status"
+msgstr "По статусу"
+
+msgid "Type first name and last name or organisation name"
+msgstr "Введите имя и фамилию или название организации"
+
+msgid "Not accepted"
+msgstr "Не принято"
+
+
+
+msgid "Get temporary access via e-mail"
+msgstr "Получить временный доступ по почте"
+
+msgid "You already logged in"
+msgstr "Вы уже вошли на сайт"
+
+msgid "You cannot submit request more than %limit orders in @interval. Try again later."
+msgstr "Вы не можете отправлять запрос чаще чем %limit раз в @interval. Попробуйте позже."
+
+msgid "Order #@num not contains information about recipient email address."
+msgstr "Заказ №@num не содержит информацию об электронной почте получателя."
+
+msgid "Message with instructions for access to order #@num was sent to your e-mail address."
+msgstr "Сообщение с инструкциями для доступа к заказу №@num было отправлено на ваш адрес электронной почты."
+
+msgid "You view order by temporary private link."
+msgstr "Вы просматриваете заказ по ссылке временного доступа."
+
+msgid "You tried access to order via priate link that already expired."
+msgstr "Вы попытались получить доступ к заказу по ссылке, срок действия которой истек."
+
+msgid "Temporary access to order #@num"
+msgstr "Временный доступ к заказу №@num"
+
+msgid "Hello! You or another user has requested access to view order #@num placed in our store."
+msgstr "Здравствуйте! Вы, или другой пользователь запросили доступ к просмотру заказа №@num, размещенному в нашем магазине."
+
+msgid "For access to the order #@num please follow to this link:"
+msgstr "Для доступа к заказу №@num пожалуйста проследуйте по этой ссылке:"
+
+msgid "Remember that this link will active within @timeout. After this period, you will have to repeat the request."
+msgstr "Учтите, что эта ссылка будет активна @timeout. По истечении этого срока, вам придется повторить запрос."
+
+msgid "Permanent link to this order: @uri"
+msgstr "Постоянная ссылка на этот заказ: @uri"
+
+msgid "Store opened you temporary access to the order #@num. Duration access is @timeout."
+msgstr "Магазин открыл вам временный доступ к заказу №@num. Время действия доступа - @timeout."
+
+msgid "name not specified"
+msgstr "имя не указано"
+
+msgid "This e-mail (@email) already used in user account on a site."
+msgstr "Этот адрес электронной почты (@email) уже используется в учетной записи на сайте."
+
+msgid "Perhaps You already have an account here before. Please <a href=\"@url\">log-in</a> on a site."
+msgstr "Вероятно Вы уже регистрировались здесь ранее. <a href=\"@url\">Войдите</a> пожалуйста на сайт."
+
+msgid "This e-mail (@email) already used in another account on a site."
+msgstr "Этот адрес электронной почты (@email) уже используется другой учетной записью на сайте."
+
+msgid "If You have other account registered to @email, please log-in using this e-mail."
+msgstr "Если у Вас есть аккаунт зарегистрированный на @email, пожалуйста войдите используя этот адрес."
+
+msgid "Order in progress ... "
+msgstr "Заказ обрабатывается ... "
+
+msgid "currently payment is not available."
+msgstr "на данный момент оплата недоступна."
+
+msgid "for free"
+msgstr "бесплатно"
+
+msgid "Paid more goods for !summ for free delivery"
+msgstr "Для бесплатной доставки купите ещё товаров на !summ"
+
+msgid "Cart is empty, You can not checkout order without goods."
+msgstr "Корзина пуста, Вы не можете создавать заказы без товаров."
+
+msgid "%username shopping cart"
+msgstr "Корзина %username"
+
+msgid "Payment for order"
+msgstr "Оплата заказа"
+
+msgid "Payment for order #@num"
+msgstr "Оплата заказа №@num"
+
+msgid "Implementation status"
+msgstr "Статус исполнения"
+
+msgid "Payment status"
+msgstr "Платежный статус"
+
+msgid "Expected"
+msgstr "Ожидается"
+
+msgid "Copy of new order, for order recipient"
+msgstr "Новый заказ, для получателей заказа"
+
+msgid "Only order node type"
+msgstr "Только для типа содержимого \"заказ\""
+
+msgid "Order already paid"
+msgstr "Заказ уже оплачен"
+
+msgid "Order is not requires money"
+msgstr "Заказ не требует денег"
+
+msgid "Sum not equals to @sum"
+msgstr "Сумма не равна @sum"
+
+msgid "Order is not published"
+msgstr "Заказ не опубликован"
+
+msgid "Orders not found"
+msgstr "Заказы не найдены"
+
+msgid "Pay order"
+msgstr "Оплатить заказ"
+
+msgid "Thanks for purchase!"
+msgstr "Спасибо за покупку!"
+
+msgid "Please prepare moneys needed for purchase."
+msgstr "Пожалуйста приготовьте деньги для оплаты."
+
+msgid "Download or print invoice and pay it."
+msgstr "Скачайте или распечатайте счет и оплатите его."
+
+msgid "It remains only to pay for the order."
+msgstr "Осталось только оплатить заказ."
+
+msgid "Delivery information"
+msgstr "Информация о доставке"
+
+msgid "Checkout"
+msgstr "Оформить"
+
+msgid "Order's microwidget"
+msgstr "Микровиджет заказов"
+
+msgid "Checkout"
+msgstr "Оформить"
+
+msgid "You have 1 order"
+msgid_plural "You have @count orders"
+msgstr[0] "У вас @count заказ"
+msgstr[1] "У вас @count заказа"
+msgstr[2] "У вас @count заказов"
+
+msgid "Order receipt"
+msgstr "Получение"
+
+msgid "Waits for payment"
+msgstr "Ожидает оплаты"
+
+msgid "Make payment"
+msgstr "Провести оплату"
+
+msgid "Temporarily unavailable"
+msgstr "Временно недоступно"
+
+msgid "Required fields"
+msgstr "Обязательные поля"
+
+msgid "Recipient data"
+msgstr "Данные получателя"
+
+msgid "Content of shop cart and delivery method"
+msgstr "Содержимое корзины и способ доставки"
+
+msgid "Information about delivery"
+msgstr "Информация о доставке"
+
+msgid "Order Customer"
+msgstr "Заказчику"
+
+msgid "Order Author"
+msgstr "Автору заказа"
+
+msgid "Order Recipient"
+msgstr "Получателю заказа"
+
+msgid "Payment accepted"
+msgstr "Платеж принят"
+
+msgid "Pay !sum"
+msgstr "Оплатить !sum"
+
+msgid "Please choose payment method"
+msgstr "Пожалуйста, выберите способ оплаты"
+
+msgid "Order was paid"
+msgstr "Заказ был оплачен"
+
+msgid "Order discount"
+msgstr "Скидка на заказ"
+
+msgid "Order freeze period"
+msgstr "Период заморозки заказа"
+
+msgid "frozen"
+msgstr "заморожен"
+
+msgid "The order item prices and delivery terms will be fixed during this period, even if changed"
+msgstr "Это срок, на который в заказе будут зафиксированы цены и условия доставки, даже в случае их изменения"
+
+msgid  "We guarantee items and delivery price preservation until %date"
+msgstr "Мы гарантируем сохранение стоимости товаров и доставки до %date"
+
+msgid "User %user set order discount to %od, comment: %c"
+msgstr "Пользователь %user установил скидку в размере %od, комментарий: %c"
+
+msgid "Order discount text"
+msgstr "Комментарий к скидке"
+
+msgid "Finished"
+msgstr "Завершены"
+
+msgid "Cancelled"
+msgstr "Отменены"
+
+msgid "Current week"
+msgstr "Текущая неделя"
+
+msgid "Current month"
+msgstr "Текущий месяц"
+
+msgid "Strict"
+msgstr "Точно"
+
+msgid "Per day"
+msgstr "По дням"
+
+msgid "Per week"
+msgstr "Понедельно"
+
+msgid "Per month"
+msgstr "Помесячно"
+
+msgid "Period"
+msgstr "Период"
+
+msgctxt "orders-statistics"
+msgid "Scale"
+msgstr "Масштаб"
+
+msgid "Orders statistics"
+msgstr "Статистика заказов"
+
+msgid "Period is too large!"
+msgstr "Период слишком большой!"
+
+msgctxt "plural"
+msgid "Processed"
+msgstr "Обработанные"

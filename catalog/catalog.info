@@ -1,0 +1,17 @@
+; $Id: catalog.info, v 1.0 2011/02/02 15:53:12 admin Exp $
+name = Catalog
+description = Catalog
+package = ITK/Catalog
+version = "7.x-dev"
+core = 7.x
+dependencies[] = menu
+dependencies[] = block
+dependencies[] = taxonomy
+dependencies[] = taxonomy_entity_index
+dependencies[] = image
+dependencies[] = utils
+dependencies[] = addons
+dependencies[] = term_access
+configure = admin/structure/catalog
+files[] = catalog.object.controller.inc
+configure = admin/structure/catalog

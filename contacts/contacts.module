@@ -1,0 +1,562 @@
+<?php //$Id: contacts.module, v 1.0 2011/03/10 09:42:26 Ivan Demenkov Exp $
+/**
+ * Copyright 2011-2017 Itinity Ltd. (itinity.ru). All rights reserved.
+ * Licensed under the GNU General Public License, version 2 or later.
+ */
+/**
+ * Implementation of hook_menu().
+ */
+function contacts_menu() {
+
+	$items = array();
+
+	$items['admin/content/about'] = array(
+		'title'				=> 'Information about company',
+		//'type'				=> MENU_LOCAL_TASK,
+		'page callback'		=> 'drupal_get_form',
+		'page arguments'	=> array('contacts_about_settings_form'),
+		'access arguments'	=> array('bypass node access'),
+		'file' => 'contacts.admin.inc',
+		'weight'			=> 2.5,
+	);
+
+	// For the default local task, we need very little configuration, as the
+	// callback and other conditions are handled by the parent callback.
+	$items['admin/content/about/about'] = array(
+		'title' => 'About company',
+		'type' => MENU_DEFAULT_LOCAL_TASK,
+		'page callback'		=> 'drupal_get_form',
+		'page arguments'	=> array('contacts_about_settings_form'),
+		'access arguments'	=> array('bypass node access'),
+		'file' => 'contacts.admin.inc',
+		'weight' => 1,
+	);
+
+	//IKW: Redundant functional
+//	$items['about'] = array(
+//		'type' =>	MENU_NORMAL_ITEM,
+//		'title' => 'About company',
+//		'page callback'		=> 'contacts_about_page',
+//		'file' => 'contacts.pages.inc',
+//		'access callback'	=> 'contacts_about_page_access',
+//		'menu_name' => 'main-menu',
+//		'weight' => 100,
+//	);
+
+	$items['admin/content/about/contacts'] = array(
+		'title' => 'Contacts',
+		'type' => MENU_LOCAL_TASK,
+		'page callback' => 'drupal_get_form',
+		'page arguments' => array('contacts_about_contacts_form'),
+		'access arguments' => array('bypass node access'),
+		'file' => 'contacts.admin.inc',
+		'weight' => 2,
+	);
+
+	$items['admin/content/about/legal'] = array(
+		'title'				=> 'Requisites',
+		'type'				=> MENU_LOCAL_TASK,
+		'page callback'		=> 'drupal_get_form',
+		'page arguments'	=> array('contacts_requisites_settings_form'),
+		'access arguments'	=> array('bypass node access'),
+		'file' => 'contacts.admin.inc',
+		'weight'			=> 3,
+	);
+
+	$items['agreement'] = array(
+		'title' => 'User agreement',
+		'page callback'		=> 'contacts_agreement_page',
+		'access callback'	=> 'contacts_agreement_page_access',
+		'file' => 'contacts.pages.inc',
+		'menu_name' 		=> 'main-menu',
+		'weight'			=> 102,
+	);
+
+	$items['contacts']	= array(
+		'type' =>	MENU_NORMAL_ITEM,
+		'title' => 'Contacts',
+		'page callback'		=> 'contacts_page',
+		'file' => 'contacts.pages.inc',
+		'access callback'	=> 'contacts_contacts_page_access',
+		'menu_name' => 'main-menu',
+		'weight' => 101,
+	);
+
+  $items['user/%user/contact'] = array(
+		'type'				=>	MENU_CALLBACK,
+		'title'				=> 'Contact',
+		'page callback'		=> 'drupal_get_form',
+		'page arguments'	=> array('contacts_form', 1),
+		'access callback'	=> 'contacts_access',
+		'file' => 'contacts.pages.inc',
+		'access arguments'	=> array(1),
+	);
+
+	$items['admin/reports/contacts'] = array(
+		'title' => 'Contact form',
+		'access arguments' => array('bypass node access',),
+		'page callback' => 'contacts_report_page',
+		'file' => 'contacts.admin.inc',
+	);
+
+	$items['admin/reports/contacts/%'] = array(
+		'title' => 'View contacts form submission',
+		'access arguments' => array('bypass node access',),
+		'page callback' => 'contacts_form_view_message',
+		'page arguments' => array(3),
+		'file' => 'contacts.admin.inc',
+		'type' => MENU_CALLBACK,
+	);
+	return $items;
+}
+
+
+/**
+* Access callback for /about
+*/
+function contacts_about_page_access() {
+  return (user_access('access content') && contacts_load_settings('about_company')) || user_access('bypass node access');
+}
+
+
+/**
+* Access callback for /contacts
+*/
+function contacts_contacts_page_access() {
+  return (user_access('access content') && contacts_load_settings('site_contacts')) || user_access('bypass node access');
+}
+
+
+/**
+* Access callback for /agreement
+*/
+function contacts_agreement_page_access() {
+  return (user_access('access content') && (contacts_load_settings('company_requisites') || (module_exists('social_profile') && social_profile_get_user_agreement_text()))) || user_access('bypass node access');
+}
+
+
+/**
+* Access callback for /user/%user/contact
+*/
+function contacts_access($account) {
+	$site_contacts = contacts_load_settings('site_contacts');
+	$users = isset($site_contacts['users']) ? $site_contacts['users'] : NULL;
+	if (empty($users)) {
+		return FALSE;
+	}
+	foreach ($users as $user) {
+		if ($user['uid'] == $account->uid) {
+			return TRUE;
+		}
+	}
+	return FALSE;
+}
+
+
+/**
+* Implements hook_help()
+*/
+function contacts_help($path, $arg) {
+	if (module_exists('contact')) {
+		switch ($path) {
+			case 'admin/content/contact/form':
+			$output = contact_help('admin/structure/contact', $arg);
+			$output = str_replace('"' . url('contact') . '"', '"' . url('contacts') . '"', $output);
+			return $output;
+		}
+	}
+}
+
+
+/**
+* Implements hook_block_view_alter()
+*/
+function contact_block_view_alter(&$data, $block) {
+	if ($block->module === 'system' && $block->delta === 'main') {
+		if (arg(0) . '/' . arg(1) . '/' . arg(2) . '/' . arg(3) === 'admin/content/contact/form') { // @see contact_category_list() in drupal contact.module -->> contact.admin.inc
+			if (!empty($data['content']['category_table']['#rows'])) {
+				foreach ($data['content']['category_table']['#rows'] as $idx => $item) {
+					$data['content']['category_table']['#rows'][$idx][3] = preg_replace('/admin\/structure\/contact\//i', 'admin/content/contact/form/', $item[3]);
+					$data['content']['category_table']['#rows'][$idx][4] = preg_replace('/admin\/structure\/contact\//i', 'admin/content/contact/form/', $item[4]);
+				}
+			}
+		}
+	}
+}
+
+
+/**
+ * Implements hook_form_alter().
+ * Altering site contact form.
+ * Adding info from site contacts setting page.
+ */
+function contacts_form_alter(&$form, &$form_state, $form_id) {
+	if (in_array($form_id, array('contact_category_edit_form', 'contact_category_delete_form', ), TRUE)) {//$form_id == 'contact_category_edit_form') {
+		$form['#submit'][] = '_contacts_contact_category_edit_or_delete_form_submit';
+	}
+	elseif ($form_id == 'contact_site_form') {
+		$form['subject']['#value'] = '';
+		$form['subject']['#type'] = 'value';
+		$form['subject']['#access'] = FALSE;
+		$form['phone'] = array(
+			'#type'		=> 'phone',
+			'#title'	=> t('Your phone'),
+			'#weight'	=> 0.000001,
+		);
+	}
+
+	//spike for hide  into comment and replace subject in contact form
+	elseif (strstr($form_id, 'comment_node_')) {
+		$form['author']['homepage']['#type'] = 'hidden';
+	}
+}
+
+
+/**
+* Submit addition for contact_category_edit_form/contact_category_delete_form forms @see contacts_form_alter()
+*/
+function _contacts_contact_category_edit_or_delete_form_submit($form, &$form_state) {
+	$form_state['redirect'] = 'admin/content/contact/form';
+}
+
+
+/**
+ * Implements hook_block_info().
+ */
+function contacts_block_info() {
+	$blocks['contacts'] = array(
+		'info' => t('Contact information'),
+		'cache' => DRUPAL_CACHE_GLOBAL,
+		'visibility' => module_exists('features') ? FEATURES_BLOCK_VISIBILITY_NON_ADMINPAGES : BLOCK_VISIBILITY_NOTLISTED,//All pages except those listed
+	);
+  	return $blocks;
+}
+
+
+/**
+ * Implements hook_block_configure().
+ */
+function contacts_block_configure($delta = '') {
+  module_load_include('inc', 'contacts', 'contacts.blocks');
+  return _contacts_block_configure($delta);
+}
+
+
+/**
+ * Implements hook_block_save().
+ */
+function contacts_block_save($delta = '', $edit = array()) {
+	if ($delta === 'contacts') {
+    variable_set('contacts_block_settings', $edit['content']);
+	}
+}
+
+
+/**
+ * Implements hook_block_view().
+ */
+function contacts_block_view($delta = '') {
+	if ($delta === 'contacts' && arg(0) !== 'contacts') {
+    $block['subject'] = '';
+    module_load_include('inc', 'contacts', 'contacts.blocks');
+    $block['content'] = _contacts_block_contents();
+    return $block;
+	}
+}
+
+
+/**
+ * Implements hook_mail_alter.
+ * If in contact form settings empty recepient fields add recepient 'site_mail'
+ */
+function contacts_mail_alter(&$message) {
+	//skip newsletter from contact info
+	//@TODO: remove when newsletter theming completed
+	/*if (!in_array($message['module'], array('newsletter', 'message', 'mailextend'))) {
+		module_load_include('inc', 'contacts', 'contacts.blocks');
+		$content = _contacts_block_contents();
+		$message['body']['sign_from_site'] = '<br />' . drupal_render($content);
+	}*/
+}
+
+
+/**
+* Implements hook_theme()
+*/
+function contacts_theme($existing, $type, $theme, $path) {
+	return array(
+		'contacts_general' => array(
+			'variables' => array(
+				'general'	=> NULL,
+				'type'		=> 'full',
+			),
+      'file' => 'contacts.theme.inc',
+		),
+		'contact_persons' => array(
+			'variables' => array(
+				'users' => NULL,
+			),
+      'file' => 'contacts.theme.inc',
+		),
+		'contacts_address' => array(
+			'variables' => array(
+				'address_elements' => NULL,
+				'street_link' => NULL,
+				'empty_text' => NULL,
+				'separator' => NULL,
+			),
+      'file' => 'contacts.theme.inc',
+		),
+		'map_link' => array(
+			'variables' => array(
+				'address_elements'	=> NULL,
+				'street_link'		=> NULL,
+				'empty_text'		=> NULL,
+			),
+      'file' => 'contacts.theme.inc',
+		),
+		'working_time' => array(
+			'variables' => array(
+				'working_time'	=> NULL,
+				'detailed' => NULL,
+			),
+      'file' => 'contacts.theme.inc',
+		),
+	);
+}
+
+
+function _MOVED_TO_SOCIAL_PROFILE_contacts_agreement_settings_form($form, &$form_state) {
+	$agreement = contacts_load_settings('company_agreement');
+	if (empty($agreement)) {
+		$agreement = array('user_agreement' => array());
+	}
+
+	$form['view'] = array(
+		'#type'		=> 'item',
+		'#markup'	=> '<div style="float:right">'.l(t('View user agreement'), 'agreement').'</div><div class = "clearfix"></div>',
+	);
+	$form['user_agreement'] = array(
+		'#title'			=> t('User agreement'),
+		'#type'				=> 'text_format',
+		'#format'			=> isset($agreement['user_agreement']['format']) ? $agreement['user_agreement']['format'] : NULL,
+		'#default_value'	=> isset($agreement['user_agreement']['value']) ? $agreement['user_agreement']['value'] : '',
+	);
+	$form['submit'] = array(
+		'#type'		=> 'submit',
+		'#value'	=> t('Save'),
+	);
+
+	return $form;
+}
+
+
+/**
+* Get contacts current settings from registry
+*/
+function contacts_load_settings($key) {
+	global $language;
+	$default_language = language_default();
+	$name = 'contacts_' . $key;
+	return utils_load_packed_var($name . '_' . $language->language, utils_load_packed_var($name . '_' . $default_language->language, array()));
+}
+
+
+/**
+* Save settings
+*/
+function contacts_save_settings($key, $settings) {
+	global $language;
+	return utils_save_packed_var('contacts_' . $key . '_' . $language->language, $settings);
+}
+
+
+/**
+ * Implements hook_user_load()
+ * Fix contacts form/ If user selected in contacts, he will need in contact form.
+ */
+function contacts_user_load($users) {
+	$site_contacts = contacts_load_settings('site_contacts');
+	$uids = array();
+	if (!empty($site_contacts['users'])) {
+		foreach ($site_contacts['users'] as $contact) {
+			$uids[] = $contact['uid']; // << undefined index notices
+		}
+	}
+	foreach ($users as $uid => &$user) {
+		if (in_array($uid, $uids)) {
+			$user->data['contact'] = TRUE; // See also contacts_form_user_profile_form_alter()
+		}
+		else {
+			$user->data['contact'] = FALSE; // See also contacts_form_user_profile_form_alter()
+		}
+	}
+}
+
+
+/**
+* Implements hook_form_FORM_ID_alter()
+*/
+function contacts_form_user_profile_form_alter(&$form, &$form_state) {
+	 if ($form['#user_category'] == 'account') {
+		// Hide unusable setting supressed by contacts_user_load()
+		$form['contact']['#access'] = FALSE;
+	}
+}
+
+
+/**
+ * Implements hook_mail()
+ */
+function contacts_mail($key, &$message, $params) {
+  global $base_url;
+  $site_name = variable_get('site_name', $_SERVER['SERVER_NAME']);
+  $options = array(
+    'langcode' => $message['language']->language,
+  );
+
+  switch ($key) {
+      case 'send_contact_form':
+      case 'message_to':
+          $message['subject'] = t('Message from the contact form on the site @site user @lfm', array(
+              '@site'	=> $site_name,
+              '@lfm'	=> $params['lfm'],
+          ), $options);
+          $body = $message['subject'];
+          if (!empty($params['from']->uid)) {
+              $body .= ' ' . l(format_username($params['from']), 'user/' . $params['from']->uid, array(
+              'absolute' => TRUE,
+              ));
+          }
+          $message['body']['intro'] = $body;
+
+      break;
+      case 'copy':
+          $message['subject'] = t('A copy of your message from the contact form on the site @site', array(
+              '@site'	=> $site_name,
+          ), $options);
+          $message['body']['intro'] = $message['subject'];
+      break;
+  }
+  $message['body']['content'] =  t('
+LFM: @lfm<br/>
+Phone: @phone<br/>
+Email address: @mail<br/>
+Message: @message<br/>', array(
+  '@lfm'		=> $params['lfm'],
+  '@phone'	=> $params['phone'],
+  '@mail'		=> $params['mail'],
+  '@message'	=> $params['message'],
+), $options) ;
+  $message['body']['button'] = l('Mark us Readed', $base_url,array('html' => TRUE));
+  module_load_include('inc', 'contacts', 'contacts.blocks');
+}
+
+
+/**
+ * Implements hook_notify_info()
+ */
+function contacts_notify_info() {
+	$info['send_contact_form'] =  array(
+		'title' => t('Submitted contact form'),
+		'description'	=> t('When user submit site-wide contact form'),
+		'recipients' => array(
+			'roles' => FALSE,
+			'users' => TRUE,
+		),
+		'methods' => array(
+			'email' => array(
+				'default' => TRUE,
+				'locked' => FALSE,
+			),
+			'sms' => array(
+				'default' => FALSE,
+				'locked' => FALSE
+			)
+		)
+	);
+	return $info;
+
+}
+
+
+/**
+* Helper function for generate yandex map
+* @see contacts_page()
+* @see _contacts_block_contents()
+*/
+function _contacts_add_map($lat, $lng) {
+	$id = drupal_html_id('site-contacts-map');
+	$location = $lat.', '.$lng;
+	drupal_add_js('//api-maps.yandex.ru/2.1/?lang=ru-RU', 'external');
+	drupal_add_js('jQuery(document).ready(function ($) {
+      ymaps.ready(function () {
+        myMap = new ymaps.Map(\''. $id .'\', {
+          center: [' . $location . '],
+          zoom: 16,
+          controls: [\'zoomControl\', \'typeSelector\']
+        });
+        myMap.geoObjects
+        .add(new ymaps.Placemark([' . $location . '], {}, {
+            preset: \'islands#blueHomeIcon\',
+        }))
+      });
+    });',
+	'inline');
+	return $id;
+}
+
+
+
+/**
+* Helper function for generate google map
+* @see contacts_page()
+* @see _contacts_block_contents()
+* @TODO: migrate to geo modules?
+*/
+function _contacts_add_map_google($lat, $lng) {
+	$id = drupal_html_id('site-contacts-map');
+	$location = $lat.', '.$lng;
+	drupal_add_js('//maps.google.com/maps/api/js', 'external');
+	drupal_add_js('jQuery(document).ready(function ($) {
+
+			var initialLocation	= new google.maps.LatLng('.$location.');
+			var initialOptions = {
+				zoom: 15,
+				center: initialLocation,
+				mapTypeControl:			true,
+				mapTypeControlOptions:	{
+					style: google.maps.MapTypeControlStyle.DROPDOWN_MENU
+				},
+				mapTypeId: google.maps.MapTypeId.ROADMAP
+
+			}
+			var map = new google.maps.Map(document.getElementById("'.$id.'"), initialOptions);
+			var marker = new google.maps.Marker({
+				map: map,
+				draggable: false,
+				animation: google.maps.Animation.DROP,
+				position: initialLocation
+			});
+			setTimeout(function () {
+				var r = function () {
+					setTimeout(function () {
+							google.maps.event.trigger(map, "resize");
+							map.setCenter(initialLocation);
+						}, 0);
+				};
+				$("#map").find("a").click(r);
+			}, 0)
+		});',
+		'inline');
+	return $id;
+}
+
+
+
+
+
+
+
+
+

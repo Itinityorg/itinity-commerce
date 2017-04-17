@@ -1,0 +1,22 @@
+<?php //$Id: field_icq.install, v 1.0 2011/03/30 12:02:00 Ivan Demenkov Exp $
+
+/**
+ * Implements hook_field_schema().
+ */
+function field_icq_field_schema($field) {
+  return array(
+    'columns' => array(
+      'icq' => array(
+      'type' => 'varchar',
+      'length' => 255,
+      'not null' => FALSE,
+      ),
+    ),
+  );
+}
+
+
+
+
+
+

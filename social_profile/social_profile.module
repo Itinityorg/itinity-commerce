@@ -1,0 +1,1795 @@
+<?php
+/**
+ * Copyright 2012-2017 Itinity Ltd. (itinity.ru). All rights reserved.
+ * Licensed under the GNU General Public License, version 2 or later.
+ */
+
+/**
+* Implements hook_menu()
+*/
+function social_profile_menu() {
+	$items['user/%user/settings'] = array(
+		'title' => 'Settings',
+		'page callback' => 'drupal_get_form',
+		'page arguments' => array('user_profile_form', 1),
+		'access callback' => 'user_edit_access',
+		'access arguments' => array(1),
+		'type' => MENU_LOCAL_TASK,
+		'file path' => drupal_get_path('module', 'user'),
+		'weight' => 20,
+		'file' => 'user.pages.inc',
+	);
+	$items[module_exists('contacts') ? 'admin/content/about/agreement' : 'admin/config/people/accounts/term'] = array(
+		'title' => 'User agreement',
+		'type' => MENU_LOCAL_TASK,
+		'access arguments'	=> array(module_exists('contacts') ? 'bypass node access' : 'administer users'),
+		'page callback' => 'drupal_get_form',
+		'page arguments' => array('social_profile_admin_terms_of_service_form'),
+		'file' => 'social_profile.admin.inc',
+		'weight' => 100,
+	);
+	$items[module_exists('contacts') ? 'admin/content/contact/agreement/reset' : 'admin/config/people/accounts/term/reset'] = array(
+		'title' => 'Reset users agreements',
+		'type' => MENU_CALLBACK,
+		'access arguments'	=> array(module_exists('contacts') ? 'bypass node access' : 'administer users'),
+		'page callback' => 'drupal_get_form',
+		'page arguments' => array('social_profile_admin_terms_of_service_reset_confirm_form'),
+		'file' => 'social_profile.admin.inc',
+	);
+
+	$items['user/%user/content'] = array(
+		'title' => 'Publications',
+		'title callback' => '_social_profile_user_content_menu_title',
+		'title arguments' => array(1),
+		'page callback' => 'social_profile_user_content_list',
+		'page arguments' => array(1),
+		'access callback' => '_social_profile_user_content_menu_access',//'user_edit_access',
+		'access arguments' => array(1),
+		'file' => 'social_profile.pages.inc',
+		'type' => MENU_LOCAL_TASK,
+	);
+	$items['user/%user/content/--all--'] = array(
+		'title' => 'All',
+		'weight' => -10,
+		'type' => MENU_DEFAULT_LOCAL_TASK,
+	);
+	foreach (node_type_get_types() as $type) {
+		$type_url_str = str_replace('_', '-', $type->type);
+		$items['user/%user/content/' . $type_url_str] = array(
+			'title' => $type->name,
+			'title callback' => '_social_profile_user_content_menu_title',
+			'title arguments' => array(1, $type->type),
+			'page callback' => 'social_profile_user_content_list',
+			'page arguments' => array(1, $type->type),
+			'access callback' => '_social_profile_user_content_menu_access',
+			'access arguments' => array(1, $type->type),
+			'file' => 'social_profile.pages.inc',
+			'type' => MENU_LOCAL_TASK,
+		);
+	}
+	if (module_exists('comment')) {
+		$items['user/%user/content/comments'] = array(
+			'title' => 'Comments',
+			'title callback' => '_social_profile_user_comments_menu_title',
+			'title arguments' => array(1),
+			'page callback' => 'social_profile_user_comments_list',
+			'page arguments' => array(1),
+			'access callback' => '_social_profile_user_comments_menu_access',
+			'access arguments' => array(1),
+			'file' => 'social_profile.pages.inc',
+			'type' => MENU_LOCAL_TASK,
+			'weight' => 100,
+		);
+	}
+  if (!module_exists('contacts')) {
+    $social_profile_terms_of_service = variable_get('social_profile_terms_of_service', array('texts' => array(),));
+    if ($social_profile_terms_of_service['texts']) {
+      $items['agreement'] = array(
+        'title' => 'User agreement',
+        'access callback' => TRUE,
+        'page callback' => 'social_profile_terms_of_service_page',
+      );
+    }
+  }
+
+  $items['user/online-status-refresh'] = array(
+    'title' => '',
+    'type' => MENU_CALLBACK,
+    'delivery callback' => 'social_profile_online_status_refresh',
+    'access callback' => TRUE,
+  );
+
+	return $items;
+}
+
+
+
+/**
+* Implements hook_menu_alter()
+*/
+function social_profile_menu_alter(&$items) {
+	$items['user'] = array(
+    'title' => 'Pesonal cabinet',
+    'title callback' => '_social_profile_user_menu_title',
+    'options' => array(
+      'display_user_picture' => TRUE,
+      'display_username' => TRUE,
+    ),
+		'page callback' => '_social_profile_userpage_page_callback',
+		'file' => 'social_profile.pages.inc',
+		'module' => 'social_profile',
+    'type' => MENU_NORMAL_ITEM,
+	) + $items['user'];
+	$items['user/%user'] = array(
+		'title' => 'Profile',
+		'title callback' => 't',
+		'title arguments' => array(),
+		'weight' => -10,
+	) + $items['user/%user'];
+
+	$items['user/%user/view']['title'] = $items['user/%user']['title'];
+	$items['user/%user/edit']['weight'] = 0;
+	$items['user/%user/cancel']['weight'] = 21;
+
+    unset($items['user/%user/ulogin']);
+
+  foreach ($items as $p => $item) {
+    // Clone user tab links to normal items for render in user-menu by default
+    if (!empty($item['type']) && arg(0, $p) . '/' . arg(1, $p) === 'user/%user' && ($item['type'] & (MENU_IS_LOCAL_TASK | MENU_IS_LOCAL_ACTION))) {
+      // Override paths like 'user/current-user-uid/abc' to 'user/abc' 
+      $p = preg_replace('/^user\/%user\/?/', '', $p);
+      $new_path = 'user/' . $p;
+      if (!isset($items[$new_path]) && strpos($new_path, '%') === FALSE) {
+        $items[$new_path] = array(
+          'title' => $item['title'],
+          'title callback' => '_social_profile_user_menu_sub_items_title_callback',
+          'title arguments' => array($p,),
+          'page callback' => '_social_profile_user_menu_item_page_callback',
+          'page arguments' => array($p,),
+          'access callback' => '_social_profile_user_menu_item_access_callback',
+          'access arguments' => array($p,),
+          'module' => 'social_profile',
+          'menu_name' => 'user-menu',
+          'type' => MENU_NORMAL_ITEM,
+        );
+        if (isset($item['weight'])) {
+          $items[$new_path]['weight'] = $item['weight'];
+        }
+      }
+    }
+  }
+}
+
+function social_profile_form_menu_overview_form_alter(&$form, &$form_state) {
+  foreach (element_children($form) as $key) {
+    if (strpos($key, 'mlid:') === 0) {
+      if ($form[$key]['#item']['title_callback'] === '_social_profile_user_menu_title') {
+        if (preg_match('/^\s*<a [^>]+>\s*<\/\s*a>/u', $form[$key]['title']['#markup'])) {
+          $form[$key]['title']['#markup'] = preg_replace('/^(\s*<a [^>]+>)\s*(<\/\s*a>)/u', '$1' . t('Personal cabinet') . utils_html_debug() . '$2', $form[$key]['title']['#markup']);
+        }
+        break;
+      }
+    }
+  }
+}
+
+
+/**
+* Implements hook_form_FORM_ID_alter()
+*/
+function social_profile_form_menu_edit_item_alter(&$form, &$form_state, $form_id) {
+  if (!empty($form['link_path']['#value']) && $form['link_path']['#value'] === 'user' && $form['original_item']['#value']['title_callback'] === '_social_profile_user_menu_title') {
+    if (trim(strip_tags($form['_path']['#description'])) === '') {
+      $form['_path']['#description'] = l('user', 'user', array('attributes' => array('target' => '_blank',)));
+    }
+    $form['link_title']['#required'] = FALSE;
+    $form['link_title']['#default_value'] = $form['original_item']['#value']['title'];
+    $link_title_weight = isset($form['link_title']['#weight']) ? $form['link_title']['#weight'] : 0;
+    $form['display_user_picture'] = array(
+      '#title' => t('User picture'),
+      '#type' => 'checkbox',
+      '#default_value' => isset($form['options']['#value']['display_user_picture']) ? $form['options']['#value']['display_user_picture'] : TRUE, // @see social_profile_menu_alter()
+      '#parents' => array(
+        // automatically store display_user_picture setting in menu link 'options' array
+        'options',
+        'display_user_picture',
+      ),
+      '#weight' => $link_title_weight - 0.001,
+      '#suffix' => utils_html_debug()
+    );
+
+    //***********Anatoliy 2016 start*********
+    $preset = isset($form['options']['#value']['user_picture_preset']) ? $form['options']['#value']['user_picture_preset'] : variable_get('user_picture_style', '');
+    $options = image_style_options();
+
+    $form['user_picture_preset'] = array(
+      '#type' => 'select',
+      '#title' => t('Image style name'),
+      // The entire enclosing div created here gets replaced when dropdown_first
+      // is changed.
+      '#parents' => array(
+        // automatically store display_username setting in menu link 'options' array
+        'options',
+        'user_picture_preset'
+      ),
+      '#states' => array(
+        'invisible' => array(
+          ':input[name="options[display_user_picture]"]' => array('checked' => false)
+        ),
+        'disabled' => array(
+          ':input[name="options[display_user_picture]"]' => array('checked' => false)
+        ),
+      ),
+      '#weight' => $link_title_weight - 0.001,
+      // When the form is rebuilt during ajax processing, the $selected variable
+      // will now have the new value and so the options will change.
+      '#options' => $options,
+      '#default_value' => isset($options[$preset]) ? $options[$preset] : '',
+    );
+    //***********Anatoliy 2016 end*********
+
+    $form['display_username'] = array(
+      '#title' => t('Username'),
+      '#type' => 'checkbox',
+      '#default_value' => isset($form['options']['#value']['display_username']) ? $form['options']['#value']['display_username'] : TRUE, // @see social_profile_menu_alter()
+      '#parents' => array(
+        // automatically store display_username setting in menu link 'options' array
+        'options',
+        'display_username',
+      ),
+      '#weight' => $link_title_weight + 0.001,
+      '#suffix' => utils_html_debug(),
+    );
+    $form['#validate'][] = '_social_profile_user_menu_edit_item_validate';
+  }
+}
+
+
+/**
+* Validate menu_edit_item form
+* Require at least one filled field form three
+* @see social_profile_form_menu_edit_item_alter()
+*/
+function _social_profile_user_menu_edit_item_validate($form, &$form_state) {
+  if (trim($form_state['values']['link_title']) === '' && !$form_state['values']['options']['display_user_picture'] && !$form_state['values']['options']['display_username']) {
+    form_error($form['link_title'], t('Menu item can not be empty. You must specify one or more options.'));
+    form_error($form['display_user_picture'], '');
+    form_error($form['display_username'], '');
+  }
+}
+
+
+/**
+* Title callback for /user menu item
+* @see social_profile_menu_alter()
+*/
+function _social_profile_user_menu_title() {
+  return user_is_logged_in() ? '' : t('User account');
+  // We return empty string for logged in users because title must be built in social_profile_preprocess_menu_link() callback
+  // @see social_profile_form_menu_edit_item_alter()
+}
+
+
+/**
+* Implements hook_preprocess_HOOK()
+* Process user menu items
+* Read link item settings from ['options'] and apply it.
+* @see social_profile_form_menu_edit_item_alter()
+*/
+function social_profile_preprocess_menu_link(&$variables) {
+  if (user_is_logged_in()) {
+    if ($variables['element']['#href'] === 'user') {
+      if ($variables['element']['#original_link']['title_callback'] === '_social_profile_user_menu_title') {
+        if (!isset($variables['element']['#localized_options']['display_user_picture']) || $variables['element']['#localized_options']['display_user_picture']) {
+
+
+          // Temporary override user picture size setting
+          $old_style = variable_get('user_picture_style', '');
+          //**********Anatoliy 2016 start ************
+          $preset = 'thumbnail';
+          if (isset($variables['element']['#localized_options']['user_picture_preset']) && $variables['element']['#localized_options']['user_picture_preset']) {
+            $preset = $variables['element']['#localized_options']['user_picture_preset'];
+          } elseif (module_exists('features')) {
+            $preset = '56x42';
+          }
+          $GLOBALS['conf']['user_picture_style'] = $preset;
+          //**********Anatoliy 2016 end ************
+          $user_picture = theme('user_picture', array('account' => $GLOBALS['user']));
+          $GLOBALS['conf']['user_picture_style'] = $old_style;
+          if ($user_picture && ($user_picture = trim(strip_tags($user_picture, '<img><span>')))) { // remove divs, links, etc
+            $title[] =  $user_picture;
+            $variables['element']['#attributes']['class'][] = 'contains-user-picture';
+          }
+        }
+
+        $title[] = !empty($variables['element']['#localized_options']['html']) ? $variables['element']['#title'] : check_plain($variables['element']['#title']);
+        $variables['element']['#localized_options']['html'] = TRUE;
+
+        if (!isset($variables['element']['#localized_options']['display_username']) || $variables['element']['#localized_options']['display_username']) {
+          $title[] = check_plain(format_username($GLOBALS['user']));
+          $variables['element']['#attributes']['class'][] = 'contains-username';
+        }
+        $variables['element']['#title'] = implode(' ', $title) . utils_html_debug();
+
+      }
+
+    }
+    elseif ($variables['element']['#href'] === 'user/view') {
+      $q = !empty($GLOBALS['_catalog_real_q']) ? $GLOBALS['_catalog_real_q'] : $_GET['q'];
+      // надо будет что-то сделать с ^^ этими костылями из модуля catalog, там все сложно. Cм. '_catalog_overrided_q' в catalog_block_view_alter() и catalog_entity_view()
+
+      if ($q === $variables['element']['#href']) {
+        $variables['element']['#localized_options']['attributes']['class']['active'] = 'active'; // because '/user/view' = overwritten '/user/UID' @see social_profile_url_outbound_alter()
+      }
+    }
+  }
+}
+
+
+/**
+* Menu item access callback for /user/* menu items; @see social_profile_menu_alter()
+*/
+function _social_profile_user_menu_item_access_callback($path) {
+  $menu_item = menu_get_item('user/' . $GLOBALS['user']->uid . '/' . $path);
+  return !empty($menu_item['access']);
+}
+
+
+/**
+* Menu item title callback for /user/* menu items.
+* @see social_profile_menu_alter()
+*/
+function _social_profile_user_menu_sub_items_title_callback($path) {
+  // Get system-default menu item title ('user/edit' = 'user/UID/edit' -->> return t('Edit'))
+  $menu_item = menu_get_item('user/' . $GLOBALS['user']->uid . '/' . $path);
+  return $menu_item['title'];
+}
+
+
+/**
+* Menu item page callback for /user/* menu items.
+* @see social_profile_menu_alter()
+*/
+function _social_profile_user_menu_item_page_callback($path) {
+  $path = 'user/' . $GLOBALS['user']->uid . '/' . $path;
+  $q = $_GET['q'];
+  menu_set_active_item($path);
+  drupal_static_reset('arg');
+  menu_local_tasks();
+  $result = menu_execute_active_handler($path, FALSE);
+  $_GET['q'] = $q;
+  drupal_static_reset('arg');
+  return $result;
+}
+
+
+/**
+* Implements hook_url_inbound_alter()
+*/
+function social_profile_url_inbound_alter(&$path, $original_path, $path_language) {
+  if (user_is_logged_in() && arg(0, $path) . '/' . arg(1, $path) === 'user/' . $GLOBALS['user']->uid) { // '/user/CURRENT_UID' => '/user/view'
+    $menu_item = menu_get_item($path);
+    if (!empty($menu_item['type']) && ($menu_item['type'] & (MENU_IS_LOCAL_TASK | MENU_IS_LOCAL_ACTION))) {
+      $path = preg_replace('/^user\/' . $GLOBALS['user']->uid . '(\/|$)/', 'user$1', $path);
+    }
+  }
+}
+
+
+/**
+* Implements hook_url_outbound_alter()
+*/
+function social_profile_url_outbound_alter(&$path, &$options, $original_path) {
+  if (user_is_logged_in()) {
+    if (arg(0, $path) . '/' . arg(1, $path) === 'user/' . $GLOBALS['user']->uid) {
+      if (!arg(2, $path)) {
+        $path = 'user/view';
+      }
+      else {
+        $menu_item = menu_get_item($path);
+        if (!empty($menu_item['type']) && ($menu_item['type'] & (MENU_IS_LOCAL_TASK | MENU_IS_LOCAL_ACTION))) {
+          $path = preg_replace('/^user\/' . $GLOBALS['user']->uid . '/', 'user', $path);
+        }
+      }
+    }
+  }
+}
+
+
+/**
+* Implements hook_drupal_goto_alter.
+*/
+function social_profile_drupal_goto_alter(&$path, &$options, &$http_response_code) {
+  //Fix user password reset form redirect
+	if (preg_match('/^user\/\d+\/edit/', $path) && !empty($options['query']['pass-reset-token'])) {
+		$path = preg_replace('/^user\/(\d+)\/edit$/', 'user/$1/settings', $path);
+		$options['fragment'] = 'edit-pass-pass1';
+	}
+  else {
+		global $user;
+		if ($user->uid && $path === 'user/' . $user->uid) {
+			$path = 'user/view';
+		}
+	}
+}
+
+
+/**
+* Implements hook_admin_menu_output_alter() (provided by admin_menu module)
+* Add subtree from Drupal user-menu (see also social_profile_menu_alter() ) into right area of admin-menu.
+*/
+function social_profile_admin_menu_output_alter(&$content) {
+	global $user;
+	$username = format_username($user);
+	// IKW: Админ-меню ->> Проблема узкого экрана. (Кстати вместо ФИО можно отображать ФИ, как в корпортале)
+	$username = preg_split('/\s+/u', $username);
+  $picture = theme('user_picture', array('account' => $user));
+  $username = strip_tags($picture, '<img>') . '<span class="admin-menu-text">' . check_plain($username[0] . (isset($username[1]) ? ' ' .$username[1] : '')) . '</span>' . module_invoke('utils', 'html_debug');
+	$content['account']['account']['#title'] = $username;
+	$content['account']['account']['#options']['html'] = TRUE;
+
+
+	if (!empty($content['account']['account'])) {
+		$content['account']['account']['#href'] = 'user';
+		$content['account']['account']['#attributes']['title'] = t('Personal cabinet');
+
+		foreach (menu_get_router() as $href => $item) {
+      if (!isset($item['type']) || ($item['type'] & (MENU_IS_LOCAL_TASK | MENU_IS_LOCAL_ACTION)) && preg_match('/^user\/%($|\/[^%]+?$)/', $href)) {
+        if ($menu_item = menu_get_item($item_path = preg_replace('/^user\/%/', 'user', $href))) {
+          if ($menu_item['title'] && $menu_item['access']) {
+            // CRUTCH (@valeriesokolova wish): disabled menu items must be not visible it admin menu and user "cabinet" page
+            // @see also _social_profile_userpage_page_callback()
+            $hidden = db_query('SELECT hidden FROM {menu_links} ml WHERE (ml.router_path = :path) AND module = \'system\'', array(':path' => preg_replace('/\/%($|\/)/', '$1', $menu_item['path'])))->fetchField();
+            if ($hidden === FALSE || !$hidden) {
+              foreach (array('title', 'href', 'weight') as $key) {
+                drupal_array_set_nested_value($content['account']['account'], explode('/', preg_replace('/^user\//', '', $menu_item['href']) . '/#' . $key), $menu_item[$key]);
+              }
+            }
+          }
+        }
+      }
+		}
+	}
+}
+
+
+
+/**
+* Helper
+* Update user_is_online cookie for logged in users. This cookie is needed for social_profile.online-status-refresh.js
+*/
+function _social_profile_user_is_online_cookie() {
+  setcookie('user_is_online', 1, REQUEST_TIME + variable_get('session_write_interval', 180), '/');
+}
+
+
+/**
+* Callback for /user/online-status-refresh
+* Refresh user online status by js events (mouse move, etc)
+* @see also _drupal_session_write()
+*/
+function social_profile_online_status_refresh() {
+  drupal_add_http_header('Content-Type', 'application/json; charset=utf-8');
+  if (user_is_logged_in()) {
+    _social_profile_user_is_online_cookie();
+  }
+}
+
+
+/**
+* Callback for /agreement
+*/
+function social_profile_terms_of_service_page() {
+  return social_profile_get_user_agreement_text();
+}
+
+
+function social_profile_permission() {
+	return array(
+		'view user private data' => array(
+			'title' => t('View user private data'),
+			'description' => t('View private fields such as phone, e-mail address, etc'),
+		),
+	);
+}
+
+
+
+/**
+* Implements hook_module_implements_alter()
+*/
+function social_profile_module_implements_alter(&$implementations, $hook) {
+	if ($hook === 'username_alter') {
+		// Supress hook ulogin_username_alter()
+		unset($implementations['ulogin']);
+	}
+
+	//Place social_profile_form_user_profile_form_alter() function into end of alteration hooks system queue
+	if ($hook === 'form_alter' || $hook === 'form_user_profile_form_alter') {
+		$g = $implementations['social_profile'];
+		unset($implementations['social_profile']);
+		$implementations['social_profile'] = $g;
+	}
+}
+
+
+/**
+* Implements hook_element_info_alter()
+*/
+function social_profile_element_info_alter(&$type) {
+	if (isset($type['ulogin_widget']) && module_exists('ulogin')) {
+		$type['ulogin_widget']['#process'][] = '_social_profile_ulogin_widget_process';
+	}
+}
+
+
+/**
+* Title callback for /user/%user/content/comments menu item
+*/
+function _social_profile_user_comments_menu_title($account) {
+	$count = _social_profile_user_comments_count($account);
+	return t('Comments') . ($count ?  ' (' . $count . ')' : '');
+}
+
+
+
+/**
+* Title callback for /user/%user/content menu item
+*/
+function _social_profile_user_content_menu_title($account, $node_type = NULL) {
+
+	static $results = array();
+	if (!isset($results[$account->uid][$node_type])) {
+		$results[$account->uid][$node_type] = '';
+		if ($node_type) {
+				$count = ($nt = node_type_load($node_type)) ? _social_profile_user_nodes_count($node_type, $account) : 0;
+				return $results[$account->uid][$node_type] = $nt->name . ($count ? ' (' . $count . ')' : '');
+		}
+		else {
+      $node_types = array();
+      foreach (node_type_get_types() as $nt) {
+        if (($item = menu_get_item('user/' . $account->uid . '/content/' . str_replace('_', '-', $nt->type))) && !empty($item['access'])) {
+          $node_types[] = $nt->type;
+        }
+      }
+			$counts[0] = _social_profile_user_nodes_count($node_types, $account);
+			$counts[1] = _social_profile_user_comments_count($account);
+
+			return $results[$account->uid][$node_type] = t('Publications') . (array_filter($counts) ? ' (' . implode('/', $counts) . ')' : '');
+		}
+	}
+	return $results[$account->uid][$node_type];
+}
+/**
+* Access callback for /user/%user/content/* menu item
+*/
+function _social_profile_user_content_menu_access($account, $node_type = NULL) {
+	if (user_edit_access($account)) {
+    static $results = array();
+    if (!isset($results[$account->uid][$node_type])) {
+      $results[$account->uid][$node_type] = FALSE;
+      if ($node_type) {
+        $results[$account->uid][$node_type] = ($nt = node_type_load($node_type)) && _social_profile_user_nodes_count($nt->type, $account);
+      }
+      else {
+        $node_types = array();
+        foreach (node_type_get_types() as $nt) {
+          if (!empty($results[$account->uid][$nt->type]) || (($item = menu_get_item('user/' . $account->uid . '/content/' . $nt->type)) && !empty($item['access']))) {
+            $node_types[] = $nt->type;
+          }
+        }
+        $results[$account->uid][$node_type] = _social_profile_user_nodes_count($node_types, $account) || _social_profile_user_comments_count($account);
+      }
+    }
+    return $results[$account->uid][$node_type];
+	}
+}
+
+
+/**
+* Access callback for /user/%user/content/comments
+*/
+function _social_profile_user_comments_menu_access($account) {
+	return user_edit_access($account) && _social_profile_user_comments_count($account);
+}
+
+
+/**
+* Helper for _social_profile_user_content_menu_title() and _social_profile_user_content_menu_access()
+*/
+function _social_profile_user_nodes_count($types, $account) {
+  static $results = array();
+  if (!isset($results[$key = implode(',', (array)$types)][$account->uid])) {
+    $results[$key][$account->uid] = $types ? db_query('SELECT COUNT(*) FROM {node} WHERE uid = :uid AND type IN (:types)', array(':uid' => $account->uid, ':types' => $types,))->fetchField() : 0;
+  }
+  return $results[$key][$account->uid];
+}
+
+
+/**
+* Helper for _social_profile_user_content_menu_title() and _social_profile_user_content_menu_access()
+*/
+function _social_profile_user_comments_count($account) {
+  static $results = array();
+  if (!isset($results[$account->uid])) {
+    $results[$account->uid] = module_exists('comment') ? db_query('SELECT COUNT(*) FROM {comment} WHERE uid = :uid', array(':uid' => $account->uid,))->fetchField() : 0;
+  }
+  return $results[$account->uid];
+}
+
+
+/**
+* Implements user cabinet "area".
+* Split user edit form on two parts: profile edit and user settings.
+* Search in users improvements.
+*/
+
+function social_profile_get_user_agreement_text() {
+	$social_profile_terms_of_service = variable_get('social_profile_terms_of_service', array('required' => FALSE, 'texts' => array()));
+	if ($social_profile_terms_of_service['texts']) {
+		global $language;
+		$language_default = language_default();
+		$text = array('value' => '', 'format' => '',);
+		$preferred_langs = array(
+			$language->language => $language->language,
+			$language_default->language => $language_default->language,
+			'en' => 'en',
+		);
+		foreach ($preferred_langs as $lang) {
+			if (!empty($social_profile_terms_of_service['texts'][$lang]['value'])) {
+				$text = $social_profile_terms_of_service['texts'][$lang];
+				break;
+			}
+		}
+		return check_markup($text['value'], !empty($text['format']) ? $text['format'] : NULL);
+	}
+  else {
+		return FALSE;
+	}
+
+}
+
+
+function social_profile_init() {
+
+
+			////////////// moved to social_profile_module_implements_alter() :
+
+		//Place social_profile_form_user_profile_form_alter() function into end of alteration hooks system queue
+		/*$fake_form = array('#user' => drupal_anonymous_user(), '#user_category' => array());
+		$fake_form_id = 'SOCIAL_PROFILE_FAKE_form_user_profile_form';
+
+		drupal_alter(array('form', 'form_user_profile_form'), $fake_form, $fake_form_state, $fake_form_id);
+
+		$drupal_alter = &drupal_static('drupal_alter');
+		$drupal_alter += array($hook = 'form,form_user_profile_form' => array());
+		foreach ($drupal_alter[$hook] as $idx => $val) {
+			if ($val == 'social_profile_form_user_profile_form_alter') {
+				unset($drupal_alter[$hook][$idx]);
+			}
+		}
+		$drupal_alter[$hook][] = 'social_profile_form_user_profile_form_alter';*/
+
+
+
+
+	if (module_exists('ulogin')) {
+	// Override ulogin module settings
+	// See also social_profile_form_ulogin_settings_form_alter
+		$GLOBALS['conf']['ulogin_duplicate_emails'] = 1; // Disallow duplicate emails (perverted ulogin logic: 0 - allow, 1 - deny)
+		$GLOBALS['conf']['ulogin_disable_username_change'] = 0;
+		$GLOBALS['conf']['ulogin_remove_password_fields'] = 0;
+		// For 'ulogin_username' setting see features_init();
+
+		if (empty($GLOBALS['conf']['ulogin_providers'])) {
+			$GLOBALS['conf']['ulogin_providers'] = array('facebook', 'vkontakte',);
+			// Also, order of providers in this setting must affect to order of buttons in widget
+		}
+
+
+		if (empty($GLOBALS['conf']['ulogin_hidden'])) {
+			$GLOBALS['conf']['ulogin_hidden'] = array('google', 'yandex', 'livejournal', 'mailru', 'twitter', );
+			// Also, order of providers in this setting must affect to order of buttons in widget
+		}
+
+
+	}
+
+  // IKW
+  $GLOBALS['conf']['user_picture_default'] = drupal_get_path('module', 'social_profile') . '/img/userpic.png'; // @see social_profile_form_alter() -->> user_admin_settings form
+}
+
+
+/**
+* Implements hook_field_extra_fields()
+*/
+function social_profile_field_extra_fields() {
+
+	$extra['user']['user'] = array(
+		'form' => array(
+			'lfm' => array(
+				'label'			=> t('Last First Middle'),
+				'description'	=> t('Last First Middle'),
+				'weight'		=> -10000,
+			),
+			'phone' => array(
+				'label'			=> t('Phone'),
+				'description'	=> t('Phone'),
+				'weight'		=> -9999,
+			),
+		),
+		'display' => array(
+			'lfm' => array(
+				'label'			=> t('Last First Middle'),
+				'description'	=> t('Last First Middle'),
+				'label_display' => 'inline',
+				'weight'		=> -10000,
+			),
+			'phone' => array(
+				'label'			=> t('Phone'),
+				'description'	=> t('Phone'),
+				'label_display' => 'inline',
+				'weight'		=> -9999,
+			),
+			'mail' => array(
+				'label'			=> t('Email'),
+				'description'	=> t('Email'),
+				'label_display' => 'inline',
+				'weight'		=> -10000,
+			),
+		),
+	);
+	//spike for addons field_extra_field_settings who not allowed to create extra field forms for other modules
+	//user_picture is not an extra_field ? comments do not read @ immediately answer
+	$extra['user']['user']['display']['user_picture'] = array(
+		'weight'		=> -5,
+	);
+	return $extra;
+}
+
+
+
+/**
+* Implements hook_extra_field_widget_settings_form()
+* @see addons.module -->> _addons_extra_field_widget_settings_form()
+*/
+function social_profile_extra_field_widget_settings_form($entity_type, $bundle, $field_name, $settings) {
+  if ($entity_type === 'user') {
+    if ($field_name === 'phone') {
+      return array(
+        'required' => array(
+          '#type' => 'checkbox',
+          '#title' => t('The field %field is required.', array('%field' => t('Phone'))),
+          '#default_value' => !empty($settings['required']),
+        ),
+      );
+    }
+  }
+}
+
+/**
+* Implements hook_extra_field_widget_settings_summary()
+* @see addons.module -->> addons_form_field_ui_field_overview_form_alter()
+*/
+function social_profile_extra_field_widget_settings_summary($entity_type, $bundle, $field_name, $settings) {
+  if ($entity_type === 'user') {
+    if ($field_name === 'phone') {
+      return '<strong>' . t('Required') . ':</strong> ' . (!empty($settings['required']) ? t('yes') : t('no'));
+    }
+  }
+}
+
+/**
+* Implements hook_block_view_alter()
+*/
+function social_profile_block_view_alter(&$data, $block) {
+	if ($block->module === 'system' && $block->delta === 'main' && arg(0) !== 'agreement') {
+    $social_profile_terms_of_service = variable_get('social_profile_terms_of_service', array('required' => FALSE,));
+    if ($social_profile_terms_of_service['required']) {
+      global $user;
+      if ($user->uid && empty($user->data['social_profile_terms_agreed'])) {
+        $data['content'] = drupal_get_form('social_profile_user_agreement_form', $user);
+        $data['content'] += array('#prefix' => '');
+        $data['content']['#prefix'] .= '<div class="messages error">' . t('To access the contents of the site you need to take user agreement.') . '</div>';
+      }
+    }
+	}
+}
+
+
+/**
+* Implements hook_page_alter()
+*/
+function social_profile_page_alter(&$page) {
+	global $user;
+	// Store user fields in cookies
+	if ($user->uid) {
+		foreach (array('lfm', 'phone',) as $key) {
+			if (property_exists($user, $key)) {
+				if (!isset($_COOKIE['Drupal_visitor_' . $key]) || $user->$key != $_COOKIE['Drupal_visitor_' . $key]) {
+					user_cookie_save(array($key => $user->$key,));
+					$_COOKIE['Drupal_visitor_' . $key] = $user->$key;
+				}
+			}
+		}
+
+    // Implements refresh online user status by js events (mouse, keyboard, etc) @see social_profile_online_status_refresh()
+    _social_profile_user_is_online_cookie();
+    drupal_add_js(drupal_get_path('module', 'social_profile') . '/social_profile.online-status-refresh.js');
+    drupal_add_library('system', 'jquery.cookie');
+    drupal_add_js(array('online_status_refresh_url' => url('user/online-status-refresh'),), 'setting');
+
+
+	}
+	if (module_exists('admin_menu') && user_access('access administration menu')) {
+		drupal_add_css(drupal_get_path('module', 'social_profile') . '/css/social_profile.admin_menu.css');
+	}
+
+  foreach ($page as $key => $blocks) {
+    if (is_array($blocks)) {
+      foreach ($blocks as $key => $block_menu) {
+        if ($key == 'system_user-menu') {
+          drupal_add_css(drupal_get_path('module', 'social_profile') . '/css/social_profile.supermenu.css');
+        }
+      }
+    }
+  }
+
+	if (preg_match('/user\/\d+/', $_GET['q']) && drupal_get_title() === t('Profile') && ($item = menu_get_item()) && !empty($item['access'])) {
+		$account = user_load(arg(1));
+		drupal_set_title(t('%account profile', array('%account' => format_username($account))) . utils_html_debug(), PASS_THROUGH);
+	}
+}
+
+
+function social_profile_user_agreement_form($form, &$form_state, $account) {
+	$social_profile_terms_of_service = variable_get('social_profile_terms_of_service', array('required' => FALSE,));
+	if ($social_profile_terms_of_service['required'] && social_profile_get_user_agreement_text()) {
+		// See also social_profile_user_presave()
+		$form['user_agreement'] = array(
+			'social_profile_terms_agreed' => array(
+			//	IKW '#prefix' => '<label>' . t('User agreement') . '</label><div class="form-textarea" style="min-height:100px;max-height:200px;overflow-y:scroll;">' . social_profile_get_user_agreement_text() . '</div>',
+				'#type' => 'checkbox',
+				'#title' => t('I\'m agreed with <a title="@title" target="_blank" class="ajax-popup" href="@url">terms of service</a>', array('@url' => url('agreement'), '@title' => t('Open this link in new tab'))),
+				'#required' => TRUE,
+				'#default_value' => !empty($account->data['social_profile_terms_agreed'])
+			),
+		);
+		$form['user_agreement_uid'] = array(
+			'#type' => 'value',
+			'#value' => $account->uid,
+		);
+		$form['actions'] = array(
+			'#type' => 'actions',
+			'submit' => array(
+				'#type' => 'submit',
+				'#value' => t('Submit'),
+			),
+		);
+		$form['actions']['submit']['#states'] = array(
+			'disabled' => array(
+				'input[name="social_profile_terms_agreed"]' => array('checked' => FALSE,),
+			),
+		);
+	}
+	return $form;
+}
+
+
+function social_profile_user_agreement_form_submit($form, &$form_state) {
+	if (!empty($form_state['values']['user_agreement_uid']) && isset($form_state['values']['social_profile_terms_agreed'])&& ($acc = user_load($form_state['values']['user_agreement_uid']))) {
+		if (empty($acc->data) || is_scalar($acc->data)) {
+			$acc->data = array();
+		}
+		$acc_agreed = !empty($acc->data['social_profile_terms_agreed']) ? 1 : 0;
+		$form_state_agreed = $form_state['values']['social_profile_terms_agreed'] ? 1 : 0;
+		if ($acc_agreed != $form_state_agreed) {
+			$acc->data['social_profile_terms_agreed'] = $form_state_agreed;
+			user_save($acc);
+		}
+	}
+}
+
+
+/**
+* Implements hook_admin_paths()
+*/
+function social_profile_admin_paths() {
+	return array(
+		'user'		=> TRUE,
+		'user/*/*'	=> TRUE,
+	);
+}
+
+
+/**
+* Implements hook_theme_registry_alter()
+*/
+function social_profile_theme_registry_alter(&$theme_registry) {
+	foreach ($theme_registry['user_picture']['preprocess functions'] as $idx => $fn) {
+		if ($fn == 'template_preprocess_user_picture') {
+			// Override template_preprocess_user_picture()
+			$theme_registry['user_picture']['preprocess functions'][$idx] = '_social_profile_template_preprocess_user_picture_override';
+		}
+	}
+}
+
+
+/**
+* Helper function for internal use only
+* Convert URL 'user/%user/*' to user/*'
+*/
+function _social_profile_user_path_to_profile_path($path, $account = NULL) {
+		return $account && $path == 'user' ? ('user' . ($account->uid ? '/' . $account->uid : '')) : preg_replace('/^user\/%user\//', 'user/' . ($account ? $account->uid . '/' : ''), $path);
+}
+
+
+
+/**
+* Implements hook_form_alter()
+*/
+function social_profile_form_alter(&$form, &$form_state, $form_id) {
+  if ($form_id === 'user_admin_settings') {
+    // IKW:
+    $form['personalization']['pictures']['user_picture_default']['#access'] = FALSE;
+
+    $form['registration_cancellation']['social_profile_phone_unique'] = array(
+      '#title' => t('One account per one phone number'),
+      '#type' => 'checkbox',
+      '#default_value' => variable_get('social_profile_phone_unique', FALSE),
+      '#weight' => 0.0019,
+    );
+  }
+	if ($form_id === 'user_register_form') {
+		$user_agreement_form = social_profile_user_agreement_form(array(), $form_state, $form['#user']);
+		if (!empty($user_agreement_form['user_agreement'])) {
+			unset($user_agreement_form['user_agreement_uid']);
+
+			$form['actions']['user_agreement'] = array('#weight' => -10) + $user_agreement_form['user_agreement'];
+			if (user_access('administer users') || user_access('bypass node access')) {
+				$form['actions']['user_agreement']['social_profile_terms_agreed']['#required'] = FALSE;
+				$form['actions']['user_agreement']['social_profile_terms_agreed']['#title'] = t('User already agreed with this terms of service');
+			}
+      else {
+				$form['actions']['submit'] += array('#states' => array());
+				$form['actions']['submit']['#states'] += array('disabled' => array('input[name="social_profile_terms_agreed"]' => array('checked' => FALSE,)));
+			}
+		}
+		$form += _social_profile_user_form_fields($form['#user']);
+    $form['#validate'][] = '_social_profile_user_form_phone_validate';
+		if (arg(0) . '/' . arg(1) . '/' . arg(2) === 'admin/people/create' && !isset($_GET['entity-label']) /* @see addons.module */) {
+			unset($form['lfm']['#default_value'], $form['phone']['#default_value']);
+		}
+	}
+
+	if ($form_id == 'field_ui_field_overview_form' && $form['#entity_type'] == 'user') {
+		$form['fields']['#header'][] = t('Show on page');
+		$bundle_settings = field_bundle_settings($form['#entity_type'], $form['#bundle']);
+		$sp_tab = array(
+				'#type'			=> 'select',
+				'#options'		=> array('edit' => t('Edit'), 'settings' => t('Settings'),),
+				'#prefix' => module_invoke('utils', 'html_debug'),
+				'#field_prefix'	=> '<em>',
+				'#field_suffix'	=> '</em>',
+				);
+		foreach (element_children($form['fields']) as $key) {
+			$form['fields'][$key]['sp_tab'] = $sp_tab;
+			if (in_array($key, $form['#fields'])) {
+				$instance = field_read_instance($form['#entity_type'], $key, $form['#bundle']);
+				$form['fields'][$key]['sp_tab']['#default_value'] = isset($instance['widget']['sp_tab']) ? $instance['widget']['sp_tab'] : 'edit';
+			} else {
+				if (in_array($key, $form['#extra'])) {
+					$form['fields'][$key]['sp_tab']['#default_value'] =
+						isset($bundle_settings['extra_fields']['form'][$key]['sp_tab'])
+						?
+						$bundle_settings['extra_fields']['form'][$key]['sp_tab']
+						:
+						(
+							// Leave 'contact', 'locale', 'account' and 'timezome' on settings tab.
+							// Other defined extra fields will be placed on to edit tab(
+							in_array($key, array('contact', 'locale', 'account', 'timezone',))
+							?
+							'settings'
+							:
+							'edit'
+						);
+				} else {
+					$form['fields'][$key]['sp_tab'] = array();
+				}
+			}
+		}
+		array_unshift($form['#submit'], 'social_profile_field_ui_field_overview_form_submit');
+	}
+	// Add submit callback to user login forms
+	if ($form_id == 'user_login' || $form_id == 'user_login_block') {
+		$form['#submit'][] = '_social_profile_form_user_login_form_submit';
+	}
+
+
+	if (module_exists('ulogin') && $form_id == 'user_login') {
+		$_ulogin_data = !empty($form_state['storage']['_ulogin_data']) ? @unserialize($form_state['storage']['_ulogin_data']) : (!empty($form_state['input']['_ulogin_data']) ? @unserialize($form_state['input']['_ulogin_data']) : array());
+		if ($_ulogin_data) {
+			// Security check.
+			if (empty($_ulogin_data['_check_sum_'])) {
+				$_ulogin_data = array();
+			} else {
+				$checksum = $_ulogin_data['_check_sum_'];
+				unset($_ulogin_data['_check_sum_']);
+				if ($checksum ===  drupal_hash_base64(ip_address() . drupal_get_private_key() . serialize($_ulogin_data))) { // See also _social_profile_ulogin_callback_override() -->> $_ulogin_data['_check_sum_'] = ...
+					$_ulogin_data['_check_sum_'] = $checksum;
+				} else {
+					watchdog('social_profile_ulogin', 'Security checksum error in _ulogin_data. Data received: <pre>@data</pre>', array('@data' => var_export($_ulogin_data, TRUE)));
+					$_ulogin_data = array();
+				}
+			}
+		}
+		$form['_attach_ulogin_data'] = array(
+			'#type' => 'checkbox',
+			'#default_value' => TRUE,
+			'#title' => !empty($_ulogin_data['network']) ? t('Attach information provided by %network network to my profile', array('%network' => drupal_ucfirst($_ulogin_data['network']))) : '',
+			'#access' => !empty($_ulogin_data),
+		);
+		$form['_ulogin_data'] = array(
+			'#type' => 'hidden',
+			'#value' => !empty($_ulogin_data) ? serialize($_ulogin_data) : NULL,
+		);
+	}
+	if ($form_id === 'field_ui_display_overview_form') {
+		if ($form['#entity_type'] === 'user') {
+			if (!empty($form['modes']['view_modes_custom']['#options']['search'])) {
+				// @see social_profile_entity_info_alter()
+				$form['modes']['view_modes_custom']['#options']['search'] = t($form['modes']['view_modes_custom']['#options']['search']);
+			}
+		}
+	}
+}
+
+
+/**
+* Validate user phone number.
+* Deny users with some phone numbers
+* @see social_profile_form_user_profile_form_alter()
+* @see social_profile_form_alter()
+*/
+function _social_profile_user_form_phone_validate($form, &$form_state) {
+  if (variable_get('social_profile_phone_unique', FALSE)) {
+    if (!empty($form['phone']) && (!isset($form['phone']['#access']) || $form['phone']['#access']) && !empty($form_state['values']['phone'])) {
+      $query = db_select('users', 'u')->fields('u', array('uid'))->range(0, 1)->condition('uid', 0, '>');
+      if (!empty($form['#user']->uid)) {
+        $query->condition('uid' , $form['#user']->uid, '<>');
+      }
+      $query->condition('phone', $form_state['values']['phone']);
+      if ($query->execute()->fetchField()) {
+        form_error($form['phone'], t('User with this phone number already exists.'));
+        if (empty($form['#user']->uid)) {
+          form_set_error(' ', l(t('Password recovery'), 'user/password'));
+        }
+      }
+    }
+  }
+
+}
+
+
+/**
+* Submit callback for field_ui_field_overview_form.
+*/
+function social_profile_field_ui_field_overview_form_submit($form, &$form_state) {
+	$form_values = $form_state['values']['fields'];
+	$entity_type = $form['#entity_type'];
+	$bundle = $form['#bundle'];
+	$admin_path = _field_ui_bundle_admin_path($entity_type, $bundle);
+	$bundle_settings = field_bundle_settings($entity_type, $bundle);
+	$bundle_settings_need_update = FALSE;
+	foreach ($form_values as $key => $values) {
+		if (in_array($key, $form['#fields'])) {
+			$instance = field_read_instance($entity_type, $key, $bundle);
+			if (!isset($instance['widget']['sp_tab'])) {
+				$instance['widget']['sp_tab'] = NULL;
+			}
+			if ($instance['widget']['sp_tab'] != $values['sp_tab']) {
+				$instance['widget']['sp_tab'] = $values['sp_tab'];
+				field_update_instance($instance);
+			}
+		}
+		elseif (in_array($key, $form['#extra'])) {
+			if (!isset($bundle_settings['extra_fields']['form'][$key]['sp_tab'])) {
+				$bundle_settings['extra_fields']['form'][$key]['sp_tab'] = NULL;
+			}
+			if ($bundle_settings['extra_fields']['form'][$key]['sp_tab'] != $values['sp_tab']) {
+				$bundle_settings['extra_fields']['form'][$key]['sp_tab'] = $values['sp_tab'];
+				$bundle_settings_need_update = TRUE;
+			}
+		}
+	}
+	if ($bundle_settings_need_update) {
+		field_bundle_settings($entity_type, $bundle, $bundle_settings);
+	}
+}
+
+
+/**
+* Submit callback for user login forms
+*/
+function _social_profile_form_user_login_form_submit($form, &$form_state) {
+	if (module_exists('ulogin') && !empty($form_state['values']['_attach_ulogin_data']) && !empty($form_state['input']['_ulogin_data'])) {
+		if ($_ulogin_data = @unserialize($form_state['input']['_ulogin_data'])) {
+			if (($acc = user_load_by_mail($_ulogin_data['email'])) && ($acc->name === $form_state['values']['name'] || (!empty($form_state['values']['mail']) && $form_state['values']['mail'] === $acc->mail))) {
+				if (!empty($_ulogin_data['_check_sum_'])) {
+					$checksum = $_ulogin_data['_check_sum_'];
+					unset($_ulogin_data['_check_sum_']);
+					if ($checksum ===  drupal_hash_base64(drupal_get_private_key() . serialize($_ulogin_data))) {
+						watchdog('social_profile_ulogin', 'Ulogin add data to account @acc: <pre>@data</pre>', array('@acc' => $acc->uid, '@data' => var_export($_ulogin_data, TRUE)), WATCHDOG_DEBUG);
+						_ulogin_identity_save($_ulogin_data);
+					}
+				}
+			}
+		}
+	}
+	// Override 'user/UID' redirect to 'user'
+	$form_state['redirect'] = 'user';
+}
+
+
+function _social_profile_user_form_fields($account) {
+	return array(
+		'lfm' => array(
+			'#prefix' => module_invoke('utils', 'html_debug'),
+			'#title' => t('Last First Middle'),
+			'#type' => 'textfield',
+			'#default_value' => isset($account->lfm) ? $account->lfm : NULL,
+			'#maxlength' => 255,
+			'#required' => (bool)(variable_get('install_task', FALSE) == 'done'),
+			'#attributes' => array('class' => array('form-text-lfm')),
+		),
+		'phone' => array(
+			'#title' => t('Phone'),
+			'#type' => 'phone',
+			'#default_value' => isset($account->phone) ? $account->phone : NULL,
+			'#maxlength' => 64,
+      '#required' => addons_extra_field_get_settings('user', 'user', 'form', NULL, 'phone', 'required'),
+		),
+	);
+}
+
+
+/**
+* Implements hook_form_FORM_ID_alter()
+* Change user image input to system-wide managed_file.
+* Adds custom submit handler for picture submissions.
+* Split form by url.
+*/
+function social_profile_form_user_profile_form_alter(&$form, &$form_state, $form_id) {
+	if ($form_id === 'user_profile_form') { // see crutches in social_profile_init()
+
+      if (module_exists('ulogin')) {
+        if (!empty($form['#user'])) {
+          require_once drupal_get_path('module', 'ulogin') . '/ulogin.pages.inc';
+          $title = drupal_get_title();
+          $ulogin_form = ulogin_user_identity(array(), $form_state, (object)$form['#user']);
+          drupal_set_title($title);
+          if (empty($ulogin_form['identity']['#rows'])) {
+            unset($ulogin_form['identity']);
+            if (!empty($ulogin_form['ulogin_widget'])) {
+              $ulogin_form['ulogin_widget']['#title'] = t('Identified');
+            }
+          }
+          else {
+            foreach ($ulogin_form['identity']['#rows'] as $idx => $row) {
+              if (preg_match('#user/(\d+)/ulogin/delete/(\d+)#u', $row[2], $m)) {
+                $ulogin_form['identity']['#rows'][$idx][2] = l(t('Delete'), 'user/' . $m[1] . '/ulogin/delete/' . $m[2], array(
+                  'query' => array('destination' => $_GET['q'] . '#edit-ulogin-wrapper'),
+                  'attributes' => array('class' => array('ajax-popup',)),
+                ));
+              }
+            }
+          }
+          if (!empty($ulogin_form['ulogin_widget']) || (!empty($ulogin_form['vtabs']) && element_children($ulogin_form['vtabs']))) {
+            $form['ulogin_wrapper'] = array(
+              '#type' => 'fieldset',
+              '#title' => t('Authentication via social network'),
+              '#collapsible' => TRUE,
+              '#collapsed' => TRUE,
+            ) + $ulogin_form;
+          }
+        }
+      }
+
+      //change image field
+		$form['picture']['picture_clone'] = array(
+		  '#type' => 'managed_file',
+		  '#default_value' => !empty($form['picture']['picture']['#value']) ? $form['picture']['picture']['#value']->fid : NULL,
+		);
+		foreach (array('picture_current', 'picture_delete', 'picture_upload') as $key) {
+		  $form['picture'][$key]['#access'] = FALSE;
+		}
+		$form += _social_profile_user_form_fields($form['#user']);
+    $form['#validate'][] = '_social_profile_user_form_phone_validate';
+		array_unshift($form['#submit'], 'social_profile_form_user_profile_form_submit');
+		//split form
+		form_load_include($form_state, 'inc', 'user', 'user.pages');
+		$menu_item = menu_get_item();
+		if (arg(0, $menu_item['path']) === 'user' || $menu_item['delivery_callback'] === 'ajax_deliver') {
+			$form['_url_path'] = array(
+				'#type' => 'hidden',
+				'#value' => isset($form_state['values']['_url_path']) ? $form_state['values']['_url_path'] : (isset($form_state['_url_path']) ? $form_state['_url_path'] : $menu_item['path']),
+			);
+			$menu_path = $form['_url_path']['#value'];
+			$bundle_settings = field_bundle_settings('user', 'user');
+			$field_info_extra_fields = field_info_extra_fields('user', 'user', 'form');
+			// Leave 'contact', 'locale', 'account' and 'timezome' on settings tab.
+			// Other defined extra fields will be placed on to edit tab
+			unset($field_info_extra_fields['contact'], $field_info_extra_fields['locale'], $field_info_extra_fields['account'], $field_info_extra_fields['timezone']);
+			foreach (element_children($form) as $key) {
+				if ($key !== 'actions'
+            &&
+            $form[$key]
+            &&
+            is_array($form[$key])
+            &&
+            (!isset($form[$key]['#type']) || !in_array($form[$key]['#type'], array('submit', 'token', 'hidden', 'value'), TRUE))
+            &&
+            (!isset($form[$key]['#access']) || $form[$key]['#access'])) {
+					if (($inst = field_read_instance('user', $key, 'user')) || !empty($field_info_extra_fields[$key])) {
+						$def_tab = isset($inst['widget']['sp_tab']) ? $inst['widget']['sp_tab'] : 'edit';
+						$form[$key]['#access'] = ($def_tab == 'edit' || $def_tab == 'settings') && preg_match('/^user\/(profile|%)\/' . $def_tab . '$/', $menu_path);
+					}
+          else {
+						$def_tab = 	isset($bundle_settings['extra_fields']['form'][$key]['sp_tab']) ? $bundle_settings['extra_fields']['form'][$key]['sp_tab'] : 'settings';
+						if (!(($def_tab == 'edit' || $def_tab == 'settings') && preg_match('/^user\/(profile|%)\/' . $def_tab . '$/', $menu_path))) {
+							$form[$key]['#access'] =  FALSE;
+						}
+					}
+				}
+			}
+			//ajax spike for menu item
+			$form_state['_url_path'] = $menu_path;
+		}
+	}
+}
+
+
+/**
+* Implements hook_form_FORM_ID_alter()
+* Add settings link into table.
+*/
+function social_profile_form_user_admin_account_alter(&$form, &$form_state) {
+	foreach ($form['accounts']['#options'] as $uid => &$options) {
+		if (!empty($options['operations']['data']['#type']) && $options['operations']['data']['#type'] === 'link') {
+
+			$options['operations']['data'] = array(
+				'#theme' => 'links',
+				'#attributes' => array(
+					'class' => array('inline',),
+				),
+				'#links' => array(
+					array(
+						'title' => $options['operations']['data']['#title'],
+						'href' => $options['operations']['data']['#href'],
+						'options' => $options['operations']['data']['#options'],
+					),
+					array(
+						'title' => t('settings'),
+						'href' => 'user/' . $uid . '/settings',
+						'options' => $options['operations']['data']['#options'],
+					),
+				),
+			);
+		}
+	}
+}
+
+
+/**
+ * Helper function.
+ * Populate changed file input to default user fields.
+ */
+function social_profile_form_user_profile_form_submit($form, &$form_state) {
+  if ($form_state['values']['picture_clone']) {
+    if (empty($form_state['values']['picture']) || ($form_state['values']['picture_clone'] != $form_state['values']['picture']->fid)) {
+      $picture = file_load($form_state['values']['picture_clone']);
+      // set for user_save(), user_save check $picture->status. @see user_save()
+      $picture->status = 0;
+      form_set_value($form['picture']['picture'], $picture, $form_state);
+    }
+  }
+  else {
+    // set picture_delete for call file_usage_delete in user_save. @see user_save()
+    if (!empty($form_state['values']['picture']->fid)) {
+      $form_state['values']['picture_delete'] = 1;
+    }
+    form_set_value($form['picture']['picture'], FALSE, $form_state);
+  }
+}
+
+
+
+/**
+ * Replacement for template_preprocess_user_picture()
+ * See social_profile_theme_registry_alter()
+ */
+function _social_profile_template_preprocess_user_picture_override(&$variables) {
+
+	template_preprocess_user_picture($variables); // << TODO: merge code of template_preprocess_user_picture and next code
+
+	$account = $variables['account'];
+	$style = !empty($variables['style']) ? $variables['style'] : variable_get('user_picture_style', '');
+
+	if (!empty($account->uid) && !isset($account->picture)) {
+		$acc = user_load($account->uid);
+		$account->picture = $acc->picture;
+	}
+
+	if (!empty($account->uid) && !empty($account->picture->uri)) {
+		$filepath = file_uri_target($account->picture->uri);
+	}
+  else {
+    if ($style) {
+      if (!file_exists($filepath = 'public://social_profile_user_picture_default.png')) { // Copy modules/social_profile/img/userpic.png to public:// directory. This needed for image style.
+        file_unmanaged_copy(variable_get('user_picture_default') , $filepath, FILE_EXISTS_REPLACE);
+      }
+    }
+    else {
+      $filepath = variable_get('user_picture_default');
+    }
+
+  }
+
+	$picture = theme($style ? 'image_style' : 'image', array(
+		'style_name' => $style,
+		'path' => $filepath,
+		'title' => $title = (empty($account->picture->uri) ? t('@user still hasn\'t photo', array('@user' => format_username($account))) : t('@user\'s picture', array('@user' => format_username($account)))),
+		'alt' => $title,
+	));
+
+	if (user_view_access($account)) {//!empty($account->uid) && user_access('access user profiles')) {
+		if (arg(0) . '/' . arg(1) === 'user/' . $account->uid) {
+			if (!empty($account->picture->uri)) {
+				$filepath = file_create_url($account->picture->uri);
+        $variables['user_picture'] = l($picture, $filepath, array('attributes' => array('class' => array('fancybox'), 'title' => t('View user picture.')), 'html' => TRUE));
+			}
+      else {
+        $variables['user_picture'] = $picture;
+      }
+
+		}
+		else {
+			$variables['user_picture'] = l($picture, "user/$account->uid", array('attributes' => array('title' => t('View user profile.')), 'html' => TRUE));
+		}
+	}
+	else {
+		$variables['user_picture'] = $picture;
+	}
+	$variables['user_picture'] .= module_invoke('utils', 'html_debug');
+}
+
+
+/**
+ * Implements hook_imce_exclude(); Defined in _features_imce_scan_directory()
+ * Return array of regexps or one regexp string for hide directories or files in imce window.
+ */
+function social_profile_imce_exclude() {
+	$result =  array(
+		'/^public\:\/\/social_profile_user_picture_default\.png$/'
+	);
+
+	return $result;
+}
+
+
+/**
+* Implements hook_user_view()
+*/
+function social_profile_user_view($account, $view_mode, $langcode) {
+  // Lfm extra field
+	if ($account->lfm) {
+		$account->content['lfm'] = array(
+			'#type' => 'item',
+			'#title' => t('Last First Middle'),
+			'#markup' => check_plain($account->lfm),
+      '#attributes' => array(
+        'class' => array('user-lfm',),
+      ),
+		);
+	}
+	global $user;
+  // Phone extra field
+	if ($account->phone) {
+		$is_private = $account->uid == $user->uid ? FALSE : addons_extra_field_get_settings('user', 'user', 'display', $view_mode, 'phone', 'private');
+		$is_private = isset($is_private) ? $is_private : TRUE;
+		$account->content['phone'] = array(
+			'#type' => 'item',
+			'#title' => t('Phone'),
+			'#markup' => theme('phone', array('phone' => $account->phone)),
+			'#access' => !$is_private || user_access('administer users') || user_access('view user private data'),
+      '#attributes' => array(
+        'class' => array('user-phone',),
+      ),
+		);
+	}
+  // Mail extra field
+	if ($account->mail) {
+		$is_private = $account->uid == $user->uid ? FALSE : addons_extra_field_get_settings('user', 'user', 'display', $view_mode, 'mail', 'private');
+		$is_private = isset($is_private) ? $is_private : TRUE;
+		$account->content['mail'] = array(
+			'#type' => 'item',
+			'#title' => t('Email'),
+			'#markup' => theme('email', array('email' => $account->mail)),
+			'#access' => !$is_private || user_access('administer users') || user_access('view user private data'),
+      '#attributes' => array(
+        'class' => array('user-mail',),
+      ),
+		);
+	}
+	$account->content['#attached']['css'][] = drupal_get_path('module', 'social_profile') . '/css/social_profile.css';
+}
+
+
+/**
+* Implements hook_user_view_alter()
+*/
+function social_profile_user_view_alter(&$build) {
+	if ($image_style = addons_extra_field_get_settings($build['#entity_type'], $build['#bundle'], 'display', $build['#view_mode'], 'user_picture', 'image_style')) {
+		$build['user_picture']['#markup'] = theme('user_picture', array(
+			'account'	=> $build['#account'],
+			'style'		=> $image_style,
+		));
+	}
+}
+
+
+
+/* SEARCH */
+
+/**
+* Implements hook_enable()
+*/
+function social_profile_enable() {
+	// Override user search routines and inherit his settings if exisits
+	$search_settings = variable_get('search_active_modules', array());
+	if (!empty($search_settings['user'])) {
+		$search_settings['social_profile'] = 'social_profile';
+		variable_set('search_active_modules', $search_settings);
+	}
+}
+
+
+/**
+* Implements hook_search_info()
+* Override for user_search_info()
+*/
+function social_profile_search_info() {
+  return array(
+    'title' => 'Users',
+  );
+}
+
+
+/**
+* Implements hook_search_access()
+*  C/P and modified from user.module -> user_search_access()
+*/
+function social_profile_search_access() {
+  return user_access('access user profiles');
+}
+
+
+/**
+* Implements hook_search_execute()
+*  C/P and modified from user.module -> user_search_execute()
+*/
+function social_profile_search_execute($keys = NULL, $conditions = NULL) {
+	// Replace wildcards with MySQL/PostgreSQL wildcards.
+	$keys = preg_replace('!\*+!', '%', $keys);
+	$query = db_select('users')->extend('PagerDefault');
+	$query->fields('users', array('uid'));
+	if (user_access('administer users') || user_access('view user private data')) {
+		// Administrators can also search in the otherwise private email field.
+		$query->fields('users', array('mail'));
+	}
+	$like = '%' . db_like($keys) . '%';
+	$db_or = db_or()->
+		condition('name', $like, 'LIKE')->
+		condition('lfm', $like, 'LIKE')->
+		condition('phone', $like, 'LIKE');
+	if (user_access('administer users') || user_access('view user private data')) {
+		$db_or->condition('mail', $like, 'LIKE');
+	}
+  else {
+		$query->condition(db_or()->condition('status', 0, '>')->condition('uid', $GLOBALS['user']->uid));
+	}
+	$query->condition($db_or);
+	$query->condition('uid', 0, '>');
+	$uids = $query
+		->orderBy('access')
+		->limit(10)
+		->execute()
+		->fetchCol();
+	$accounts = user_load_multiple($uids);
+	$results = array();
+	foreach ($accounts as $account) {
+		$view = user_view($account, 'search');
+		$result = array(
+			'title' => check_plain(format_username($account)),
+			'link' => url('user/' . $account->uid, array('absolute' => TRUE)),
+			'type' => t('User'),
+			'snippet' => drupal_render($view),
+			//'extra' => $account,
+		);
+		$field_extra_fields_get_display = field_extra_fields_get_display('user', 'user', 'search');
+		if ((user_access('administer users') || user_access('view user private data')) && empty($field_extra_fields_get_display['mail']['visible'])) {
+			$result['title'] .= ' (' . ($account->name != $account->mail && $result['title'] != $account->name ? $account->name . ', ' : '') . $account->mail . ')';
+		}
+		$results[] = $result;
+	}
+	return $results;
+}
+
+
+/**
+* Implements hook_entity_info_alter()
+*/
+function social_profile_entity_info_alter(&$entity_info) {
+	// Add search results display mode for user profiles
+	$entity_info['user']['view modes']['search'] = array(
+		'label' => 'Search results',
+		'custom settings' => FALSE,
+	);
+}
+
+
+/**
+* Implements hook_username_alter()
+* Replace display of user login name with L.F.M. if possible
+*/
+function social_profile_username_alter(&$name, $account) {
+	if (!$account) {
+		$account = (object)array('uid' => 0);
+	}
+	$names = &drupal_static(__FUNCTION__, array());
+	$cid = ($account->uid ? $account->uid : $name) . ':' . $account->uid;
+
+	if (!isset($names[$cid])) {
+		$names[$cid] = $name;
+		if (isset($account->lfm)) {
+			if ($account->lfm) {
+				$names[$cid] = _social_profile_limit_words($account->lfm, 3);
+			}
+		} else {
+			if (!empty($account->uid) && ($acc = user_load($account->uid))) {
+				if (!empty($acc->lfm)) {
+					$names[$cid] = _social_profile_limit_words($acc->lfm, 3);
+				}
+        else {
+					if ($account->uid) {
+						if ($name == variable_get('anonymous', t('Anonymous'))) {
+							$names[$cid] = $acc->name;
+						}
+					}
+				}
+			}
+		}
+	}
+	$name = trim($names[$cid]);
+}
+
+
+/**
+* Set limit words count in string
+*/
+function _social_profile_limit_words($string, $words_count) {
+	return preg_replace('/^\s*(([^\s]*\s+){' . $words_count . '})(.*?)$/u', '$1', trim($string));
+}
+
+
+/**
+ * Implements hook_extra_field_formatter_settings_form()
+ * Add preset selection for user_picture.
+ */
+function social_profile_extra_field_formatter_settings_form($entity_type, $bundle, $mode, $field_name, $settings) {
+	if ($entity_type == 'user' && $mode == 'display') {
+		$form = array();
+		if ($field_name == 'user_picture') {
+
+			$style = isset($settings['image_style']) ? $settings['image_style'] : variable_get('user_picture_style', '');
+			$form = array(
+				'image_style' => array(
+					'#type'				=> 'select',
+					'#title'			=> t('Image style'),
+					'#default_value'	=> $style,
+					'#options'			=> image_style_options(FALSE),
+				),
+			);
+		}
+		if ($field_name == 'phone' || $field_name == 'mail') {
+			$form = array(
+				'private' => array(
+					'#type' => 'checkbox',
+					'#title' => t('Private field'),
+					'#description' => t('This information will visible only for owner and sites administrators'),
+					'#default_value'	=> isset($settings['private']) ? $settings['private'] : TRUE,
+				),
+			);
+		}
+		return $form;
+	}
+}
+
+
+/**
+ * Implements hook_extra_field_formatter_settings_summary()
+ */
+function social_profile_extra_field_formatter_settings_summary($entity_type, $bundle, $mode, $field_name, $settings) {
+	if ($entity_type == 'user' && $mode == 'display') {
+		if ($field_name == 'user_picture') {
+			$style = isset($settings['image_style']) ? $settings['image_style'] : variable_get('user_picture_style', '');
+			$summary = t('Image style: @style', array('@style' => $style));
+			return $summary;
+		}
+		if ($field_name == 'phone' || $field_name == 'mail') {
+			return $summary = '<strong>' . t('Private field') . ':</strong> ' . (!isset($settings['private']) || $settings['private'] ? t('yes') : '<strong class="marker">' . t('no') . '</strong>');
+		}
+	}
+}
+
+
+/**
+* Implements hook_form_FORM_ID_alter ()
+*/
+function social_profile_form_ulogin_settings_form_alter(&$form, &$form_state, $form_id) {
+
+
+
+	// Addons for ulogin module.
+	// Supress unused or hard overwritten settings. See also social_profile_init().
+	$form['vtabs']['fset_account']['ulogin_display_name']['#access'] = FALSE; // hook ulogin_username_alter() is supressed by social_profile_module_implements_alter()
+	// Hide already disabled fields
+
+	if ($form['vtabs']['fset_account']['ulogin_email_confirm']['#disabled']) {
+		$form['vtabs']['fset_account']['ulogin_email_confirm']['#access'] = FALSE;
+	}
+	if ($form['vtabs']['fset_account']['ulogin_override_realname']['#disabled']) {
+		$form['vtabs']['fset_account']['ulogin_override_realname']['#access'] = FALSE;
+	}
+
+	$form['vtabs']['fset_other']['ulogin_duplicate_emails']['#access'] = FALSE;
+	$form['vtabs']['fset_fields']['#access'] = FALSE; // See also _social_profile_ulogin_widget_process()
+	$form['vtabs']['fset_account']['ulogin_disable_username_change']['#access'] = FALSE;
+	$form['vtabs']['fset_account']['ulogin_remove_password_fields']['#access'] = FALSE;
+}
+
+
+/**
+* Process 'ulogin_widget' element type. @see social_profile_element_info_alter()
+*/
+function _social_profile_ulogin_widget_process($element, &$form_state, &$complete_form) {
+	$element['#ulogin_fields_required'] = 'email,first_name,last_name,nickname,bdate,sex,photo,photo_big,country,city,phone';
+	$element['#ulogin_fields_optional'] = 'first_name,last_name,nickname,bdate,sex,photo,photo_big,country,city,phone';
+	if (!empty($_COOKIE['Drupal_visitor_ulogin_last_network'])) {
+		$network = $_COOKIE['Drupal_visitor_ulogin_last_network'];
+		$ulogin_providers = explode(',', $element['#ulogin_providers']);
+
+		$ulogin_hidden = explode(',', $element['#ulogin_hidden']);
+		if (in_array($network, $ulogin_providers, TRUE)) {
+			foreach ($ulogin_providers as $idx => $p) {
+				if ($p === $network) {
+					unset($ulogin_providers[$idx]);
+				}
+			}
+			array_unshift($ulogin_providers, $network);
+		}
+    else {
+			if (in_array($network, $ulogin_hidden, TRUE)) {
+				foreach ($ulogin_hidden as $idx => $p) {
+					if ($p === $network) {
+						unset($ulogin_hidden[$idx]);
+					}
+				}
+				array_unshift($ulogin_providers, $network);
+				array_unshift($ulogin_hidden, array_pop($ulogin_providers));
+			}
+		}
+		$element['#ulogin_providers'] = implode(',', $ulogin_providers);
+		$element['#ulogin_hidden'] = implode(',', $ulogin_hidden);
+
+	}
+	return $element;
+}
+
+
+/**
+ * Implements hook_user_presave().
+ */
+function social_profile_user_presave(&$edit, $account, $category) {
+
+	if (!$account->uid && !empty($edit['social_profile_terms_agreed'])) {
+		$edit['data']['social_profile_terms_agreed'] = $edit['social_profile_terms_agreed'] ? 1 : 0;
+	}
+
+	if (module_exists('ulogin')) {
+		global $ulogin_data;
+		// See as example ulogin_user_presave()
+		if (empty($account->uid) && !empty($ulogin_data)) { // the user is being created
+			$lfm = array();
+			if (!empty($ulogin_data['last_name'])) {
+				$lfm[] = $ulogin_data['last_name'];
+			}
+			if (!empty($ulogin_data['first_name'])) {
+				$lfm[] = $ulogin_data['first_name'];
+			}
+			if ($lfm) {
+				$edit['lfm'] = implode(' ', $lfm);
+			}
+			if (!empty($ulogin_data['phone'])) {
+				$edit['phone'] = $ulogin_data['phone'];
+			}
+		}
+	}
+
+}
+
+
+/**
+* Preprocess user profile template
+*/
+function social_profile_preprocess_user_profile(&$variables) {
+	// Wrap user_profile content in special div with dynamic classes (main div in standard user-profile.tpl.php do not support additional classes. @see user-profile.tpl.php)
+	$acc = $variables['elements']['#account'];
+	$classes = array('user-profile-wrapper', 'view-mode-' . $variables['elements']['#view_mode']);
+	if ($acc->uid) {
+		if (isset($acc->access) && module_exists('who')) {
+			$classes[] = who_user_is_online($acc) ? 'user-online' : 'user-offline';
+		}
+		if (isset($acc->status)) {
+			if (!$acc->status) {
+				$classes[] = 'blocked';
+			}
+		}
+	}
+	$variables['user_profile'] += array('#prefix' => '', '#suffix' => '',);
+	$variables['user_profile']['#prefix'] = '<div class="' . implode(' ', $classes) . '">' . module_invoke('utils', 'html_debug') . $variables['user_profile']['#prefix'];
+	$variables['user_profile']['#suffix'] .= '</div>';
+
+}
+
+
+/**
+* Preprocess useranme
+*/
+function social_profile_preprocess_username(&$variables) {
+	if (isset($variables['account']->status) && !$variables['account']->status) {
+	// add 'blocked' class for blocked users
+		$variables['link_attributes']['class'][] = 'blocked';
+		$variables['link_attributes']['title'] = t('Blocked') . (!empty($variables['link_attributes']['title']) ? '. ' . $variables['link_attributes']['title'] : '');
+	}
+}
+
+
+
+
+
+/**
+* Implements hook_query_TAG_alter()
+* @see admin_content_filter_users_form() in admin_content_filter module files
+*/
+function social_profile_query_admin_content_filter_users_alter(QueryAlterableInterface $query) {
+	$order = &$query->getOrderBy();
+	if (!empty($order[$f = 'u.name'])) {
+		$order['u.lfm'] = $order[$f];
+		unset($order[$f]);
+	}
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+

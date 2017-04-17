@@ -1,0 +1,2551 @@
+<?php  //$Id: catalog.module, v 1.0 2011/02/02 15:53:12 admin Exp $
+/**
+ * Copyright 2011-2017 Itinity Ltd. (itinity.ru). All rights reserved.
+ * Licensed under the GNU General Public License, version 2 or later.
+ */
+
+define('CATALOG_DEVMODE_ON', 1);
+
+module_load_include('inc', 'catalog', 'includes/catalog.crud');
+module_load_include('inc', 'catalog', 'includes/catalog.sql_info');
+module_load_include('inc', 'catalog', 'includes/catalog.select_entities');
+module_load_include('inc', 'catalog', 'includes/catalog.exposed');
+
+
+/**
+* Implements hook_init()
+*/
+function catalog_init() {
+  
+}
+
+function catalog_page_alter(&$page) {
+  if (basename($_SERVER['SCRIPT_NAME']) === 'index.php' && arg(0) != 'batch' && !drupal_installation_attempted() && ($val = variable_get('catalog_menu_rebuild_needed', FALSE))) {
+    if (is_array($val)) {
+      foreach ($val as $cid) {
+        if ($catalog_object = catalog_object_load($cid)) {
+          $new = $val;
+          unset($new[$cid]);
+          if ($new) {
+            variable_set('catalog_menu_rebuild_needed', $new);
+          } else {
+            variable_del('catalog_menu_rebuild_needed');
+          }
+          _catalog_object_rebuild_menu_tree($catalog_object);
+          break; // one rebuild per one page render.
+        }
+      }
+    } else {
+      variable_del('catalog_menu_rebuild_needed');
+      _catalog_object_rebuild_menu_tree();
+    }
+  }
+}
+
+/**
+ * Implements hook_menu()
+ */
+function catalog_menu() {
+  $items = array();
+
+  $items['catalog/%catalog_object'] = array(
+    'type' => MENU_CALLBACK,
+    'title callback' => 'entity_label',
+    'title arguments' => array('catalog_object', 1,),
+    'page callback' => 'catalog_page',
+    'page arguments' => array(1),
+    'access callback' => 'catalog_access',
+    'access arguments' => array('view', 1, NULL, NULL),
+    'file' => 'includes/catalog.pages.inc',
+  );
+  $items['catalog/%catalog_object/view'] = array(
+    'title' => 'View',
+    'type' => MENU_DEFAULT_LOCAL_TASK,
+    'weight' => -10,
+  );
+  $items['catalog/%catalog_object/delete'] = array(
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('catalog_object_delete_form', 1),
+    'access callback' => 'catalog_access',
+    'access arguments' => array('update', 1, NULL, NULL,),
+    'type' => MENU_CALLBACK,
+    'file' => 'includes/catalog.admin.inc',
+  );
+  $items['catalog/%catalog_object/edit'] = array(
+    'title' => 'Settings',
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('catalog_object_edit_form', 1),
+    'type' => MENU_LOCAL_TASK,
+    'access callback' => 'catalog_access',
+    'access arguments' => array('update', 1, NULL, NULL, ),
+    'file' => 'includes/catalog.admin.inc',
+  );
+  $items['catalog/%catalog_object/edit/main'] = array(
+    'title' => 'General',
+    'type' => MENU_DEFAULT_LOCAL_TASK,
+    'weight' => -10,
+  );
+  $items['catalog/%catalog_object/edit/filtersorting'] = array(
+    'title' => 'Filter & Sorting',
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('catalog_object_filtersorting_form', 1),
+    'type' => MENU_LOCAL_TASK,
+    'access callback' => 'catalog_access',
+    'access arguments' => array('update', 1, NULL, NULL, ),
+    'file' => 'includes/catalog.admin.inc',
+    'weight' => 10,
+  );
+  $items['catalog/%catalog_object/switch/%'] = array(
+    'type'        => MENU_CALLBACK,
+    'page callback'    => '_catalog_object_switch_mode',
+    'page arguments' => array(1, 3),
+    'access callback' => 'catalog_access',
+    'access arguments' => array('view', 1, NULL, NULL, ),
+  );
+/*    $items['catalog/%catalog_object/filteremember'] = array(
+    'type'        => MENU_CALLBACK,
+    'page callback'    => '_catalog_object_filter_remember',
+    'page arguments' => array(1),
+    'access callback'  => TRUE,
+  );
+*/
+  $path = 'catalog/%catalog_object';
+  $taxonomy_menu = taxonomy_menu();
+  for ($i = 0; $i <= 19; $i++) {
+    $ts = $i ? array_fill(0, $i, '%') : array();
+    $ts[] = '%taxonomy_term';
+
+    $p = $path . '/' . implode('/', $ts);
+    $items[$p] = $items[$path];
+    $items[$p]['page arguments'] = array(1, 1 + count($ts));
+    $items[$p]['load arguments'] = array(1, 1 + count($ts));
+    $items[$p]['access arguments'] = array('view', 1, NULL, 1 + count($ts));
+    $items[$p]['title arguments'] = array('taxonomy_term', 1 + count($ts));
+    $items[$p . '/edit'] = $taxonomy_menu['taxonomy/term/%taxonomy_term/edit'];
+    $items[$p . '/edit']['page arguments'] = array('taxonomy_form_term', 1 + count($ts));
+    $items[$p . '/edit']['access arguments'] = array(1 + count($ts));
+    $items[$p . '/edit']['file path'] = drupal_get_path('module', 'taxonomy');
+  }
+  $items['admin/structure/catalog'] = array(
+    'title' => 'Material lists',
+    'description' => 'Manage material lists',
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('catalog_overview_form'),
+    'access arguments' => array('administer site sections'),
+    'file' => 'includes/catalog.admin.inc',
+  );
+  $items['admin/structure/catalog/list'] = array(
+    'title' => 'All lists',
+    'type' => MENU_DEFAULT_LOCAL_TASK,
+    'weight' => -10,
+  );
+  $items['admin/structure/catalog/add'] = array(
+    'title' => 'Add',
+    'type' => MENU_LOCAL_TASK,
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('catalog_object_edit_form'),
+    'access arguments' => array('administer site sections'),
+    'weight' => -20,
+    'file' => 'includes/catalog.admin.inc',
+  );
+  //@see catalog_admin_menu_map()
+  $items['admin/structure/catalog/%catalog_object'] = array(
+    'type' => MENU_NORMAL_ITEM,
+    'page callback' => '_catalog_menu_redirect',
+    'page arguments' => array(3),
+    'access callback' => 'catalog_access',
+    'access arguments' => array('view', 3, NULL, NULL, ),
+    'title callback' => '_catalog_title_callback',
+    'title arguments' => array(3),
+  );
+  $items['admin/structure/catalog/%catalog_object/edit'] = array(
+    'type' => MENU_NORMAL_ITEM,
+    'title' => 'Edit',
+    'page callback' => '_catalog_menu_redirect',
+    'page arguments' => array(3, 4),
+    'access callback' => 'catalog_access',
+    'access arguments' => array('update', 3, NULL, NULL, ),
+  );
+  $items['admin/structure/catalog/%catalog_object/delete'] = array(
+    'type' => MENU_NORMAL_ITEM,
+    'title' => 'Delete',
+    'page callback' => '_catalog_menu_redirect',
+    'page arguments' => array(3, 4),
+    'access callback' => 'catalog_access',
+    'access arguments' => array('update', 3, NULL, NULL, ),
+  );
+
+  $items['admin/structure/block/add_informer'] = array(
+    // Grabbed and modified from block module
+    'title' => 'Add informer',
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('block_add_block_form', 'add_informer'),
+    'access arguments' => array('administer blocks'),
+    'type' => MENU_LOCAL_ACTION,
+    'file' => 'block.admin.inc',
+    'file path' => drupal_get_path('module', 'block'),
+  );
+
+  $default_theme = variable_get('theme_default', 'bartik');
+  foreach (list_themes() as $key => $theme) {
+    if ($key != $default_theme) {
+      $items['admin/structure/block/list/' . $key . '/add_informer'] = array(
+        // Grabbed and modified from block module
+        'title' => 'Add informer',
+        'page callback' => 'drupal_get_form',
+        'page arguments' => array('block_add_block_form', 'add_informer'),
+        'access arguments' => array('administer blocks'),
+        'type' => MENU_LOCAL_ACTION,
+        'file' => 'block.admin.inc',
+        'file path' => drupal_get_path('module', 'block'),
+      );
+    }
+  }
+  return $items;
+}
+
+
+// action for menu 'catalog/%catalog_object/switch/%'
+function _catalog_object_switch_mode($catalog_object, $mode) {
+  if ($mode) {
+    $params = session_get_cookie_params();
+    // !! temporaly without check mode types
+    setcookie('catalog_mode_' . $catalog_object->cid, $mode, 0, $params['path'], $params['domain'], $params['secure'], $params['httponly']);
+  }
+  //if ($mode=='map') die();
+  drupal_goto();
+}
+
+
+function _catalog_menu_redirect($catalog_object, $op = '') {
+  $uri = entity_uri('catalog_object', $catalog_object);
+  drupal_goto($uri['path'] . ($op ? '/' . $op : ''), array(), 301);
+}
+
+
+/**
+ * Implements hook_admin_menu_map()
+ */
+function catalog_admin_menu_map() {
+  if (!user_access('administer site sections')) {
+    return;
+  }
+
+  $map['admin/structure/catalog/%catalog_object'] = array(
+    'parent' => 'admin/structure/catalog',
+    'arguments' => array(
+      array('%catalog_object' => array_keys(entity_load('catalog_object', FALSE, array('is_block' => 0,)))),
+    ),
+  );
+
+  return $map;
+}
+
+function _catalog_set_menu_rebuild_task($cid = NULL) {
+  $val = variable_get('catalog_menu_rebuild_needed', FALSE);
+  if (!variable_get('menu_rebuild_needed', FALSE)) {
+    variable_set('menu_rebuild_needed', TRUE);
+  }
+  if (!$cid) {
+    variable_set('catalog_menu_rebuild_needed', TRUE);
+  } else {
+    if (!is_array($val)) {
+      $val = array($cid => $cid);
+    } else {
+      $val += array($cid => $cid);
+    }
+    variable_set('catalog_menu_rebuild_needed', $val);
+  }
+}
+
+/**
+ * Implements hook_taxonomy_term_insert()
+ */
+function catalog_taxonomy_term_insert($term) {
+  foreach (catalog_object_load_multiple(FALSE, array('vid' => $term->vid, 'is_block' => FALSE,)) as $catalog_object) {
+    _catalog_set_menu_rebuild_task($catalog_object->cid);
+  }
+  _catalog_term_update_sort_breadcrumb($term->tid);
+}
+
+/**
+ * Implements hook_taxonomy_term_update()
+ */
+function catalog_taxonomy_term_update($term) {
+  foreach (catalog_object_load_multiple(FALSE, array('is_block' => FALSE, 'vid' => $term->original->vid == $term->vid ? $term->vid : array($term->original->vid, $term->vid,))) as $catalog_object) {
+    _catalog_set_menu_rebuild_task($catalog_object->cid);
+  }
+  _catalog_term_update_sort_breadcrumb($term->tid);
+}
+
+
+function _catalog_entity_taxonomy_fields_update_sort_breadcrumb($entity, $type) {
+  list($id, $vid, $bundle) = entity_extract_ids($type, $entity);
+  foreach (field_info_instances($type, $bundle) as $instance) {
+    $field_name = $instance['field_name'];
+    $field = field_info_field($field_name);
+    if ($field['module'] == 'taxonomy' && $field['storage']['type'] == 'field_sql_storage') {
+
+      if (isset($entity->{$field_name})) {
+        $items = $entity->{$field_name};
+      }
+      elseif (isset($entity->original->{$field_name})) {
+        $items = $entity->original->{$field_name};
+      }
+      else {
+        continue;
+      }
+      foreach (field_available_languages($type, $field) as $langcode) {
+        if (!empty($items[$langcode])) {
+          foreach ($items[$langcode] as $item) {
+            _catalog_term_update_sort_breadcrumb($item['tid']);
+          }
+        }
+      }
+    }
+  }
+}
+
+function _catalog_term_update_sort_breadcrumb($tid, $reset = FALSE) {
+  static $updated = array();
+  if ($reset) {
+    $updated = array();
+  }
+  if (isset($updated[$tid])) {
+    return;
+  }
+  $updated[$tid] = $tid;
+  $bread = array();
+  foreach (array_reverse(taxonomy_get_parents_all($tid)) as $term) {
+    if ($term->tid == $tid) {
+      foreach (taxonomy_get_tree($term->vid, $tid) as $t) {
+        if ($t->tid != $tid) {
+          _catalog_term_update_sort_breadcrumb($t->tid);
+        }
+      }
+    }
+    $n = drupal_strtolower($term->name);
+    $n = preg_replace('/\W|_|\s+/u', ' ', $n);
+    $n = preg_replace('/^\s|\s$/u', '', $n);
+    $bread[] = $n;
+  }
+  db_query('UPDATE {taxonomy_entity_index} SET sort_breadcrumb = :bread WHERE tid = :t AND (sort_breadcrumb IS NULL OR sort_breadcrumb <> :bread)', array(':bread' => truncate_utf8(implode('/', $bread), 255), ':t' => $tid));
+}
+
+
+/**
+ * Implements hook_taxonomy_term_delete()
+ */
+function catalog_taxonomy_term_delete($term) {
+  db_query('UPDATE {catalog_objects} SET tid = NULL WHERE tid = :tid AND NOT (tid IS NULL)', array(':tid' => $term->tid));
+  foreach (catalog_object_load_multiple(FALSE, array('vid' => $term->vid, 'is_block' => FALSE,)) as $catalog_object) {
+    _catalog_set_menu_rebuild_task($catalog_object->cid);
+  }
+}
+
+
+/**
+ * Generate all possible links and aliases based on catalog_object filters setting
+ */
+function _catalog_collect_all_links($catalog_object, $reset = FALSE) {
+  $links = array();
+  $uri = 'catalog/' . $catalog_object->cid;
+  $links[$uri] = array($catalog_object->machine_name);
+  if ($reset) {
+    entity_get_controller('taxonomy_term')->resetCache();
+  }
+  if ($catalog_object->bundle) {
+    foreach (taxonomy_get_tree($catalog_object->vid) as $t) {
+      $parents = taxonomy_get_parents_all($t->tid);
+      $pts_a = $pts_t = array();
+      foreach ($parents as $p) {
+        $term_alias = drupal_get_path_alias('taxonomy/term/' . $p->tid);
+        if ($term_alias !== 'taxonomy/term/' . $p->tid) {
+          $pts_a[] = $term_alias;
+        }
+        else {
+          $pts_a[] = $p->tid;
+        }
+        $pts_t[] = $p->tid;
+      }
+      $src = $uri .  '/' . implode('/', array_reverse($pts_t));
+      $links[$src] = array($catalog_object->machine_name);
+      foreach (array_reverse($pts_a) as $p_a) {
+        $links[$src][] = $p_a;
+      }
+    }
+  }
+  return $links;
+}
+
+//
+/**
+ * Save or update all possible catalog_object url aliases in path alias system
+ */
+function _catalog_object_rebuild_aliases($catalog_object) {
+  if (!$catalog_object->is_block) {
+    $links = _catalog_collect_all_links($catalog_object, TRUE);
+    $cid = $catalog_object->cid;
+    foreach (db_query('SELECT * FROM {url_alias} WHERE (source = :eq OR source LIKE :like)',
+      array(':eq' => 'catalog/' . $cid, ':like' => 'catalog/' . $cid . '/%',)) as $r) {
+      $src = $r->source;
+      if (empty($links[$src])) {
+        path_delete(array('source' => $r->source,));
+      }
+      else {
+        if (($alias = implode('/', $links[$src])) != $r->alias) {
+          $r->alias = $alias;
+          $r = (array)$r;
+          path_save($r);
+        }
+      }
+      unset($links[$src]);
+    }
+    foreach ($links as $src => $alias) {
+      $path = array('source' => $src, 'alias' => implode('/', $alias), 'module' => 'catalog',);
+      path_save($path);
+    }
+  }
+}
+
+/**
+ * Build URL chunk, based on node type, vocabulary and term combination
+ */
+function _catalog_build_term_url($tid, $as_alias = FALSE) {
+  static $result = array();
+  $as_alias = (bool)$as_alias;
+  if (!isset($result[$tid][$as_alias])) {
+    $result[$tid][$as_alias] = FALSE;
+    $url = array();
+    foreach (array_reverse(taxonomy_get_parents_all($tid)) as $p) {
+      $url[] = $as_alias && ($alias = drupal_get_path_alias($term_url = 'taxonomy/term/' . $p->tid)) && ($alias !== $term_url) ? $alias : $p->tid;
+    }
+    if ($url) {
+      $result[$tid][$as_alias] = implode('/', $url);
+    }
+  }
+  return $result[$tid][$as_alias];
+}
+
+/**
+ * Implements hook_FORM_ID_form_alter()
+ */
+function catalog_form_menu_reset_item_confirm_alter(&$form, &$form_state, $form_id) {
+  if (!empty($form['item']['#value']['module']) && $form['item']['#value']['module'] == 'catalog') {
+    if (!empty($form['item']['#value']['customized']) && ($catalog_object = menu_get_object('catalog_object', 1, $form['item']['#value']['link_path']))) {
+      if (!arg(2, $form['item']['#value']['link_path'])) {
+        foreach ($form['#submit'] as &$callback) {
+          if ($callback == 'menu_reset_item_confirm_submit') {
+            $callback = '_catalog_menu_reset_item_confirm_submit';
+          }
+        }
+      } else {
+        $form['#submit'][] = '_catalog_menu_reset_item_confirm_submit';
+      }
+      $form['catalog_object'] = array(
+        '#type' => 'value',
+        '#value' => $catalog_object,
+      );
+    }
+  }
+}
+
+function _catalog_menu_reset_item_confirm_submit($form, &$form_state) {
+  $catalog_object = $form_state['values']['catalog_object'];
+  $menu_name = $catalog_object->menu_name;
+
+  if (!$menu_name) {
+    catalog_object_menu_tree_delete($catalog_object->cid);
+  } else {
+    if (!arg(2, $form['item']['#value']['link_path'])) {
+      $form_state['redirect'] = 'admin/structure/menu/manage/' . $menu_name;
+      $link = array(
+        'link_path' => 'catalog/' . $catalog_object->cid,
+        'link_title' => $catalog_object->title,
+        'module' => 'catalog',
+        'menu_name' => $menu_name,
+        'customized' => 0,
+        'mlid' => $form_state['values']['item']['mlid'],
+        'hidden' => 0,
+        'external' => 0,
+        'has_children' => TRUE,
+        'expanded' => 0,
+        'weight' => 0,
+        'options' => array(),
+        'updated' => 0,
+      );
+      menu_link_save($link);
+    }
+    _catalog_set_menu_rebuild_task($catalog_object->cid);
+  }
+}
+
+
+function _catalog_object_rebuild_menu_tree($catalog_object = NULL) {
+
+  if (!empty($catalog_object->is_block)) {
+    return;
+  }
+  if (empty($catalog_object)) {
+    foreach (catalog_object_load_multiple(FALSE, array('is_block' => FALSE,)) as $cid => $catalog_object) {
+      _catalog_object_rebuild_menu_tree($catalog_object);
+    }
+    return;
+  }
+
+  $lock_name = '_catalog_object_rebuild_menu_tree_' . $catalog_object->cid;
+  if (!lock_acquire($lock_name, 5)) {
+    lock_wait($lock_name);
+    _catalog_object_rebuild_menu_tree($catalog_object);
+    return;
+  }
+
+  $menu_name = '';
+  if (empty($catalog_object->menu_name) || !$catalog_object->status) {
+    $result = db_query("SELECT mlid FROM {menu_links} WHERE (link_path LIKE :like ) AND module = 'catalog'",
+      array(':like' => 'catalog/' . $catalog_object->cid . '/%'), array('fetch' => PDO::FETCH_ASSOC));
+    foreach ($result as $m) {
+      menu_link_delete($m['mlid']);
+    }
+    lock_release($lock_name);
+    return;
+  } else {
+    $menu_name = $catalog_object->menu_name;
+  }
+  /*
+
+         1: Pre-build new tree
+
+       */
+
+  $vids = $tids = array();
+
+
+    if (!empty($catalog_object->vid)) {
+      $vids = taxonomy_vocabulary_load_multiple(array($catalog_object->vid));
+    }
+
+    foreach ($vids as $vid => $v) {
+      foreach (taxonomy_get_tree($vid, $catalog_object->tid ? $catalog_object->tid : 0) as $term) {
+        $tids[$term->tid] = $term;
+      }
+    }
+
+  $tree = array();
+  if (count($tids) > 1) {
+    foreach ($tids as $t) {
+      $tree['catalog/' . $catalog_object->cid . '/' . _catalog_build_term_url($t->tid)] = array(
+        //'alias' => $catalog_object->machine_name.'/'. _catalog_build_term_url($nt->type, $t->vid, $t->tid, TRUE),
+        'link_title' => $t->name,
+        'weight' => $t->weight,
+      );
+    }
+  }
+  ksort($tree);
+
+  /*
+         2: Search existing menu-links of current catalog_object and delete non-existent in new tree or not customized links
+
+       */
+
+  foreach (db_query('SELECT mlid, plid, link_path, customized FROM {menu_links} WHERE module = \'catalog\' AND link_path LIKE :like',
+    array(':like' => 'catalog/' . $catalog_object->cid . '/%')) as $l) {
+    if (empty($tree[$l->link_path]) || !$l->customized) { //if not in tree or not customized - delete it
+      menu_link_delete($l->mlid);
+    } else {
+      if ($l->customized) {
+        $tree[$l->link_path] = menu_link_load($l->mlid);
+      }
+    }
+  }
+  /*
+         3: Save links
+       */
+  foreach ($tree as $path => $item) {
+    $item += array(
+      'link_path' => $path,
+      'menu_name' => $menu_name,
+    );
+    $item['module'] = 'catalog';
+    if (empty($item['customized'])) {
+      //find parent here::::
+      //Code & comments grabbed and modified from 'includes/menu.inc'
+
+      // If everything else failed, try to derive the parent from the path
+      // hierarchy. This only makes sense for links derived from menu router
+      // items (ie. from hook_menu()).
+
+      $query = db_select('menu_links');
+      $query->condition('module', 'catalog');
+
+      // Find the parent - it must be unique.
+      $parent_path = $path;
+      do {
+        $parent = FALSE;
+        $parent_path = substr($parent_path, 0, strrpos($parent_path, '/'));
+        $new_query = clone $query;
+        $new_query->condition('link_path', $parent_path);
+        // Only valid if we get a unique result.
+        if ($new_query->countQuery()->execute()->fetchField() == 1) {
+          $parent = $new_query->fields('menu_links')->execute()->fetchAssoc();
+        }
+      }
+      while ($parent === FALSE && $parent_path);
+
+      if (!empty($parent['mlid'])) {
+        $item['plid'] = $parent['mlid'];
+        $item['menu_name'] = $parent['menu_name'];
+      }
+    }
+    unset($item['has_children']);
+    menu_link_save($item);
+  }
+
+  lock_release($lock_name);
+}
+
+
+function _catalog_taxonomy_overview_terms_submit($form, &$form_state) {
+  if (!empty($form['#vocabulary']->vid)) {
+    foreach (catalog_object_load_multiple(FALSE, array('vid' => $form['#vocabulary']->vid, 'is_block' => FALSE,)) as $catalog_object) {
+      _catalog_set_menu_rebuild_task($catalog_object->cid);
+      _catalog_object_rebuild_aliases($catalog_object);
+    }
+  }
+
+  //_catalog_set_menu_rebuild_task();
+  //_catalog_object_rebuild_menu_tree();
+}
+
+/**
+ * Implementats hook_form_FORM_ID_alter()
+ */
+define("NODE_MAX_WEIGHT", 50);
+function catalog_form_node_form_alter(&$form, $form_state) {
+  /// Convert sticky to weight
+
+  // Modify, rename and hide old checkbox (for default js processing titles in vertical tabs, see modules/node/node.js)
+  $form['options']['_fakesticky'] = $form['options']['sticky'];
+  $form['options']['_fakesticky']['#title'] = t('Weight in lists') . ' = ' . (NODE_MAX_WEIGHT - $form['options']['sticky']['#default_value'] + 1);
+  $form['options']['_fakesticky']['#attributes']['style'] = 'display:none';
+  $form['options']['_fakesticky']['#title_display'] = 'invisible';
+  if ($form['options']['sticky']['#default_value']) {
+    $form['options']['_fakesticky']['#attributes']['checked'] = 'checked';
+  }
+  // Make checkbox as select box.
+  $form['options']['sticky']['#type'] = 'select';
+  $form['options']['sticky']['#options'] = array_combine(range(NODE_MAX_WEIGHT, 1), range(1, NODE_MAX_WEIGHT)) +
+                                           array(0 => t('Without weight'));
+  $form['options']['sticky']['#title'] = t('Weight in lists');
+  $form['options']['sticky']['#description'] = t('Materials with this option always have a higher priority in sorting in listings relatively to the materials without the weight.');
+}
+
+/**
+ * Implements hook_form_alter()
+ */
+function catalog_form_alter(&$form, &$form_state, $form_id) {
+  if ($form_id === 'menu_edit_item') {
+    if ($form['module']['#value'] === 'catalog' && !empty($form['link_path']['#value']) && preg_match('/^catalog\/(\d+)\/\d+/', $form['link_path']['#value'], $m)) {
+      $catalog_object = catalog_object_load($m[1]);
+      $form['parent']['#description'] = t('This feature is locked because current menu link is used in autogenerated menu tree. See catalog <a target="_blank" href="@url">%title</a> settings.', array(
+        '@url' => url('catalog/' . $catalog_object->cid),
+        '%title' => $catalog_object->title,
+      ));
+      $form['parent']['#disabled'] = TRUE;
+      $form['parent'] += array(
+        '#suffix' => '',
+      );
+      $form['parent']['#suffix'] .= module_invoke('utils', 'html_gebug');
+    }
+  }
+  if ($form_id === 'menu_overview_form') {
+    foreach (element_children($form) as $key) {
+      if (isset($form[$key]['#item'])) {
+        if ($form[$key]['#item']['module'] === 'catalog') {
+          if (preg_match('/^catalog\/%\//', $form[$key]['#item']['router_path'])) {
+            // Supress drag catalog items
+            $form[$key]['plid']['#access'] = FALSE;
+            $form[$key]['weight']['#access'] = FALSE;
+          }
+          $form[$key]['mlid']['#access'] = FALSE;
+        }
+      }
+    }
+  }
+
+  if ($form_id === 'field_ui_display_overview_form') {
+
+    // Hide description extra field by default in teaser representation of taxonomy term
+    // See also catalog_field_extra_fields_display_alter() hook
+    if ($form['#entity_type'] === 'taxonomy_term' && $form['#view_mode'] === 'teaser') {
+      $field_bundle_settings = field_bundle_settings('taxonomy_term', $form['#bundle']);//variable_get('field_bundle_settings_taxonomy_term__' . $form['#bundle']);
+      if (!isset($field_bundle_settings['extra_fields']['display']['description']['teaser']['visible'])) {
+        $form['fields']['description']['format']['type']['#default_value'] = 'hidden';
+      }
+    }
+    if ($form['#entity_type'] === 'catalog_object') {
+      //IKW: Change page titles on catalog enity field/display forms.
+      if (!empty($form['#bundle'])) {
+        _catalog_change_field_ui_page_title(catalog_object_load($form['#bundle']));
+      }
+
+      if (!empty($form['modes']['view_modes_custom']['#options'])) {
+        //  @see catalog_entity_info()
+        foreach ($form['modes']['view_modes_custom']['#options'] as $idx => $title) {
+          $form['modes']['view_modes_custom']['#options'][$idx] = t($title);
+        }
+        // Hide unused view modes (@see catalog_entity_info())
+        $catalog_object = catalog_object_load($form['#bundle']);
+        if (!$catalog_object->vid && !$catalog_object->tid) {
+          $hide_all = TRUE;
+          foreach ($form['modes']['view_modes_custom']['#options'] as $idx => $title) {
+            if (preg_match('/^level_/', $idx)) {
+              $form['modes']['view_modes_custom'][$idx]['#access'] = FALSE;
+            }
+            else {
+              $hide_all = FALSE;
+            }
+          }
+          if ($hide_all) {
+            $form['modes']['#access'] = FALSE;
+          }
+        }
+      }
+    }
+  }
+  if ($form_id == 'field_ui_field_overview_form') {
+    //IKW: Change page titles on catalog enity field/display forms.
+    if ($form['#entity_type'] === 'catalog_object' && !empty($form['#bundle'])) {
+      _catalog_change_field_ui_page_title(catalog_object_load($form['#bundle']));
+    }
+  }
+
+
+  if ($form_id == 'node_admin_content') {
+
+    $form['admin']['nodes']['#header']['sticky'] = array('data' => t('Weight in lists'), 'field' => 'n.sticky', 'sort' => 'desc');
+    if (!empty($form['admin']['nodes']['#options'])) {
+      foreach ($form['admin']['nodes']['#options'] as $nid => $node) {
+
+        $node = node_load($nid);
+        $form['admin']['nodes']['#options'][$nid]['sticky'] = $node->sticky ? (NODE_MAX_WEIGHT - $node->sticky + 1)
+            : '<small>' . t('Without weight') . '</small>';
+        /*TODO: $form['admin']['nodes']['#options'][$nid]['sticky'] = array(
+            'data' => array(
+              '#type' => 'select',
+              '#options' => array_combine(range(NODE_MAX_WEIGHT, 1), range(1, NODE_MAX_WEIGHT)) + array(0 => t('Without weight')),
+              '#default_value' => $node->sticky ? (NODE_MAX_WEIGHT - $node->sticky + 1) : 0,
+              ),
+            );*/
+      }
+    }
+  }
+  if ($form_id == 'taxonomy_overview_terms') {
+    $form['#submit'][] = '_catalog_taxonomy_overview_terms_submit';
+  }
+  //Add ajax features for menu item edit form
+  if ($form_id == 'menu_edit_item' && $form['link_path']['#type'] == 'textfield') {
+    $wrapper_id = 'catalog-link-path-ajax-wrapper';
+    $form['link_path'] += array(
+      '#prefix' => '',
+      '#suffix' => '',
+    );
+
+    $form['link_path']['#prefix'] = '<div id="' . $wrapper_id . '">';
+    $form['link_path']['#suffix'] .= '</div>';
+    $ajax = array(
+      'callback' => '_catalog_menu_edit_item_ajax',
+      'wrapper' => $wrapper_id,
+      'method' => 'replace',
+      'effect' => 'fade',
+      'event' => 'change',
+    );
+
+    $form['method'] = array(
+      '#type' => 'select',
+      '#title' => t('Method of adding links'),
+      '#options' => array(
+        '' => t('Enter URL'),
+        'node' => t('Content selection'),
+        'catalog_object' => t('Content list selection'),
+      ),
+      '#ajax' => $ajax,
+    );
+
+    $form['method']['#weight'] = 0.00102;
+    $form['link_path']['#weight'] = 0.00103;
+
+    // if IKW:
+    // И, если можно, расположить в этой же строке появляющееся поле Адрес/Содержимое/Раздел сайта
+    // div class="contaner-inline" - not IKW way.
+    // "Такое расположение удобнее":
+    $form['method_prefix'] = array(
+      '#markup' => '<table class="table-wrapper supress-css"><tr><td>',
+      '#weight' => 0.0010199,
+    );
+    $form['method_suffix'] = array(
+      '#markup' => '</td><td>&nbsp;&nbsp;&nbsp;&nbsp;</td>',
+      '#weight' => 0.0010201,
+    );
+    $form['link_path_prefix'] = array(
+      '#markup' => '<td>',
+      '#weight' => 0.0010299,
+    );
+    $form['link_path_suffix'] = array(
+      '#markup' => '</td></tr></table>',
+      '#weight' => 0.0010301,
+    );
+    // endif IKW
+
+
+    $def_method = '';
+    if (empty($form_state['triggering_element']['#name']) || $form_state['triggering_element']['#name'] !== 'method') {
+      $item = menu_get_item($form['link_path']['#default_value']);
+      if ($item['path'] == 'node/%') {
+        $def_method = 'node';
+      }
+      if ($item['path'] == 'catalog/%') {
+        $def_method = 'catalog_object';
+      }
+    } else {
+      $def_method = $form_state['values']['method'];
+    }
+    $form['method']['#default_value'] = $def_method;
+    $link_path = array();
+
+    switch ($def_method) {
+      case 'node':
+        if (!empty($form_state['triggering_element']) && isset($form_state['values']['link_path']) && arg(0, $form_state['values']['link_path']) === 'node' && ($nid = arg(1, $form_state['values']['link_path']))) {
+          $form_state['input']['link_path'] = $nid;
+        }
+        $link_path = array(
+          '#title' => t('Content'),
+          '#type' => 'entity_selector',
+          '#selector_entity_type' => 'node',
+          '#return_field' => 'url',
+          '#default_value' => arg(1, $form['link_path']['#default_value']),
+        );
+        break;
+      case 'catalog_object':
+        $opts = array();
+        foreach (catalog_object_load_multiple(FALSE, array('is_block' => FALSE,)) as $cid => $o) {
+          $opts['catalog/' . $o->cid] = $o->title ? $o->title : $o->machine_name;
+        }
+        if ($opts) {
+        $link_path = array(
+          //'#type' => 'select',
+          '#type' => 'entity_selector',
+          '#selector_entity_type' => 'catalog_object',
+          '#selector_conditions' => array(
+            'is_block' => array(1, '<>',),
+          ),
+          '#return_field' => 'url',
+          '#title' => t('Site section'),
+          //'#options' => array('' => '') + $opts,
+          '#default_value' => preg_replace('/^catalog\/(\d+)/', '$1', $form['link_path']['#default_value']),
+          );
+        }
+        break;
+      default:
+        if (!empty($form_state['triggering_element']) && $form_state['triggering_element']['#name'] === 'method') {
+          $form_state['input']['link_path'] = $form_state['values']['link_path'];
+        }
+    }
+    if ($link_path) {
+      $form['link_path'] = array_merge($form['link_path'], $link_path);
+      unset($form['link_path']['#description']);
+    }
+  }
+
+  if (!empty($form['#node_edit_form'])) {
+    $form['options']['#weight'] = -10;
+  }
+}
+
+function _catalog_menu_edit_item_ajax($form, &$form_state) {
+  return $form['link_path'];
+}
+
+
+/**
+ * Implements hook_theme()
+ */
+function catalog_theme($existing, $type, $theme, $path) {
+  return array(
+    'catalog_overview_form' => array(
+      'render element' => 'form',
+      'file' => 'includes/catalog.admin.inc',
+    ),
+    'catalog_admin_orders_table' => array(
+      'render element' => 'element',
+      'file' => 'includes/catalog.theme.inc',
+    ),
+    'catalog_admin_filtersorting_table' => array(
+      'render element' => 'element',
+      'file' => 'includes/catalog.theme.inc',
+    ),
+    'catalog_list_entities' => array(
+      'variables' => array('catalog_object' => NULL, 'entities' => NULL),
+      'file' => 'includes/catalog.theme.inc',
+    ),
+    'catalog_list_terms' => array(
+      'variables' => array('tree' => NULL, 'catalog_object' => NULL, 'cols' => NULL, 'center' => NULL,),
+      'file' => 'includes/catalog.theme.inc',
+    ),
+    'catalog_mode_switches' => array(
+      'variables' => array('catalog_object' => NULL, 'center' => NULL,),
+      'file' => 'includes/catalog.theme.inc',
+    ),
+    'catalog_filter_exposed' => array(
+      'variables' => array('catalog_object' => NULL),
+      'file' => 'includes/catalog.theme.inc',
+    ),
+  );
+}
+
+function _catalog_set_shared_object_state($cid = NULL, $tid = NULL) {
+  $def = array(
+    'cid' => NULL,
+    'tid' => NULL,
+  );
+  static $state;
+  if (!$state) {
+    $state = $def;
+  }
+  if ($cid || $tid) {
+    $state = array(
+      'cid' => $cid,
+      'tid' => $tid,
+    );
+  }
+  $state = array_filter($state);
+  if ($state) {
+    $state += $def;
+  }
+  return $state;
+}
+
+function _catalog_get_shared_object_state() {
+  return _catalog_set_shared_object_state();
+}
+
+/**
+ * Implements hook_entity_info_alter()
+ */
+function catalog_entity_info_alter(&$entity_info) {
+  //add custom view modes
+  if (!empty($entity_info['node']['view modes'])) {
+    $entity_info['node']['view modes'] += array(
+      'informer' => array(
+        'label' => t('Informer'),
+        'custom settings' => TRUE,
+      ),
+    );
+  }
+  if (!empty($entity_info['user']['view modes'])) {
+    $entity_info['user']['view modes'] += array(
+      'informer' => array(
+        'label' => t('Informer'),
+        'custom settings' => TRUE,
+      ),
+    );
+  }
+  $entity_info['taxonomy_term']['view modes'] += array(
+    'teaser' => array(
+      'label' => t('Teaser'),
+      'custom settings' => TRUE,
+    ),
+  );
+  $entity_info['user']['view modes'] += array(
+    'teaser' => array(
+      'label' => t('Teaser'),
+      'custom settings' => TRUE,
+    ),
+  );
+
+  //Override term URL generation
+  $entity_info['taxonomy_term']['uri callback'] = '_catalog_taxonomy_term_uri';
+}
+
+
+/**
+* Implements hook_entity_view()
+*/
+function catalog_entity_view($entity, $type, $view_mode, $langcode) {
+  if ($type === 'node' && in_array($view_mode, array('full', 'default'), TRUE) && arg(0) . '/' . arg(1) === 'node' . '/' . $entity->nid) {
+    foreach ($entity as $key => $data) {
+      if (!empty($entity->content[$key]) && $key[0] !== '#' && ($lang = field_language('node', $entity, $key, $langcode)) && !empty($entity->{$key}[$lang]) && ($field = reset($entity->{$key}[$lang]))) {
+        if (!empty($field['tid']) && ($info = field_info_field($key)) && $info['type'] === 'taxonomy_term_reference') {
+         
+          $vid = NULL;
+          if (!empty($field['taxonomy_term']->vid)) {
+            $vid = $field['taxonomy_term']->vid;
+          }
+          elseif ($term = taxonomy_term_load($field['tid'])) {
+            $vid = $term->vid;
+          }
+          if ($vid) {
+            $entity->content[$key]['#pre_render'][] = '_catalog_term_field_pre_render';
+          }
+        }
+      }
+    }
+  }
+  if (empty($GLOBALS['_catalog_overrided_q']) && $type !== 'catalog_object' && ($entity_uri = entity_uri($type, $entity))) {
+    if (preg_match('/^' . preg_quote($entity_uri['path'], '/') . '($|\/)/', $_GET['q'])) { //we in entity page
+
+      list($id, $vid, $bundle) = entity_extract_ids($type, $entity);
+      // Find parent catalog_object candidate for current displayed entity
+
+      // Get terms used in node. This is primary symptom for detection parent catalog_object
+      static $tids = array();
+      $entity_key = $type . ':' . $id;
+      if (!isset($tids[$entity_key])) {
+        $tids[$entity_key] = db_query('SELECT tid FROM {taxonomy_entity_index} WHERE entity_type = :entity_type AND entity_id = :entity_id', array(':entity_type' => $type, ':entity_id' => $id,))->fetchCol();
+        $tids[$entity_key] = drupal_map_assoc($tids[$entity_key]);
+      }
+
+      $cids = drupal_map_assoc(db_query('SELECT cid FROM {catalog_objects} WHERE NOT is_block AND status AND entity_type = :t AND bundle = :b', array(':t' => $type, ':b' => $bundle,))->fetchCol());
+      if (!empty($_COOKIE['Drupal_visitor_catalog_id']) && !empty($cids[$_COOKIE['Drupal_visitor_catalog_id']])) {
+        array($_COOKIE['Drupal_visitor_catalog_id'] => $_COOKIE['Drupal_visitor_catalog_id']) + $cids;
+      }
+      if ($tids[$entity_key]) {
+        $cids = drupal_map_assoc(db_query('SELECT cid FROM {catalog_objects} WHERE tid IN (:t) AND NOT is_block AND status', array(':t' => $tids[$entity_key], ))->fetchCol()) + $cids;
+      }
+
+      if ($tids[$entity_key] || $cids) {
+        // Select catalog objects menu items
+        $query = db_select('menu_links', 'ml')
+              ->fields('ml')
+              ->condition('ml.module', 'catalog')
+              ->range(NULL, 1);
+        if ($tids[$entity_key]) {
+            $query->condition('link_path', '^catalog\/(' . ($cids ? implode('|', $cids) : '\d+') . ')((' . ($tids[$entity_key] ? '(\/[0-9]+)*\/(' . implode('|', $tids[$entity_key]) . ')(\/|$)' : '\/') . ')|$)', 'REGEXP');
+          if ($cids) {
+            $query->orderBy('link_path LIKE \'catalog/' . reset($cids) . '/%\' ', 'DESC');
+          }
+          $query->orderBy('link_path REGEXP(\'[0-9]\/(' . implode('|', $tids[$entity_key]) . ')(\/|$)\')', 'DESC');
+          $query->orderBy('link_path', 'ASC');
+        }
+        else {
+          $in = array();
+          foreach ($cids as $cid) {
+            $in[] = 'catalog/' . $cid;
+          }
+          $query->condition('link_path', $in);
+        }
+        if (($link = $query->execute()->fetchAssoc()) && ($catalog_object = catalog_object_load(arg(1, $link['link_path']))) && !$catalog_object->is_block) {
+          if (($tids[$entity_key] || (!$catalog_object->tid && !$catalog_object->vid)) && ($tids[$entity_key] || ($catalog_object->entity_type == $type && $catalog_object->bundle == $bundle))) {
+            if (preg_match('/^catalog\/\d+\/.*?(\d+)$/', $link['link_path'], $m)) {
+              $catalog_object->current_params['term'] = taxonomy_term_load($m[1]);
+            }
+            if (_catalog_select_entities($catalog_object, NULL, NULL, $id)) {
+              $menu_names = menu_get_active_menu_names();
+              if (!in_array($link['menu_name'], $menu_names)) {
+                $menu_names[] = $link['menu_name'];
+                menu_set_active_menu_names($menu_names);
+              }
+              $q = $_GET['q'];
+
+              $stored_title = drupal_get_title();
+              menu_set_active_item($link['link_path']);
+              menu_set_active_trail();
+              drupal_set_title($stored_title, PASS_THROUGH);
+              foreach ($menu_names as $m) {
+                menu_tree_set_path($m, $link['link_path']);
+              }
+              $_GET['q'] = $q;
+              $GLOBALS['_catalog_overrided_q'] = $link['link_path'];
+
+              _catalog_set_shared_object_state(arg(1, $link['link_path']), arg(count(arg(NULL, $link['link_path'])) - 1, $link['link_path']));
+              // See also catalog_block_view_alter()              
+            }
+
+          }
+        }
+      }
+    }
+  }
+}
+
+
+/// @TODO: IN CONSTRUCTION:
+function catalog_find_preferred_object($for_entity_type = NULL, $for_entity = NULL, $vid = NULL, $tids = array()) {
+  
+  $query = db_select('catalog_objects', 'c')->fields('c', array('cid'));
+  $query->condition('c.is_block', 0);
+  
+  if ($for_entity_type) {
+    $query->condition('c.entity_type', $for_entity_type);
+    if ($for_entity) {
+      list(,,$bundle) = entity_extract_ids($for_entity_type, $for_entity);
+      $query->condition('c.bundle', $bundle);
+    }
+  }
+
+  $last_cid = !empty($_COOKIE['Drupal_visitor_catalog_id']) ? $_COOKIE['Drupal_visitor_catalog_id'] : NULL;
+  if ($last_cid) {
+    $query->addExpression('-FIELD(c.cid, :last_cid)', 'last_cid', array(':last_cid' => $last_cid));
+    $query->orderBy('last_cid');
+  }
+  if ($tids) {
+    $vids = array();
+    foreach (taxonomy_get_parents_all(reset($tids)) as $t) {
+      $tids[] = $t->tid;
+      $vids[$t->vid] = $t->vid;
+    }
+    $query->condition(db_or()->condition('c.tid', $tids)->condition('c.vid', $vids));
+    
+  }
+  elseif ($vid) {
+    $query->condition('c.vid', $vid);
+  }
+  if ($cids = $query->range(0, 1)->execute()->fetchCol()) {
+    return catalog_object_load(reset($cids));
+  }
+  
+}
+
+/**
+* Prerender for term fields
+* @see catalog_entity_view()
+*/
+function _catalog_term_field_pre_render($element) {
+  if (($state = _catalog_get_shared_object_state()) && $state['cid']) {
+    foreach (element_children($element) as $key) {
+      if (!empty($element[$key]['#options']['entity']->tid) && ($uri = _catalog_build_term_url($element[$key]['#options']['entity']->tid))) {
+        $element[$key]['#href'] = 'catalog/' . $state['cid'] . '/' . $uri;
+      }
+      elseif (!empty($element[$key]['#links'])) { // breadcrumbed_link. @see addons_field_formatter_view()
+        foreach ($element[$key]['#links'] as $idx => $link) {
+          if (!empty($link['href']) && ($uri = _catalog_build_term_url($link['entity']->tid))) {
+            $element[$key]['#links'][$idx]['href'] = 'catalog/' . $state['cid'] . '/' . $uri;
+          }
+        }
+      }
+    }
+  }
+  return $element;
+}
+
+
+
+/**
+* Implements hook_block_view_alter()
+*/
+function catalog_block_view_alter(&$data, $block) {
+  // Wrap renderable menus into pre- and post- renders
+  // @see catalog_entity_view()
+  if (!empty($GLOBALS['_catalog_overrided_q']) && !empty($data['content']) && utils_block_contains_menu($block->module, $block->delta)) {
+    $data['content']['#pre_render'][] = '_catalog_menu_block_pre_render';
+    $data['content']['#post_render'][] = '_catalog_menu_block_post_render';
+  }
+}
+
+/**
+* Helper function.
+* Override real $_GET['q']. Needs for add 'active' class in l() function. This will restored in finally _catalog_menu_block_post_render() function.
+* @see catalog_block_view_alter()
+*/
+function _catalog_menu_block_pre_render($elements) {
+  $GLOBALS['_catalog_real_q'] = $_GET['q'];
+  $_GET['q'] = $GLOBALS['_catalog_overrided_q'];
+  return $elements;
+}
+
+
+/**
+* Restore real $_GET['q']
+* @see catalog_block_view_alter(), _catalog_menu_block_pre_render()
+*/
+function _catalog_menu_block_post_render($data) {
+  $_GET['q'] = $GLOBALS['_catalog_real_q'];
+  return $data;
+}
+
+
+
+/**
+* Implements hook_entity_prepare_view()
+*/
+function catalog_entity_prepare_view($entities, $type, $langcode) {
+  if (count($entities) == 1) { // Single entity view, we in entity page or not?
+    $entity = reset($entities);
+
+  }
+}
+
+
+/**
+* Override term URL generation
+* See also catalog_entity_info_alter()
+*/
+function _catalog_taxonomy_term_uri($term) {
+  $state = _catalog_get_shared_object_state();
+  if (!empty($state['cid'])) {
+
+
+
+    static $catalog_object;
+    if (!isset($catalog_object) || $state['cid'] != $catalog_object->cid) {
+      $catalog_object = catalog_object_load($state['cid']);
+    }
+
+    // Fix for term field displayed in non-native catalog context. Find preferred catalog for this term and use it for url if possible
+    if ($catalog_object->vid != $term->vid) {
+      static $overrided = array();
+      if (!isset($overrided[$state['cid']])) {
+        $overrided[$state['cid']] = 0;
+        foreach (db_query('SELECT * FROM {catalog_objects} WHERE NOT is_block AND status AND (vid = :vid OR tid = :tid) AND entity_type = :entity_type AND bundle = :bundle AND cid <> :cid',
+        array(
+        ':vid' => $term->vid,
+        ':tid' => $term->tid,
+        ':entity_type' => $catalog_object->entity_type,
+        ':bundle' => $catalog_object->bundle,
+        ':cid' => $catalog_object->cid,
+        )) as $r) {
+          $overrided[$state['cid']] = $r->cid;
+          break;
+        }
+      }
+      $state['cid'] = $overrided[$state['cid']] ? $overrided[$state['cid']] : $state['cid'];
+    }
+
+
+
+    if ($uri = _catalog_build_term_url($term->tid)) {
+      return array('path' => 'catalog/' . $state['cid'] . '/' . $uri);
+    }
+  }
+  // in construction elseif ($catalog_object = catalog_find_preferred_object(NULL, NULL, NULL, array($term->tid))) {
+  // in construction   if ($uri = _catalog_build_term_url($term->tid)) {
+  // in construction     return array('path' => 'catalog/' . $catalog_object->cid . '/' . $uri);
+  // in construction   }
+  // in construction }
+  return taxonomy_term_uri($term);
+}
+
+
+/**
+ * Implements hook_node_type_update()
+ */
+function catalog_node_type_update($info) {
+  if (!empty($info->old_type) && $info->old_type != $info->type) {
+    db_update('catalog_objects')
+      ->fields(array('bundle' => $info->type))
+      ->condition('entity_type', 'node')
+      ->condition('bundle', $info->old_type)
+      ->execute();
+  }
+}
+
+
+
+/**
+ * Implements hook_taxonomy_vocabulary_delete()
+ */
+function catalog_taxonomy_vocabulary_delete($vocabulary) {
+  db_update('catalog_objects')
+    ->fields(array(
+      'vid'  => 0,
+    ))
+    ->condition('vid', $vocabulary->vid)
+    ->execute();
+  foreach (catalog_object_load_multiple(FALSE, array('is_block' => FALSE,)) as $catalog_object) {
+    _catalog_object_rebuild_aliases($catalog_object);
+    _catalog_set_menu_rebuild_task($catalog_object->cid);
+  }
+}
+
+/**
+ * Implements hook_taxonomy_vocabulary_update()
+ */
+function catalog_taxonomy_vocabulary_update($vocabulary) {
+  foreach (catalog_object_load_multiple(FALSE, array('is_block' => FALSE,)) as $catalog_object) {
+    _catalog_object_rebuild_aliases($catalog_object);
+    _catalog_set_menu_rebuild_task($catalog_object->cid);
+  }
+}
+
+
+
+/**
+* Implements hook_preprocess_node()
+*/
+function catalog_preprocess_node(&$variables) {
+  // Remove contextual links in informer mode
+  if ($variables['view_mode'] == 'informer') {
+    unset($variables['elements']['#contextual_links']);
+    if (!in_array('node-teaser', $variables['classes_array'])) {
+      $variables['classes_array'][] = 'node-teaser';
+    }
+  }
+}
+
+
+
+/**
+* Implements hook_entity_view_alter()
+*/
+function catalog_entity_view_alter(&$build, $entity_type) {
+  if ($entity_type == 'user') {
+    $entity = $build['#account'];
+
+  }
+  else {
+    $entity = isset($build['#' . $build['#entity_type']]) ? $build['#' . $build['#entity_type']] : (isset($build['#entity']) ? $build['#entity'] : NULL);
+  }
+  ////// split entity by rows for rendering in table mode
+  if (!empty($build['#entity_type']) && !empty($entity->_current_catalog)) {
+    $catalog_object = $entity->_current_catalog;
+    if ($catalog_object->materials_settings['mode'] === 'table') {
+      if (!isset($catalog_object->content['#header'])) {
+        $catalog_object->content['#header'] = array();
+      }
+      foreach (element_get_visible_children($build) as $key) {
+        if (is_array($build[$key]) && (!field_info_field($key) || field_get_items($entity_type, $entity, $key))) {
+          if (isset($build[$key]['#title'])) {
+            $catalog_object->content['#header'][$key] = $build[$key]['#title'];
+            if (!empty($build[$key]['#type'])) {
+              if ($build[$key]['#type'] === 'user_profile_category') {
+                $build[$key]['#title'] = '';  //'#title_display' = 'invisible' do not work in 'user_profile_category' element type
+              } else {
+                if (!in_array($build[$key]['#type'], array('checkbox', 'select', ))) {
+                  $build[$key][$key]['#title_display'] = 'invisible';
+                }
+              }
+            } else {
+              $build[$key]['#label_display'] = 'hidden';
+            }
+          }  else {
+            $catalog_object->content['#header'][$key] = $key;
+          }
+        }
+      }
+    }
+  }
+}
+
+/**
+* Implements hook_flush_caches()
+*/
+function catalog_flush_caches() {
+  return array('cache_catalog_entities');
+}
+
+function _catalog_cache_clear() {
+  db_truncate('cache_catalog_entities')->execute();
+}
+
+function catalog_entity_update($entity, $type) {
+  if ($type == 'node' || $type == 'user') {
+    _catalog_cache_clear();
+  }
+  _catalog_entity_taxonomy_fields_update_sort_breadcrumb($entity, $type);
+}
+
+function catalog_entity_delete($entity, $type) {
+  if ($type == 'node' || $type == 'user') {
+    _catalog_cache_clear();
+  }
+}
+
+function catalog_entity_insert($entity, $type) {
+  if ($type == 'node' || $type == 'user') {
+    _catalog_cache_clear();
+  }
+  _catalog_entity_taxonomy_fields_update_sort_breadcrumb($entity, $type);
+}
+
+/**
+* Implements hook_permission()
+*/
+function catalog_permission() {
+  return array(
+    'administer site sections' => array(
+      'title' => t('Administer content lists'),
+    ),
+  );
+}
+
+
+/**
+* Implements hook_menu_alter()
+*/
+function catalog_menu_alter(&$menu) {
+  foreach (array(
+    'taxonomy/term/%taxonomy_term', 'admin/structure/taxonomy/%taxonomy_vocabulary_machine_name', 'admin/structure/types/manage/%node_type'
+  ) as $path) {
+    if (!empty($menu[$path . '/edit']) && !isset($menu[$path . '/edit']['context'])) {
+      $menu[$path . '/edit']['context'] = MENU_CONTEXT_INLINE | MENU_LOCAL_TASK;
+    }
+  }
+}
+
+
+/**
+* Access callback for /catalog/%catalog_object* and /admin/structure/catalog*
+*/
+function catalog_access($op, $catalog_object, $account = NULL, $term = NULL) {
+  if (!$account) {
+    global $user;
+    $account = $user;
+  }
+  if (user_access('administer site sections', $account)) {
+    return TRUE;
+  }
+  if (!user_access('access content', $account)) {
+    return FALSE;
+  }
+  if ((!empty($catalog_object->status) || !empty($catalog_object->is_block)) && $op === 'view') {
+    if ($catalog_object->entity_type === 'user') {
+      if (!user_access('administer permissions', $account) && !user_access('administer users', $account) && !user_access('access user profiles', $account)) {
+        return FALSE;
+      }
+    }
+    elseif ($catalog_object->entity_type === 'node') {
+      if (user_access('bypass node access', $account)) {
+        return TRUE;
+      }
+      if (!empty($catalog_object->bundle)) {
+        if (user_access('edit any ' . $catalog_object->bundle . ' content', $account)) {
+          return TRUE;
+        }
+        if (module_exists('prevention') && user_denied('view ' . $catalog_object->bundle . ' node type')) {
+          return FALSE;
+        }
+      }      
+    }
+    
+    // check for access to view terms where catalog show specified term
+    if ($term && !taxonomy_term_view_access($term, $account)) {
+      return FALSE;
+    }
+    return TRUE;
+  }
+  return FALSE;
+}
+
+
+function catalog_object_menu_tree_delete($cid) {
+  // Delete all menu module links that point to this catalog object.
+  $result = db_query("SELECT mlid FROM {menu_links} WHERE ( link_path = :path OR link_path LIKE :like ) AND module = 'catalog'",
+    array(':path' => 'catalog/' . $cid, ':like' => 'catalog/' . $cid . '/%'), array('fetch' => PDO::FETCH_ASSOC));
+  foreach ($result as $m) {
+    menu_link_delete($m['mlid']);
+  }
+}
+
+
+/**
+* Implements hook_admin_paths
+*/
+function catalog_admin_paths() {
+  $paths = array();
+  foreach (array('edit', 'delete', 'display', 'fields',) as $p) {
+    $paths += array(
+      'catalog/*/' . $p => TRUE,
+      'catalog/*/' . $p . '/*' => TRUE,
+    );
+  }
+  return $paths;
+}
+
+
+function catalog_object_machine_name_load($name) {
+  $objects = catalog_object_load_multiple(NULL, array('machine_name' => $name));
+  $catalog_object = reset($objects);
+  return $catalog_object ? $catalog_object : FALSE;
+}
+
+/**
+* Uri callback for catalog object entity. @see catalog_entity_info()
+*/
+function catalog_uri($catalog_object) {
+  return array(
+    'path' => 'catalog/' . $catalog_object->cid,
+  );
+}
+
+/**
+* Implements hook_entity_info()
+*/
+function catalog_entity_info() {
+  $return['catalog_object'] = array(
+    'label' => t('Content list'),
+    'controller class' => 'CatalogObjectController', // @see catalog.object.controller.inc
+    'base table' => 'catalog_objects',
+    'uri callback' => 'catalog_uri',
+    'fieldable' => TRUE,
+    'entity keys' => array(
+      'id' => 'cid',
+      //'revision' => 'cid',
+      'label' => 'title',
+      'bundle' => 'cid',
+    ),
+    'bundle keys' => array(
+      'bundle' => 'cid',
+    ),
+    'bundles' => array(),
+    'view modes' => array(
+      /*'rss' => array(
+        'label' => t('RSS feed'),
+        'custom settings' => TRUE,
+      ),*/
+    ),
+  );
+  for ($i = 0; $i < 10; $i++) {
+    $return['catalog_object']['view modes']['level_' . $i] = array(
+      'label' => $i <= 8 ? 'Category view on level ' . $i : 'Category view on level ' . $i . ' and more',
+    );
+  }
+  foreach (db_query('SELECT * FROM {catalog_objects} c WHERE NOT is_block') as $catalog_object) {
+    $return['catalog_object']['bundles'][$catalog_object->cid] = array(
+      'label' => $catalog_object->title,
+      'is_block' => $catalog_object->is_block,
+      'admin' => array(
+        'path' => 'catalog/%catalog_object',
+        'real path' => 'catalog/' . $catalog_object->cid . '',
+        'bundle argument' => 1,
+        'access arguments' => array('administer site sections'),
+      ),
+    );
+  }
+  return $return;
+}
+
+
+/**
+* Implements hook_seo_entity_supported() defined in SEO module
+*/
+function catalog_seo_entity_supported($entity_type, $entity = NULL, $bundle = NULL, $bundle_info = NULL, $meta_type = 'meta' /* meta or geo*/) {
+  if ($entity_type == 'catalog_object') {
+    if (empty($entity->is_block) && empty($bundle_info['is_block'])) {
+      return TRUE;
+    }
+  }
+}
+
+
+/**
+* Implements hook_field_extra_fields()
+*/
+function catalog_field_extra_fields() {
+  $return = array();
+
+  //CATALOG extra fields
+  $info = entity_get_info('catalog_object');
+  foreach ($info['bundles'] as $cid => $data) {
+    $catalog_object = catalog_object_load($cid);
+
+    $return['catalog_object'][$cid] = array(
+      'form' => array(
+        'title' => array(
+          'label' => t('Title'),
+          'description' => t('Content list title and machine name'),
+          'weight' => -10,
+        ),
+        'description' => array(
+          'label' => t('Catalog description'),
+          'description' => t('Text field contains information about this list'),
+          'weight' => -9.5,
+          ),
+        'filters' => array(
+          'label' => t('Content selection'),
+          'description' => t('Content selector settings'),
+          'weight' => -9,
+        ),
+        /*'settings' => array(
+          'label' => t('View setup'),
+          'description' => t('Display settings for aggregated items'),
+          'weight' => -8,
+        ),*/
+        /*'terms_settings' => array(
+          'label' => 'DEPRECATED ' . t('Terms view setup'),
+          'description' => t('Display settings for terms view'),
+          'weight' => -7,
+        ),*/
+        'menu' => array(
+          'label' => t('Menu settings'),
+          'description' => t('Menu settings'),
+          'weight' => -6,
+        ),
+      ),
+      'display' => array(
+        'description' => array(
+          'label' => t('Catalog description'),
+          'description' => t('Text field contains information about this list'),
+          'label_display' => 'hidden',
+          'weight' => -1,
+        ),
+        'object' => array(
+          'label' => t('Current category'),
+          'description' => t('Representation of current category'),
+          'weight' => 0,
+        ),
+        'terms' => array(
+          'label' => t('Children categories'),
+          'label_display' => 'hidden',
+          'description' => t('List of categories'),
+          'weight' => 1,
+          /*'default_display' => array(
+            'default' => array(
+              'visible' => FALSE,
+            ),
+          ),*/
+        ),
+        'pager1' => array(
+          'label' => t('Pager'),
+          'description' => t('Pagination tool'),
+          'weight' => 2,
+          'visible' => FALSE,
+        ),
+        'sort_links' => array(
+          'label' => t('Sorting control'),
+          'description' => t('List sorting tool'),
+          'label_display' => 'inline',
+          'weight' => 2.1,
+          'visible' => TRUE,
+        ),
+        'materials' => array(
+          'label' => ($catalog_object->entity_type === 'node' ? t('Materials') : ($catalog_object->entity_type === 'user' ? t('Users') : t('Content'))),
+          'description' =>
+            ($catalog_object->entity_type === 'node'
+            ? t('%type type materials in <a href="@url" target="_blank">"teaser" view mode</a>', array(
+              '@url' => url('admin/structure/types/manage/' . $catalog_object->bundle . '/display/teaser'),
+              '%type' => node_type_get_name($catalog_object->bundle),
+            ))
+            : ($catalog_object->entity_type === 'user' ? t('Users in <a href="@url" target="_blank">"teaser" view mode</a>', array(
+              '@url' => url('admin/config/people/accounts/display/teaser'),
+            )) : t('Selected materials'))),
+          'label_display' => 'hidden',
+          'weight' => 3,
+        ),
+        'pager2' => array(
+          'label' => t('Pager copy'),
+          'description' => t('Pagination tool') . '. ' . t('This copy can be used for placing pagers as above, so below of the list.'),
+          'weight' => 4,
+        ),
+        'admin_links' => array(
+          'label' => t('Links for adding term or material'),
+          'description' => '',
+          'weight' => 5,
+        ),
+      ),
+    );
+    if ($catalog_object->entity_type === 'node') {
+      $return['catalog_object'][$cid]['display']['feed'] = array(
+          'label' => t('Feed icon'),
+          'description' => t('RSS feed'),
+          'weight' => 6,
+          'default_display' => array(
+            'default' => array(
+              'visible' => FALSE,// IKW
+            ),
+          ),
+      );
+    }
+    if (!$catalog_object->vid && !$catalog_object->tid) {
+      unset($return['catalog_object'][$cid]['display']['object'], $return['catalog_object'][$cid]['display']['terms']);
+    }
+    else {
+
+      if (!$catalog_object->vid) {
+        if ($t = taxonomy_term_load($catalog_object->tid)) {
+          $v = taxonomy_vocabulary_load($t->vid);
+        }
+      }
+      else {
+        $v = taxonomy_vocabulary_load($catalog_object->vid);
+      }
+      if ($v) {
+        $field_view_mode_settings = field_view_mode_settings('taxonomy_term', $v->machine_name);
+        $return['catalog_object'][$cid]['display']['object']['description'] = t('Representation of current category in <a href="@url" target="_blank">full mode</a>', array(
+          '@url' => url('admin/structure/taxonomy/' . $v->machine_name . '/display' . (!empty($field_view_mode_settings['full']['custom_settings']) ? '/full' : '')),
+        ));
+        // Список категорий словаря "куку" или подкатегорий в зависимости от текущего состояния
+        $return['catalog_object'][$cid]['display']['terms']['description'] = t('List of %vocabulary categories or subcategories according to current state, in <a href="@url" target="_blank">"teaser" view mode</a>', array(
+          '%vocabulary' => $v->name,
+          '@url' => url('admin/structure/taxonomy/' . $v->machine_name . '/display/teaser'),
+        ));
+      }
+    }
+  }
+  return $return;
+}
+
+
+/**
+* Implements hook_field_extra_fields_display_alter()
+*/
+function catalog_field_extra_fields_display_alter(&$displays, $context) {
+  if ($context['entity_type'] === 'taxonomy_term' && $context['view_mode'] === 'teaser') {
+    // Hide description extra field by default in teaser representation of taxonomy term
+    // See also catalog_form_alter() hook --->>> $form_id === 'field_ui_display_overview_form' condition.
+    $field_bundle_settings = field_bundle_settings('taxonomy_term', $context['bundle']);//(variable_get('field_bundle_settings_taxonomy_term__' . $context['bundle']));
+    if (!isset($field_bundle_settings['extra_fields']['display']['description']['teaser']['visible'])) {
+      $displays['description']['visible'] = FALSE;
+    }
+  }
+}
+
+
+/**
+* Implements hook_block_info()
+*/
+function catalog_block_info() {
+
+  $info = array();
+  // Get all of catalog objects that implements blocks
+  foreach (catalog_object_load_multiple(FALSE, array('is_block' => TRUE,)) as $catalog_object) {
+    $info[$catalog_object->cid] = array(
+      'info' => $catalog_object->title . ' (' . t('informer') . ')',
+      'cache' => !empty($catalog_object->orders['random']['enabled']) ? DRUPAL_NO_CACHE : DRUPAL_CACHE_PER_USER + DRUPAL_CACHE_PER_PAGE,
+    );
+  }
+
+  $info['filter'] = array(
+    'info' => t('User filter for materials lists'),
+    'cache' => DRUPAL_NO_CACHE,
+    'region' => 'content',
+    'status' => 1,
+    'weight' => -1,
+  );
+  if ($r = (db_query('SELECT region, weight FROM {block} WHERE module = \'system\' AND delta = \'main\' AND theme =:t', array(':t' => $GLOBALS['theme_key']))->fetch())) {
+    $info['filter']['region'] = $r->region;
+    $info['filter']['weight'] = $r->weight - 1;
+  }
+  return $info;
+}
+
+
+/**
+* Implements hook_block_view()
+*/
+function catalog_block_view($delta = '') {
+  $block = array();
+  // User filters block:
+  if ($delta === 'filter') {
+    if (!path_is_admin(current_path()) && ($catalog_object = menu_get_object('catalog_object'))) {
+      $level = count(arg()) - 2;
+      $view_mode = 'level_' . min($level, 9);
+      $field_extra_fields_get_display = field_extra_fields_get_display('catalog_object', $catalog_object->cid, $view_mode);
+      if ($field_extra_fields_get_display['materials']['visible']) {
+        $exposed = FALSE;
+        foreach ($catalog_object->filters as $method => $data)  {
+          if (!empty($data['exposed'])) {
+            $exposed = TRUE;
+            break;
+          }
+        }
+        if ($exposed) {
+          $block['subject'] = NULL;
+          $block['content']['catalog_filter_exposed_form'] = drupal_get_form('catalog_filter_exposed_form', $catalog_object);
+        }
+      }
+    }
+  }
+  // Informer blocks:
+  elseif (($catalog_object = catalog_object_load($delta)) && catalog_access('view', $catalog_object)) {
+    /*
+    $access = TRUE;
+    if ($catalog_object->entity_type === 'user') {
+      if (!user_access('access user profiles')) {
+        $access = FALSE;
+      }
+    }
+    if ($catalog_object->entity_type === 'node') {
+      if (module_exists('prevention') && user_denied('view ' . $catalog_object->bundle . ' node type')) {
+        $access = FALSE;
+      }
+
+    }*/
+
+    //TODO:  Old code legacy. This params used in many places. We initialize it here. Move this into separated function or $catalog_object->current_params.
+    // Where is block, use direct data from {catalog_objects} table, else we get settings from extra fields @see catalog_extra_field_formatter_settings_form()
+  //  $catalog_object->materials_settings = isset($catalog_object->block_settings['materials_settings']) ? $catalog_object->block_settings['materials_settings'] : 0;
+
+        //variable_set('zhahaha_' . $catalog_object->cid, $catalog_object->cid);
+    $catalog_object->materials_settings = $catalog_object->block_settings;
+       //  *************** end temp ******************
+    if (!isset($catalog_object->materials_settings['mode'])) {
+      $catalog_object->materials_settings['mode'] = 'list';
+    }
+   // if (empty($catalog_object->materials_settings['modes']['list']['settings'])) {
+   //   $catalog_object->materials_settings['modes']['list']['settings'] = array(
+   //     'cols' => 1,
+   //     'rows' => 10,
+   //   );
+   // }
+    if ($ids = _catalog_select_entities($catalog_object)) {
+
+      $block['subject'] = $catalog_object->title;
+
+      $load_fn = $catalog_object->entity_type . '_load_multiple';
+      $loaded_entities = $load_fn($ids);
+      field_attach_prepare_view($catalog_object->entity_type, $loaded_entities, 'informer');
+      entity_prepare_view($catalog_object->entity_type, $loaded_entities);
+      $entities = array();  // $xx = 0;
+      foreach ($loaded_entities as $id => $entity) {
+        $view_fn = $catalog_object->entity_type . '_view';
+        $entity->_current_catalog = $catalog_object;
+        $entities[$id] = $view_fn($entity, 'informer');
+        //if ($xx==0) m($entities[$id]); $xx++;
+      }
+      $block['content'] = array(
+        '#attached' => array(
+          'css' => array(
+            drupal_get_path('module', 'catalog') . '/catalog.css',
+          ),
+        ),
+        '#catalog_object' => $catalog_object,
+        'materials' => theme('catalog_list_entities', array('catalog_object' => $catalog_object, 'entities' => $entities,)),
+        'link ' => array(
+          '#markup' => '',
+          '#weight' => 0.99,
+        ),
+      );
+      if (isset($catalog_object->_pager_element)) {
+        $block['content']['pager'] = array(
+          '#theme' => 'pager',
+          '#element' => $catalog_object->_pager_element,
+          '#access' => FALSE, // Do not display pager in informers, but create array for reading by other modules. @TODO: May be other module will read _pager_element property directly?
+          '#weight' => 1,        
+        );
+      }
+      
+      if (!empty($catalog_object->materials_settings['link_to_list'])) {
+        $link_title = ($catalog_object->materials_settings['link_to_list_settings']['link_to_list_title']) ? $catalog_object->materials_settings['link_to_list_settings']['link_to_list_title'] : t('All list');
+        $link_href = ($catalog_object->materials_settings['link_to_list_settings']['link_to_list_href']) ? $catalog_object->materials_settings['link_to_list_settings']['link_to_list_href'] : '#' ;
+        $link_class = $catalog_object->materials_settings['link_to_list_settings']['link_to_list_class'];
+        $block['content']['link']['#markup'] = l($link_title, $link_href, array('html' => TRUE, 'attributes' => array('class' => array('catalog-link-to-list', $link_class))));
+      }
+      
+      if (!empty($catalog_object->materials_settings['modes'][$catalog_object->materials_settings['mode']]['settings']['center'])) {
+        $block['#attributes']['class'][] = 'centered';
+      }
+    }
+  }
+  return $block;
+}
+
+/**
+ * Implements hook_form_FORM_ID_alter()
+ * block_add_block
+ */
+function catalog_form_block_add_block_form_alter(&$form, &$form_state, $form_id) {
+  if (!empty($form_state['build_info']['args'][0]) && $form_state['build_info']['args'][0] == 'add_informer') {
+    $form['module']['#value'] = 'catalog';
+    _catalog_block_form_alter($form, $form_state);
+    foreach ($form['#submit'] as $idx => $func) {
+      if ($func == 'block_add_block_form_submit') {
+        unset($form['#submit'][$idx]);
+      }
+    }
+    drupal_set_title(t('Add informer'));
+    $form['#validate'][] = '_catalog_edit_form_state_fix';
+    $form['#submit'][] = '_catalog_add_block_form_submit';
+  }
+}
+
+/**
+ * Implements hook_form_FORM_ID_alter()
+ * block_admin_configure
+ */
+function catalog_form_block_admin_configure_alter(&$form, &$form_state, $form_id) {
+  if ($form['module']['#value'] == 'catalog' && ctype_digit('' . $form['delta']['#value'])) {
+    form_load_include($form_state, 'inc', 'catalog', 'includes/catalog.admin');
+    $catalog_object = $form['delta']['#value'] ? catalog_object_load($form['delta']['#value']) : NULL;
+    _catalog_block_form_alter($form, $form_state, $catalog_object);
+    drupal_set_title(t('Informer') . ': ' . check_plain($catalog_object->title));
+    $form['#validate'][] = '_catalog_edit_form_state_fix';
+    $form['#submit'][] = 'catalog_object_edit_form_submit';
+  }  //m($form);
+  //  $form['settings']['block_settings']['mode']['#options']['map'] = t('Map');
+}
+
+
+function _catalog_block_form_alter(&$form, &$form_state, $catalog_object = NULL) {
+  // Generate custom catalog_object form controls and modify existing form here:
+  $old_settings = $form['settings'];
+  form_load_include($form_state, 'inc', 'catalog', 'includes/catalog.admin');
+  $form['settings'] = catalog_object_edit_form($form, $form_state, $catalog_object, TRUE);
+  unset($form['settings']['description']);
+  // deprecated $form['settings']['terms_settings']['#access'] = FALSE;
+  $form['settings']['title'] = $old_settings['title'];
+  unset($old_settings['title'], $old_settings['body_field']);
+  $form['settings']['title']['#description'] = t('Override the default title for the block. Use <em>!placeholder</em> to display no title, or leave blank to use the default block title.',
+    array('!placeholder' => check_plain('<none>')));
+  $form['settings']['title']['#weight'] = -20;
+  $form['settings']['is_block'] = array(
+    '#type' => 'hidden',
+    '#value' => 1,
+  );
+
+  $form['settings']['info'] = array(
+    '#type' => 'textfield',
+    '#title' => t('Block description'),
+    '#default_value' => $catalog_object ? $catalog_object->title : NULL,
+    '#maxlength' => 64,
+    '#description' => t('A brief description of your block. Used on the <a href="@overview">Blocks administration page</a>.',
+      array('@overview' => url('admin/structure/block'))),
+    '#required' => TRUE,
+    '#weight' => -20,
+  );
+/*
+  $form['settings']['filters']['filters']['block_exclude_current'] = array(
+    '#type' => 'checkbox',
+    '#title' => t('Exclude material already displayed in main content'),
+    '#default_value' => $catalog_object ? $catalog_object->block_exclude_current : 1,
+  );
+*/
+  $form['settings']['filters']['vid']['#title'] = t('Vocabulary for materials filtration');
+  //m($old_settings);
+  $form['settings'] += $old_settings;
+  if ($catalog_object) {
+    $form['actions']['delete'] = array(
+      '#type' => 'link',
+      '#title' => t('Delete'),
+      '#attributes' => array('class' => 'form-submit',),
+      '#href' => 'admin/structure/block/manage/catalog/' . $catalog_object->cid . '/delete',
+    );
+  }
+  unset(/*$form['settings']['settings']['use_lightbox'],*/ $form['settings']['machine_name'], $form['settings']['menu'], $form['settings']['submit'], $form['settings']['status'], $form['settings']['delete']);
+}
+
+function _catalog_add_block_form_submit($form, &$form_state) {
+  form_load_include($form_state, 'inc', 'catalog', 'includes/catalog.admin');
+  if ($catalog_object = catalog_object_edit_form_submit($form, $form_state)) {
+    // Store block delta to allow other modules to work with new block.
+    $form_state['values'] += array(
+      'delta' => $catalog_object->cid,
+      'pages' => '',
+      'custom' => 0,
+      'roles' => array(),
+      'visibility' => 0,
+    );
+    $form_state['values']['delta'] = $catalog_object->cid;
+
+    $query = db_insert('block')->fields(
+      array('visibility', 'pages', 'custom', 'title', 'module', 'theme', 'status', 'weight', 'delta', 'cache'));
+    foreach (list_themes() as $key => $theme) {
+      if ($theme->status) {
+        $query->values(array(
+            'visibility' => (int)$form_state['values']['visibility'],
+            'pages' => trim($form_state['values']['pages']),
+            'custom' => (int)$form_state['values']['custom'],
+            'title' => $form_state['values']['title'],
+            'module' => 'catalog',
+            'theme' => $theme->name,
+            'status' => 0,
+            'weight' => 0,
+            'delta' => $catalog_object->cid,
+            'cache' => DRUPAL_CACHE_PER_USER + DRUPAL_CACHE_PER_PAGE,
+          ));
+      }
+    }
+    $query->execute();
+
+    $query = db_insert('block_role')->fields(array('rid', 'module', 'delta'));
+    foreach (array_filter($form_state['values']['roles']) as $rid) {
+      $query->values(array(
+          'rid' => $rid,
+          'module' => 'catalog',
+          'delta' => $catalog_object->cid,
+        ));
+    }
+    $query->execute();
+
+    // Store regions per theme for this block
+    foreach ($form_state['values']['regions'] as $theme => $region) {
+      db_merge('block')
+          ->key(array('theme' => $theme, 'delta' => $catalog_object->cid, 'module' => 'catalog'))
+          ->fields(array(
+          'region' => ($region == BLOCK_REGION_NONE ? '' : $region),
+          'pages' => trim($form_state['values']['pages']),
+          'status' => (int)($region != BLOCK_REGION_NONE),
+        ))
+          ->execute();
+    }
+    drupal_set_message(t('The informer has been created.'));
+    cache_clear_all();
+  }
+  $form_state['redirect'] = 'admin/structure/block';
+}
+
+function catalog_form_block_admin_display_form_alter(&$form, &$form_state, $form_id) {
+  foreach ($form['blocks'] as &$block) {
+    if ($block['module']['#value'] == 'catalog') {
+      $block['delete'] = array(
+        '#type' => 'link',
+        '#title' => t('delete'),
+        '#href' => 'admin/structure/block/manage/' . $block['module']['#value'] . '/' . $block['delta']['#value'] . '/delete',
+      );
+    }
+  }
+}
+
+
+function catalog_form_block_custom_block_delete_alter(&$form, &$form_state, $form_id) {
+  if ($form_state['build_info']['args'][0] == 'catalog') {
+    $form['cid'] = $form['bid'];
+    $form['bid']['#value'] = NULL;
+    foreach ($form['#submit'] as $key => $callback) {
+      if ($callback == 'block_custom_block_delete_submit') {
+        unset($form['#submit'][$key]);
+      }
+    }
+    $catalog_object = catalog_object_load($form['cid']['#value']);
+    $form['info'] = array('#type' => 'hidden', '#value' => $catalog_object->title);
+    $form['#submit'][] = '_catalog_block_delete_submit';
+    drupal_set_title(t('Are you sure you want to delete the block %name?', array('%name' => $catalog_object->title)), PASS_THROUGH);
+  }
+}
+
+function _catalog_block_delete_submit($form, &$form_state) {
+  // Grabbed and modified from block_custom_block_delete_submit()
+  if (catalog_object_delete($form_state['values']['cid'])) {
+    drupal_set_message(t('The informer %name has been removed.', array('%name' => $form_state['values']['info'])));
+  } else {
+    drupal_set_message(t('Informer has not been deleted.'), 'error');
+  }
+  $form_state['redirect'] = 'admin/structure/block';
+}
+
+/**
+* Implements hook_form_FORM_ID_alter()
+* Add submit callback.
+*/
+function catalog_form_taxonomy_form_term_alter(&$form, &$form_state, $form_id) {
+  $form['#submit'][] = '_catalog_form_taxonomy_form_term_submit';
+}
+
+/**
+*
+*/
+function _catalog_form_taxonomy_form_term_submit($form, &$form_state) {
+  foreach (catalog_object_load_multiple(FALSE, array('is_block' => FALSE,)) as $catalog_object) {
+    _catalog_object_rebuild_aliases($catalog_object);
+  }
+}
+
+/**
+* Implements hook_preprocess_taxonomy_term()
+*/
+function catalog_preprocess_taxonomy_term(&$variables) {
+  $variables['classes_array'][] = str_replace('_', '-', $variables['view_mode']);
+}
+
+function _catalog_change_field_ui_page_title($catalog_object) {
+  if (empty($catalog_object)) {
+    return;
+  }
+  drupal_set_title(t('List %name', array('%name' => $catalog_object->title)), PASS_THROUGH);
+}
+
+
+
+/**
+* Implements hook_extra_field_formatter_settings_form() defined in addons module
+*/
+function catalog_extra_field_formatter_settings_form($entity_type, $bundle, $mode, $field_name, $settings) {
+  $form = array();
+  if ($entity_type === 'catalog_object' && $mode === 'display') {
+    if ($field_name === 'terms') {
+      $catalog_object = catalog_object_load($bundle);
+      $vocabulary = taxonomy_vocabulary_load($catalog_object->vid);
+      $form = array(
+        'table_view' => array(
+          '#type' => 'checkbox',
+          '#title' => t('Table output'),
+          '#default_value' => isset($settings['table_view']) ? $settings['table_view'] : NULL,
+        ),
+        'cols' => array(
+          '#type' => 'select',
+          '#title' => t('Cols'),
+          '#options' => drupal_map_assoc(range(1, 10)),
+          '#default_value' => isset($settings['cols']) ? $settings['cols'] : 1,
+          '#inline' => TRUE,
+          '#states' => array(
+            'invisible' => array(
+              'input[name="fields[terms][settings_edit_form][settings][table_view]"]' => array('checked' => TRUE,),
+            ),
+          ),
+        ),
+        'colwrap' => array(
+          '#type' => 'checkbox',
+          '#title' => t('Alignment by columns'),
+          '#default_value' => !empty($settings['colwrap']),
+          '#states' => array(
+            'invisible' => array(
+              'input[name="fields[terms][settings_edit_form][settings][table_view]"]' => array('checked' => TRUE,),
+            ),
+          ),
+        ),
+        'center' => array(
+          '#type' => 'select',
+          '#title' => t('Alignment in cells'),
+          '#options'  => array(0 => t('On the left edge'), 1 => t('On the center')),
+          '#default_value' => isset($settings['center']) ? $settings['center'] : NULL,
+          '#inline' => TRUE,
+        ),
+        'link' => array(
+          '#theme' => 'link',
+          '#text' => '<small>' . t('Set up view mode for terms in %vocabulary', array('%vocabulary' => $vocabulary->name)) .'</small>',
+          '#path' => 'admin/structure/taxonomy/' . $vocabulary->machine_name . '/display/teaser',
+          '#options' => array(
+            'html' => TRUE,
+            'attributes' => array('target' => '_blank',),
+          ),
+        ),
+      );
+    }
+    if ($field_name === 'materials') {
+      if (empty($settings['modes'])) {
+        $settings['modes']['list']['enabled'] = 1;
+      }
+      foreach (array_keys($settings['modes']) as $mode) {
+        // Init form structure ordered by weights stored in settings array
+        $form['modes'][$mode] = array();
+      }
+      $catalog_object = catalog_object_load($bundle);
+      // get from custom hook data for display modes and standartisation it params
+      foreach (module_implements('catalog_materials_diplay_methods') as $module) {
+        $fn = $module . '_catalog_materials_diplay_methods';
+        if ($display_methods = $fn($settings, $catalog_object)) {
+          foreach ($display_methods as $method => $data) {
+            $data['settings']['#states']['visible']['input[name="fields[materials][settings_edit_form][settings][modes][' . $method . '][enabled]"]']['checked'] = TRUE;
+            $data['settings']['#type'] = 'container';
+            $form['modes'][$method] = array(
+              '#type' => 'container',
+              'enabled' => array(
+                '#type' => 'checkbox',
+                '#title' => $data['settings']['caption']['#value'],
+                '#field_prefix' => '<span class="sort-handle"></span>',
+                '#default_value' => !empty($settings['modes'][$method]['enabled']),
+              ),
+              'settings' => $data['settings'],
+            );
+          }
+        }
+      }
+      if (array_filter($form['modes'])) {
+        $form['modes'] += array(
+          '#attached' => array(
+            'js' => array(
+              drupal_get_path('module', 'catalog') . '/catalog.materials.settings.js',
+            ),
+            'library' => array(
+              array('system', 'ui.sortable'),
+            ),
+          ),
+          '#type' => 'fieldset',
+          '#attributes' => array(
+            'class' => array('catalog-modes',),
+          ),
+          '#title' => t('Display modes'),
+        );
+      }
+    }
+  }
+  return $form;
+}
+
+
+/**
+ * Implements hook_form_FORM_ID_alter()
+ */
+function catalog_form_field_ui_display_overview_form_alter(&$form, &$form_state, $form_id) {
+  if (!empty($form['fields'])) {
+    if ($form['#entity_type'] === 'catalog_object') {
+      $form['#validate'][] = 'catalog_field_ui_display_overview_form_validate';
+    }
+  }
+}
+
+
+/**
+* Validate callback for field_ui_display_overview_form form @see catalog_form_field_ui_display_overview_form_alter()
+*/
+function catalog_field_ui_display_overview_form_validate($form, &$form_state) {
+  if (!empty($form['fields']['materials']['#row_type']) && $form['fields']['materials']['#row_type'] === 'extra_field') {
+    $settings = array();
+    if (isset($form_state['values']['fields']['materials']['settings_edit_form']['settings'])) {
+      $settings = &$form_state['values']['fields']['materials']['settings_edit_form']['settings'];
+        $sort_settings = array();
+        // sort modes by INPUT modes weight
+        foreach (array_keys($form_state['input']['fields']['materials']['settings_edit_form']['settings']['modes']) as $mode) {
+          $sort_settings[$mode] = $settings['modes'][$mode];
+      }
+      $settings['modes'] = $sort_settings;
+    }
+    elseif (isset($form_state['formatter_settings']['materials'])) {
+      $settings = &$form_state['formatter_settings']['materials']; //m('!!');
+    }
+    if ($settings) {
+       $switches = array_keys(_catalog_materials_settings_mode_switches($settings)); // active switchers
+      if (!$switches)  {
+        $switches = array_keys(_catalog_materials_settings_mode_switches($settings, FALSE));// inactive switchers
+      }
+      // mode is first of active or (if not) inactive switchers
+      $settings['mode'] = array_shift($switches);
+      $settings['modes'][$settings['mode']]['enabled'] = 1;
+      //m($settings);       m(2);
+    }
+  }
+}
+
+function catalog_extra_field_formatter_settings_summary($entity_type, $bundle, $mode, $field_name, $settings) {
+  if ($entity_type === 'catalog_object' && $mode === 'display') {
+    if ($field_name == 'terms') {
+      if (!empty($settings['table_view'])) {
+        $output = array(t('Mode' ) . ': ' . drupal_strtolower(t('Table output')));
+      }
+      else {
+        $output[] = t('Cols') . ': ' . (isset($settings['cols']) ? $settings['cols'] : '1');
+        if (!empty($settings['colwrap'])) {
+          $output[] = t('Alignment by columns');// . ': ' . t('yes');
+        }
+      }
+      $output[] = t('Alignment in cells') . ': ' . drupal_strtolower(!empty($settings['center']) ? t('On the center') : t('On the left edge'));
+      return implode('<br/>', $output);
+    }
+    if ($field_name === 'materials') {
+      //m($settings);
+      if (empty($settings['mode'])) {
+        $settings['mode'] = 'list';
+        $settings['modes']['list']['settings']['caption'] = t('List');
+      }
+      $output = array();
+      if ($settings['modes']) {
+        $output[] = t('Display as' ) . ': <strong>' . $settings['modes'][$settings['mode']]['settings']['caption'] .'</strong>';
+      }
+      switch ($settings['mode']) {
+        case 'list':
+          $output[] = t('Cols') . ': <strong>' . (isset($settings['modes']['list']['settings']['cols']) ? $settings['modes']['list']['settings']['cols'] : 1) . '</strong>';
+          $output[] = t('Rows') . ': <strong>' . (isset($settings['modes']['list']['settings']['rows']) ? $settings['modes']['list']['settings']['rows'] : 10) . '</strong>';
+          if (!empty($settings['modes']['list']['settings']['colwrap'])) {
+            $output[] = t('Alignment by columns');// . ': ' . t('yes');
+          }
+          if (!empty($settings['modes']['list']['settings']['center'])) {
+            $output[] = t('Centered cells');// . ': ' . (!empty($settings['modes']['list']['settings']['center']) ? t('yes') : t('no'));
+          }
+          $output[] = t('Text zoom') . ': <span style="font-size: ' . (!empty($settings['modes']['list']['settings']['zoom']) ? $settings['modes']['list']['settings']['zoom'] / 100 : 1) . 'em">' . (!empty($settings['modes']['list']['settings']['zoom']) ? ($settings['modes']['list']['settings']['zoom']) . '%' : t('none')) . '</span>';
+        break;
+        case 'table':
+          $output[] = t('Rows') . ': <strong>' . (isset($settings['modes']['table']['settings']['rows']) ? $settings['modes']['table']['settings']['rows'] : 10) . '</strong>';
+          $output[] = t('Centered cells') . ': ' . (!empty($settings['modes']['table']['settings']['center']) ? t('yes') : t('no'));
+          $output[] = t('Text zoom') . ': <span style="font-size: ' . (!empty($settings['modes']['table']['settings']['zoom']) ? $settings['modes']['table']['settings']['zoom'] / 100 : 1) . 'em">' . (!empty($settings['modes']['table']['settings']['zoom']) ? ($settings['modes']['table']['settings']['zoom']) . '%' : t('none')) . '</span>';
+        break;
+      }
+            $switches = _catalog_materials_settings_mode_switches($settings);
+            if (count($switches) > 1) {
+              $output[]  = '<strong>' . t('Enabled modes') . '</strong>: '. (($switches) ? implode (', ', $switches) : t('None'));
+            }
+      return implode('<br/>', $output);
+    }
+  }
+}
+
+/**
+* Implements hook_entity_load()
+*/
+function catalog_entity_load($entities, $type) {
+  foreach ($entities as $entity) {
+    if (empty($entity->catalog_info_entity_type)) {
+      // Add isolated internal property (needed for similar filter in catalog_similar.module and 'exclude_current' filter)
+      $entity->catalog_info_entity_type = $type;
+    }
+  }
+}
+
+/**
+* Helper function. Detect entity loaded by url.
+* Like menu_get_object($entity_type, $path), but we do not use entity type in required param.
+* Needed in some interactive informers.
+*/
+function catalog_menu_get_entity($path = NULL) {
+  $path = $path ? $path : $_GET['q'];
+  $known = array( // [entity_type] => [url before first entity ID part]
+    'node' => 'node',
+    'user' => 'user',
+    'catalog_object' => 'catalog',
+    'taxonomy_term' => 'taxonomy/term',
+  );
+  if (module_exists('comment')) {
+    $known['comment'] = 'comment';
+  }
+  foreach ($known  as $type => $url) {
+    if (preg_match('/' . preg_quote($url, '/') . '\/\d+(\/|$)/', $path)) {
+      return menu_get_object($type, count(arg(NULL, $url)));
+    }
+  }
+}
+
+
+/**
+* Implements hook_seo_robots_txt().
+* Defined in seo_robots_txt()
+* Add own lines into dynamycally generated robots.txt
+* return array of strings
+*/
+function catalog_seo_robots_txt() {
+  return array(
+    'Disallow: *?catalog_commands_',   // @see catalog.exposed.inc
+    'Disallow: *&catalog_commands_',
+    'Disallow: /taxonomy',
+    'Disallow: *?q=taxonomy',
+  );
+}
+
+/**
+ * Menu title callback
+ */
+function _catalog_title_callback($catalog_object) {
+  return $catalog_object->title;
+}
+
+/**
+ * return checked mode switches (from extra field settings checkboxes)
+ *  structure such as {mode}_switch and [{mode}_setting][caption] to  mode => caption
+ SRuban */
+function _catalog_materials_settings_mode_switches($materials_settings, $is_active = TRUE) {
+  $mode_switches = array();
+  if (is_array($materials_settings)) {
+    foreach ($materials_settings['modes'] as $mode_switch=>$m_val) {
+      if ((empty($m_val['enabled'])!=$is_active)) {
+        $mode_switches[$mode_switch] = isset($m_val['settings']['caption']) ? $m_val['settings']['caption'] : $mode_switch ; // dummy
+      }
+    }
+  }
+   return $mode_switches;
+}
+/*
+ * return extra settings for catalog_form_block_admin_configure_form * SRuban
+ */
+function _catalog_extra_settings_form($is_block = FALSE, $settings = array()) {
+    $form = array();
+// sample for *catalog_form_block_admin_configure_form_alter*
+// $form['settings']['block_settings']['mode']['#options']['map'] = t('Map');
+  if ($is_block) {
+    $form = array(
+      '#tree' => TRUE,
+      '#type' => 'fieldset',
+      '#collapsible' => TRUE,
+      '#collapsed' => FALSE,
+      '#title' => t('Content displaying options'),
+      array('#markup' => '<div class="container-inline">'),
+      'mode' => array(
+        '#type' => 'select',
+        '#title' => t('Display as'),
+        '#options' => array(
+          'list' => t('List'),
+          'table' => t('Table'),
+        ),
+        '#default_value' => isset($settings['mode']) ? $settings['mode'] : NULL,
+      ),
+      'modes' => array(
+        'list' => array(
+          'settings' => array(
+            '#type' => 'container',
+            '#states' => array(
+              'visible' => array(
+                ':input[name="block_settings[mode]"]' => array('value' => 'list'),
+              ),
+            ),
+            'cols' => array(
+              '#type' => 'select',
+              '#inline' => TRUE,
+              '#title' => t('Cols'),
+              '#title_display' => 'invisible',
+              '#field_suffix' => t('cols X'),
+              '#options' => drupal_map_assoc(range(1, 10)),
+              '#default_value' => isset($settings['modes']['list']['settings']['cols']) ? $settings['modes']['list']['settings']['cols'] : 1,
+            ),
+            'rows' => array(
+              '#type' => 'select',
+              '#inline' => TRUE,
+              '#title' => t('Rows'),
+              '#title_display' => 'invisible',
+              '#field_suffix' => t('rows'),
+              '#options' => drupal_map_assoc(range(1, 30)),
+              '#default_value' => isset($settings['modes']['list']['settings']['rows']) ? $settings['modes']['list']['settings']['rows'] : 10,
+            ),
+            array('#markup' => '&nbsp;&nbsp;'),
+            'center' => array(
+              '#type' => 'checkbox',
+              '#title' => t('Centered cells'),
+              '#default_value' => !empty($settings['modes']['list']['settings']['center']),
+            ),
+          ),
+        ),
+        'table'=> array(
+          'settings' => array(
+            '#type' => 'container',
+            '#states' => array(
+              'visible' => array(
+                ':input[name="block_settings[mode]"]' => array('value' => 'table'),
+              ),
+            ),
+            'rows' => array(
+              '#type' => 'select',
+              '#inline' => TRUE,
+              '#title' => t('Rows'),
+              '#title_display' => 'invisible',
+              '#field_suffix' => t('rows'),
+              '#options' => drupal_map_assoc(range(1, 30)),
+              '#default_value' => isset($settings['modes']['table']['settings']['rows']) ? $settings['modes']['table']['settings']['rows'] : 10,
+            ),
+            array('#markup' => '&nbsp;&nbsp;'),
+            'center' => array(
+              '#type' => 'checkbox',
+              '#title' => t('Centered cells'),
+              '#default_value' => !empty($settings['modes']['table']['settings']['center']),
+            ),
+          ),
+        ), 
+
+      
+      ),
+      array('#markup' => '</div>'),
+      
+      
+      'link_to_list' => array(
+        '#type' => 'checkbox',
+        '#title' => t('Add a link to the list of materials'),
+        '#default_value' => !empty($settings['link_to_list']),
+      ), 
+      'link_to_list_settings' => array(
+        '#type' => 'container',
+        '#states' => array(
+          'visible' => array(
+            ':input[name="block_settings[link_to_list]"]' => array('checked' => TRUE,),
+          ),
+        ),
+        'link_to_list_title' => array(
+          '#type' => 'textfield',
+          '#title' => t('Title links'),
+          '#default_value' => !empty($settings['link_to_list_settings']['link_to_list_title']) ? $settings['link_to_list_settings']['link_to_list_title'] : NULL,
+        ),
+        'link_to_list_href' => array(
+          '#type' => 'textfield',
+          '#title' => t('URL links'),
+          '#default_value' => !empty($settings['link_to_list_settings']['link_to_list_href']) ? $settings['link_to_list_settings']['link_to_list_href'] : NULL,
+        ),
+        'link_to_list_class' => array(
+          '#type' => 'textfield',
+          '#title' => t('Classes for links'),
+          '#default_value' => !empty($settings['link_to_list_settings']['link_to_list_class']) ? $settings['link_to_list_settings']['link_to_list_class'] : NULL,
+        ),
+      ),
+      
+    );
+  }
+  return $form;
+}
+// TEMP
+function catalog_catalog_materials_diplay_methods($settings = array(), $catalog_object = NULL) {
+  $view_mode_opts = addons_entity_view_modes($catalog_object->entity_type, $catalog_object->bundle, FALSE, 'label', array('rss', 'full', 'search_index',));
+  $entity_info = entity_get_info($catalog_object->entity_type);
+  return array(
+    'list' => array(
+      'settings' => array(
+        'caption' => array(
+          '#type' => 'hidden', 
+          '#value' => t('List'),
+        ),
+        'view_mode' => array(
+          '#type' => 'select',
+          '#title' => t('Use view mode for %entity-type', array('%entity-type' => drupal_strtolower($entity_info['label']))),
+          '#options' => $view_mode_opts,
+          '#inline' => TRUE,
+          '#default_value' => isset($settings['modes']['list']['settings']['view_mode']) ? $settings['modes']['list']['settings']['view_mode'] : 'teaser',
+        ),
+        array('#markup' => '<div class="container-inline">'),
+        'cols' => array(
+          '#type' => 'select',
+          '#inline' => TRUE,
+          '#title' => t('Cols'),
+          '#title_display' => 'invisible',
+          '#field_suffix' => t('cols X'),
+          '#options' => drupal_map_assoc(range(1, 10)),
+          '#default_value' => isset($settings['modes']['list']['settings']['cols']) ? $settings['modes']['list']['settings']['cols'] : 1,
+        ),
+        'rows' => array(
+          '#type' => 'select',
+          '#inline' => TRUE,
+          '#title' => t('Rows'),
+          '#title_display' => 'invisible',
+          '#field_suffix' => t('rows'),
+          '#options' => drupal_map_assoc(range(1, 30)) + drupal_map_assoc(range(50, 950, 50)) + drupal_map_assoc(range(1000, 10000, 500)), // Temporary crutch for menacom.ru (Lera)
+          '#default_value' => isset($settings['modes']['list']['settings']['rows']) ? $settings['modes']['list']['settings']['rows'] : 10,
+        ),
+        array('#markup' => '</div>'),
+        'colwrap' => array(
+          '#type' => 'checkbox',
+          '#title' => t('Alignment by columns'),
+          '#default_value' => !empty($settings['modes']['list']['settings']['colwrap']),
+        ),
+        'center' => array(
+          '#type' => 'checkbox',
+          '#title' => t('Centered cells'),
+          '#default_value' => !empty($settings['modes']['list']['settings']['center']),
+        ),
+        'zoom' => array(
+          '#type' => 'select',
+          '#inline' => TRUE,
+          '#title' => t('Text zoom'),
+          '#options' => array('' => t('None')) + drupal_map_assoc(range(30, 120, 5)) + array(
+            (!empty($settings['modes']['list']['settings']['zoom']) ? $settings['modes']['list']['settings']['zoom'] : '') => (!empty($settings['modes']['list']['settings']['zoom']) ? $settings['modes']['list']['settings']['zoom'] / 100 : '')
+          ),
+          '#default_value' => !empty($settings['modes']['list']['settings']['zoom']) ? $settings['modes']['list']['settings']['zoom'] : '',
+          '#field_suffix' => '%',
+        ),
+      ),
+      'render_callback' => '_list_materails_render',  // not implemented yet
+    ),
+    'table' => array(
+      'settings' => array(
+        'caption' => array(
+          '#type' => 'hidden', 
+          '#value' => t('Table'),
+        ),
+        'view_mode' => array(
+          '#type' => 'select',
+          '#title' => t('Use view mode for %entity-type', array('%entity-type' => drupal_strtolower($entity_info['label']))),
+          '#options' => $view_mode_opts,
+          '#inline' => TRUE,
+          '#default_value' => isset($settings['modes']['table']['settings']['view_mode']) ? $settings['modes']['table']['settings']['view_mode'] : 'teaser',
+        ),
+        'rows' => array(
+          '#type' => 'select',
+          '#inline' => TRUE,
+          '#title' => t('Rows'),
+          '#title_display' => 'invisible',
+          '#field_suffix' => t('rows'),
+          '#options' => drupal_map_assoc(range(1, 30)) + drupal_map_assoc(range(50, 950, 50)) + drupal_map_assoc(range(1000, 10000, 500)), // Temporary crutch for menacom.ru (Lera)
+          '#default_value' => isset($settings['modes']['table']['settings']['rows']) ? $settings['modes']['table']['settings']['rows'] : 10,
+        ),
+        'center' => array(
+          '#type' => 'checkbox',
+          '#title' => t('Centered cells'),
+          '#default_value' => !empty($settings['modes']['table']['settings']['center']),
+        ),
+        'zoom' => array(
+          '#type' => 'select',
+          '#inline' => TRUE,
+          '#title' => t('Text zoom'),
+          '#options' => array('' => t('None')) + drupal_map_assoc(range(30, 120, 5)) + array(
+            (!empty($settings['modes']['table']['settings']['zoom']) ? $settings['modes']['table']['settings']['zoom'] : '') => (!empty($settings['table_settings']['zoom']) ? $settings['modes']['table']['settings']['zoom'] / 100 : '')
+          ),
+          '#default_value' => !empty($settings['modes']['table']['settings']['zoom']) ? $settings['modes']['table']['settings']['zoom'] : '',
+          '#field_suffix' => '%',
+        ),
+        //'#attributes' => array('class' => array('form-item')),
+      ),
+      'render_callback' => '_table_materails_render',// not implemented yet
+    ),
+  );
+}
+
+

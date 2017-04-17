@@ -1,0 +1,88 @@
+<?php //$Id: term_access.install, v 1.0 2013/10/14 10:23:45 itinity Exp $
+
+/**
+* Implements hook_install()
+*/
+function term_access_install() {
+	db_add_field('taxonomy_term_data', 'verified', array(
+		'description' => 'Flag what a term is approved by administrator',
+		'type' => 'int',
+		'default' => 1,
+		'not null' => TRUE,
+		'unsigned' => TRUE,));
+	db_add_field('taxonomy_term_data', 'uid', array(
+		'description' => 'Uid of author',
+		'type' => 'int',
+		'default' => NULL,
+		'not null' => FALSE,
+		'unsigned' => TRUE,));
+	db_add_index('taxonomy_term_data', 'verified', array('verified'));
+	db_add_index('taxonomy_term_data', 'uid', array('uid'));
+}
+
+
+/**
+* Implements hook_uninstall()
+*/
+function term_access_uninstall() {
+	db_drop_field('taxonomy_term_data', 'verified');
+	db_drop_field('taxonomy_term_data', 'uid');
+}
+
+
+/**
+* Implements hook_schema_alter()
+*/
+function term_access_schema_alter(&$schema) {
+	$schema['taxonomy_term_data']['fields']['verified'] = array(
+		'description' => 'Flag what a term is approved by administrator',
+		'type' => 'int',
+		'default' => 1,
+		'not null' => TRUE,
+		'unsigned' => TRUE,
+	);
+	$schema['taxonomy_term_data']['fields']['uid'] = array(
+		'description' => 'Uid of author',
+		'type' => 'int',
+		'default' => NULL,
+		'not null' => FALSE,
+		'unsigned' => TRUE,
+	);
+	$schema['taxonomy_term_data']['indexes']['verified'] = array('verified');
+	$schema['taxonomy_term_data']['indexes']['uid'] = array('uid');
+}
+
+
+/**
+* Add additional fields in {taxonomy_term_data}
+*/
+function term_access_update_7001() {
+	db_add_field('taxonomy_term_data', 'verified', array(
+		'description' => 'Flag what a term is approved by administrator',
+		'type' => 'int',
+		'default' => 1,
+		'not null' => TRUE,
+		'unsigned' => TRUE,));
+	db_add_index('taxonomy_term_data', 'verified', array('verified'));
+	db_add_field('taxonomy_term_data', 'uid', array(
+		'description' => 'Uid of author',
+		'type' => 'int',
+		'default' => NULL,
+		'not null' => FALSE,
+		'unsigned' => TRUE,));
+	db_add_index('taxonomy_term_data', 'uid', array('uid'));
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+

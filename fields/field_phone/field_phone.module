@@ -1,0 +1,223 @@
+<?php //$Id: field_phone.module, v 1.0 2011/03/30 12:02:00 Ivan Demenkov Exp $
+/**
+ * Copyright 2011-2017 Itinity Ltd. (itinity.ru). All rights reserved.
+ * Licensed under the GNU General Public License, version 2 or later.
+ */
+
+define('FIELD_PHONE_WIDGET_ELEMENT_SIZE', 15);
+
+/**
+ * Implements hook_field_info().
+ */
+function field_phone_field_info() {
+	return array(
+		'phone' => array(
+			'label'				=> t('Phone'),
+			'description'		=> t('This field stores and renderes phone number.'),
+			'settings'			=> array('max_length' => 255),
+			'default_widget'	=> 'phone',
+			'default_formatter'	=> 'phone',
+		),
+	);
+}
+
+/**
+ * Implements hook_content_is_empty().
+ */
+function field_phone_field_is_empty($item, $field) {
+	if (empty($item['phone'])) {
+		return TRUE;
+	}
+	return FALSE;
+}
+
+/**
+ * Implements hook_field_settings_form(). Added for field permissions module.
+ */
+function field_phone_field_settings_form($field, $instance, $has_data){
+	$form = array();
+	return $form;
+}
+
+/**
+ * Implements hook_field_formatter_info().
+ *
+ */
+function field_phone_field_formatter_info() {
+	$formats = array(
+		'phone' => array(
+			'label'			=> t('Phone'),
+			'description'	=> t('Display a phone with regional code.'),
+			'field types'	=> array('phone'),
+		),
+	);
+	return $formats;
+}
+
+/**
+ * Implements hook_field_formatter_view().
+ */
+function field_phone_field_formatter_view($object_type, $object, $field, $instance, $langcode, $items, $display) {
+	$element = array();
+
+	$widget = $instance['widget'];
+	$settings = $widget['settings'];
+
+	foreach ($items as $delta => $item) {
+		$element[$delta] = array(
+			'#markup'	=> theme('phone', array(
+        'phone' => $item['phone'],
+        'country_code' => $item['country_code'],
+        'region_code' => $item['region_code'],
+      )),
+		);
+	}
+
+	return $element;
+}
+
+/**
+ * Implements hook_field_widget_info().
+ */
+function field_phone_field_widget_info() {
+	return array(
+		'phone'	=> array(
+			'label'			=> t('Phone'),
+			'field types'	=> array('phone'),
+			'settings'		=> array('size' => FIELD_PHONE_WIDGET_ELEMENT_SIZE),
+		),
+	);
+}
+
+/**
+ * Implements hook_field_widget_form().
+ */
+function field_phone_field_widget_form(&$form, &$form_state, $field, $instance, $langcode, $items, $delta, $base) {
+	$element = $base;
+  $settings = $instance['settings'];
+
+  $items += array($delta => array());
+  $items[$delta] += array(
+    'phone' => '',
+    'country_code' => '',
+    'region_code' => '',
+  );
+	$element['phone'] = $base + array(
+		'#type' => 'phone',
+		'#default_value'	=> addons_format_phone($items[$delta]['phone'], $items[$delta]['country_code'], $items[$delta]['region_code']),
+		'#size' => $instance['widget']['settings']['size'],
+		'#masked' => !empty($settings['use_mask']),
+	);
+  if (!empty($settings['default_country_for_numbers'])) {
+    $element['phone']['#fixed_country'] = $settings['default_country_for_numbers'];
+
+    if (!empty($settings['only_mobile_numbers']) && $settings['default_country_for_numbers'] == 'ru') {
+      // can be used only for russian numbers by the moment, so we hardcode 'ru' here
+      $element['phone']['#mobile_only'] = TRUE;
+    }
+
+    if (!empty($settings['allow_users_change_default_country'])) {
+      $element['phone']['#allow_change_country'] = TRUE;
+    }
+  }
+	return $element;
+}
+
+/**
+ * Implements hook_field_instance_settings_form().
+ * @param array $field
+ * @param array $instance
+ */
+function field_phone_field_instance_settings_form($field, $instance) {
+  $form = array();
+
+  $settings = $instance['settings'];
+  if ($field['type'] === 'phone' && $field['module'] === 'field_phone') {
+    $form['use_mask'] = array(
+      '#type' => 'checkbox',
+      '#title' => t('Use mask for input'),
+      '#description' => t('Increases page load time and its size.'),
+      '#default_value' => !empty($settings['use_mask']),
+    );
+    $form['default_country_for_numbers'] = array(
+      '#type' => 'select',
+      '#title' => t('Default country for phone numbers'),
+      '#options' => array(NULL => t('- None -')) + addons_phone_code_info(NULL, 'title'),//_addons_phone_get_available_countries_list(),
+      '#default_value' => !empty($settings['default_country_for_numbers']) ? $settings['default_country_for_numbers'] : NULL,
+    );
+    /*
+    $form['allow_users_change_default_country'] = array(
+      '#type' => 'checkbox',
+      '#title' => t('Allow users to change default country'),
+      '#default_value' => !empty($settings['allow_users_change_default_country']),
+      '#states' => array(
+        'invisible' => array(
+          ':input[name="instance[settings][default_country_for_numbers]"]' => array('value' => ''),
+        ),
+      ),
+    );
+    $form['only_mobile_numbers'] = array(
+      '#type' => 'checkbox',
+      '#title' => t('Only mobile numbers'),
+      '#default_value' => !empty($settings['only_mobile_numbers']),
+      '#states' => array(
+        'visible' => array(
+          ':input[name="instance[settings][default_country_for_numbers]"]' => array('value' => 'ru'),
+        ),
+      ),
+    );
+    */
+  }
+
+  return $form;
+}
+
+/**
+ * Implements hook_form_FORM_ID_alter().
+ * @param array $form
+ * @param array $form_state
+ * @see addons_validate_phone()
+ */
+function field_phone_form_field_ui_field_edit_form_alter(&$form, &$form_state) {
+  if ($form['#field']['type'] === 'phone' && $form['#field']['module'] === 'field_phone') {
+    // disable validation and masking if our field is used on Field UI form to set default value
+    // we're doing this to avoid extra troubles
+    $field_name = $form['#field']['field_name'];
+    foreach (element_children($form['instance']['default_value_widget'][$field_name]) as $lang) {
+      foreach (element_children($form['instance']['default_value_widget'][$field_name][$lang]) as $idx) {
+        $form['instance']['default_value_widget'][$field_name][$lang][$idx]['phone'] = array(
+          '#skip_validation' => TRUE,
+          '#masked' => FALSE,
+          '#fixed_country' => NULL,
+          '#mobile_only' => FALSE,
+        ) + $form['instance']['default_value_widget'][$field_name][$lang][$idx]['phone'];
+      }
+    }
+  }
+}
+
+/**
+ * Implements hook_field_presave().
+ */
+function field_phone_field_presave($entity_type, $entity, $field, $instance, $langcode, &$items) {
+  if ($field['type'] === 'phone' && $field['module'] === 'field_phone') {
+    // parse phone number and store its parts (country code, regional code and phone) separately
+    foreach ($items as $delta => $item) {
+      $full_phone = '';
+      if (isset($item['country_code'])) {
+        $full_phone .= '+' . $item['country_code'];
+      }
+      if (isset($item['region_code'])) {
+        $full_phone .= '(' . $item['region_code'] . ')';
+      }
+      $full_phone .= $item['phone'];
+      $items[$delta] = addons_parse_phone($full_phone);
+    }
+  }
+}
+
+
+
+
+
+

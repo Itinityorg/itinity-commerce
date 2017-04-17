@@ -1,0 +1,240 @@
+<?php
+
+/**
+ * Implements hook_install()
+ */
+function social_profile_install() {
+  // Implements extra fields (lfm and phone) placed in {users} base table and autoloaded/auto updated with entity/user API
+  social_profile_schema_alter($schema);
+  if (!db_field_exists('users', 'lfm')) {
+    db_add_field('users', 'lfm', $schema['users']['fields']['lfm']);
+  }
+  if (!db_index_exists('users', 'lfm')) {
+    db_add_index('users', 'lfm', array('lfm'));
+  }
+  if (!db_field_exists('users', 'phone')) {
+    db_add_field('users', 'phone', $schema['users']['fields']['phone']);
+  }
+  if (!db_index_exists('users', 'phone')) {
+    db_add_index('users', 'phone', array('phone'));
+  }
+  // Override user search routines and inherit his settings if settings exisits
+  $search_settings = variable_get('search_active_modules', array());
+  if (!empty($search_settings['user'])) {
+    $search_settings['social_profile'] = 'social_profile';
+    variable_set('search_active_modules', $search_settings);
+  }
+}
+
+
+/**
+ * Implements hook_uninstall()
+ */
+function social_profile_uninstall() {
+  db_drop_field('users', 'lfm');
+  db_drop_field('users', 'phone');
+  variable_del('social_profile_terms_of_service');
+  variable_del('social_profile_phone_unique');
+  foreach (db_query('SELECT uid, data FROM {users} WHERE uid') as $r) {
+    if (!empty($r->data)) {
+      if ($r->data = @unserialize($r->data)) {
+        if (!empty($r->data['social_profile_terms_agreed'])) {
+          unset($r->data['social_profile_terms_agreed']);
+          db_query('UPDATE {users} SET data = :data WHERE uid = :uid', array(
+            ':data' => serialize($r->data),
+            ':uid' => $r->uid
+          ));
+        }
+      }
+    }
+  }
+  file_unmanaged_delete('public://social_profile_user_picture_default.png');
+}
+
+
+/**
+ * Implements hook_schema_alter()
+ * Insert extra fields in users schema
+ */
+function social_profile_schema_alter(&$schema) {
+  $schema['users']['fields']['lfm'] = array(
+    'description' => 'Last, first and middle name',
+    'type' => 'varchar',
+    'length' => '255',
+    'not null' => FALSE,
+  );
+  $schema['users']['indexes']['lfm'] = array('lfm');
+  $schema['users']['fields']['phone'] = array(
+    'description' => 'Phone number',
+    'type' => 'varchar',
+    'length' => '64',
+    'not null' => FALSE,
+  );
+  $schema['users']['indexes']['phone'] = array('phone');
+}
+
+
+/**
+ * Add fields in users table (lfm, phone).
+ * Override user_search_ hooks.
+ */
+function social_profile_update_7002() {
+  social_profile_schema_alter($schema);
+  if (!db_field_exists('users', 'lfm')) {
+    db_add_field('users', 'lfm', $schema['users']['fields']['lfm']);
+  }
+  if (!db_index_exists('users', 'lfm')) {
+    db_add_index('users', 'lfm', array('lfm'));
+  }
+  if (!db_field_exists('users', 'phone')) {
+    db_add_field('users', 'phone', $schema['users']['fields']['phone']);
+  }
+  if (!db_index_exists('users', 'phone')) {
+    db_add_index('users', 'phone', array('phone'));
+  }
+  registry_update();
+  // Override user search routines and inherit his settings if settings exisits. See also social_profile_install()
+  $search_settings = variable_get('search_active_modules', array());
+  if (!empty($search_settings['user'])) {
+    $search_settings['social_profile'] = 'social_profile';
+    variable_set('search_active_modules', $search_settings);
+  }
+
+}
+
+
+/**
+ * Delete deprecated field_user_phone, field_user_lfm fields
+ */
+function social_profile_update_7003() {
+  if (db_table_exists('field_data_field_user_lfm')) {
+    foreach (db_query('SELECT entity_id, field_user_lfm_value FROM {field_data_field_user_lfm} WHERE entity_type = \'user\' AND field_user_lfm_value <> \'\'') as $r) {
+      $lfm = truncate_utf8($r->field_user_lfm_value, 255);
+      db_query('UPDATE {users} SET lfm = :lfm WHERE uid = :uid', array(
+        ':lfm' => $lfm,
+        ':uid' => $r->entity_id
+      ));
+    }
+  }
+  if (db_table_exists('field_data_field_user_phone')) {
+    $col_name = db_field_exists('field_data_field_user_phone', 'field_user_phone_phone') ? 'field_user_phone_phone' : 'field_user_phone_value';
+    if (db_field_exists('field_data_field_user_phone', $col_name)) {
+      foreach (db_query('SELECT entity_id, ' . $col_name . ' AS phone FROM {field_data_field_user_phone} WHERE entity_type = \'user\' AND ' . $col_name . ' <> \'\'') as $r) {
+        $phone = truncate_utf8($r->phone, 64);
+        db_query('UPDATE {users} SET phone = :phone WHERE uid = :uid', array(
+          ':phone' => $phone,
+          ':uid' => $r->entity_id
+        ));
+      }
+    }
+  }
+  field_delete_field('field_user_lfm');
+  field_delete_field('field_user_phone');
+  field_purge_batch(1000);
+}
+
+
+/**
+ * Update user agreement settings
+ */
+function social_profile_update_7004() {
+  $social_profile_terms_of_service = variable_get('social_profile_terms_of_service', array(
+    'required' => FALSE,
+    'texts' => array()
+  ));
+  foreach (language_list() as $l) {
+    if (($data = utils_load_packed_var('contacts_company_agreement_' . $l->language)) && !empty($data['user_agreement']['value'])) {
+      $social_profile_terms_of_service['texts'][$l->language] = $data['user_agreement'];
+    }
+  }
+  variable_set('social_profile_terms_of_service', $social_profile_terms_of_service);
+}
+
+
+/**
+ * Update mail field view display setting
+ */
+function social_profile_update_7005() {
+  if ($field_bundle_settings_user__user = variable_get('field_bundle_settings_user__user')) {
+    foreach ($field_bundle_settings_user__user['extra_fields']['display']['mail'] as $key => $data) {
+      $field_bundle_settings_user__user['extra_fields']['display']['mail'][$key]['visible'] = TRUE;
+    }
+    variable_set('field_bundle_settings_user__user', $field_bundle_settings_user__user);
+  }
+}
+
+
+/**
+ * Format phones in {users} table
+ */
+function social_profile_update_7006() {
+  $phones = array();
+  foreach (db_query('SELECT uid, phone FROM {users} WHERE uid > 0 AND phone <> \'\' AND NOT (phone IS NULL)') as $r) {
+    if ($new = str_replace('-', '', addons_format_phone($r->phone))) {
+      $phones[$new][$r->phone] = $r->phone;
+    }
+  }
+  foreach ($phones as $new => $olds) {
+    db_query('UPDATE {users} SET phone = :new WHERE phone IN (:olds)', array(
+      ':new' => $new,
+      ':olds' => $olds
+    ));
+  }
+  return count($phones) . ' phones in {users} table were formatted.';
+}
+
+/**
+ * Add file_usage for pirctures users.
+ */
+function social_profile_update_7007() {
+  $users = db_select('users', 'u')
+    ->fields('u')
+    ->execute()
+    ->fetchAll();
+
+  $connection = Database::getConnection('default');
+
+  $connection->query('START TRANSACTION');
+
+  $connection->query('DROP procedure IF EXISTS social_profile_usage_add');
+
+  $connection->query('
+          CREATE PROCEDURE social_profile_usage_add(IN fid2 INT, IN module2 VARCHAR(50), IN type2 VARCHAR(50), IN id2 INT)
+          BEGIN
+            INSERT
+              INTO file_usage(fid, module, type, id, count)
+              SELECT DISTINCT fid2, module2, type2, id2, 1
+                FROM file_usage
+                WHERE NOT EXISTS(
+                  SELECT 1
+                    FROM file_usage
+                    WHERE fid = fid2
+                    AND module = module2
+                    AND type = type2
+                    AND id = id2
+                );
+          END');
+
+  foreach ($users as $user) {
+    if (!empty($user->uid) && !empty($user->picture)) {
+      $connection->query('CALL social_profile_usage_add(' . $user->picture . ', \'user\', \'user\', ' . $user->uid . ')');
+    }
+  }
+
+  $connection->query('DROP procedure IF EXISTS social_profile_usage_add');
+
+  $connection->query('COMMIT');
+}
+
+
+
+
+
+
+
+
+
+
+
+
+

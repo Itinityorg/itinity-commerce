@@ -1,0 +1,87 @@
+<?php
+/**
+ * Created by PhpStorm.
+ * User: mpatrin
+ * Date: 18.05.16
+ * Time: 14:22
+ */
+
+
+/**
+ * Implements hook_schema().
+ */
+function snapshot_schema() {
+  $schema['snapshot'] = array(
+    'description' => '',
+    'fields' => array(
+      'sid' => array(
+        'description' => 'snapshot id',
+        'type' => 'serial',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+      ),
+      'bundle' => array(
+        'description' => 'snapshot bundle',
+        'type' => 'varchar',
+        'length' => 32,
+        'not null' => TRUE,
+      ),
+      'type' => array(
+        'description' => 'type of shot data',
+        'type' => 'varchar',
+        'length' => 32,
+        'not null' => TRUE,
+      ),
+      'id' => array(
+        'description' => 'id of shot data',
+        'type' => 'int',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+      ),
+      'timestamp' => array(
+        'description' => 'Timestamp of snapshot creation',
+        'type' => 'int',
+        'not null' => TRUE,
+      ),
+      'lifetime' => array(
+        'description' => 'Lifetime of snapshot',
+        'type' => 'int',
+        'not null' => TRUE,
+      ),
+      'hash' => array(
+        'description' => 'Snapshot hash',
+        'type' => 'varchar',
+        'length' => 32,
+        'not null' => TRUE,
+      ),
+      'data' => array(
+        'description' => 'Serialized snapshot data',
+        'type' => 'blob',
+        'size' => 'big',
+        'not null' => FALSE,
+        'serialize' => TRUE,
+      ),
+      'markup' => array(
+        'description' => 'Rendered snapshot data',
+        'type' => 'text',
+        'size' => 'big',
+        'not_null' => FALSE,
+      ),
+      'frozen' => array(
+        'description' => 'Deny any snapshot manipulations',
+        'type' => 'int',
+        'size' => 'tiny',
+        'not_null' => FALSE,
+        'default' => 0,
+      ),
+    ),
+    'primary key' => array('sid'),
+    'indexes' => array(
+      'timestamp' => array('timestamp'),
+      'type' => array('type'),
+      'id' => array('id'),
+    ),
+  );
+
+  return $schema;
+}

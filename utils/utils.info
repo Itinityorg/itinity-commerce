@@ -1,0 +1,6 @@
+;$Id: utils.info, v 1.0 2011/01/17 15:22:44 ITKLD Exp $
+name = Utilites
+description = Utilites
+package = ITK/System
+version = "7.x-dev"
+core = 7.x

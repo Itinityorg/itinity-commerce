@@ -1,0 +1,1214 @@
+<?php //$Id: shop.install, v 1.0 2011/04/11 10:08:57 Ivan Demenkov Exp $
+
+function shop_install() {
+
+}
+
+/**
+ * Implementation of hook_uninstall().
+ */
+function shop_uninstall() {
+  field_purge_batch(1000);
+  variable_del('shop_cart_block_view');
+  variable_del('shop_cart_icon');
+  variable_del('shop_cart_caption');
+  variable_del('shop_cart_horizontal');
+  variable_del('shop_cart_block_checkout_caption');
+}
+
+/**
+ * Implements hook_schema().
+ */
+function shop_schema() {
+  $schema['shop_index'] = array(
+    'description' => 'All products extra fields index, for best performance',
+    'fields' => array(
+      'entity_id' => array(
+        'description' => 'Product entity identifier',
+        'type' => 'int',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+      ),
+      'revision_id' => array(
+        'description' => 'Product revision entity identifier, if possible',
+        'type' => 'int',
+        'not null' => TRUE,
+        'default' => 0,
+      ),
+      'entity_type' => array(
+        'description' => 'Type of entity of product',
+        'type' => 'varchar',
+        'length' => '128',
+        'not null' => FALSE,
+        'default' => NULL,
+      ),
+      'price' => array(
+        'description' => 'Price of product',
+        'type' => 'numeric',
+        'not null' => TRUE,
+        'default' => 0,
+        'precision' => '30',
+        'scale' => '2',
+      ),
+      'currency' => array(
+        'description' => 'Currency of price in ISO format',
+        'type' => 'varchar',
+        'length' => '8',
+        'not null' => FALSE,
+      ),
+      'qty' => array(
+        'description' => 'Quantity of products in stock. NULL is indented as infinity quantity.',
+        'type' => 'numeric',
+        'unsigned' => TRUE,
+        'not null' => FALSE,
+        'precision' => '30',
+        'scale' => '2',
+      ),
+      'qty_fraction' => array(
+        'description' => 'Fraction of quantity of products in buy forms.',
+        'type' => 'numeric',
+        'unsigned' => TRUE,
+        'not null' => FALSE,
+        'precision' => '30',
+        'scale' => '2',
+      ),
+      'qty_type' => array(
+        'description' => 'Units of measurement for product quantity',
+        'type' => 'varchar',
+        'length' => '128',
+        'not null' => FALSE,
+      ),
+      'title' => array(
+        'description' => 'Entity cached title',
+        'type' => 'varchar',
+        'length' => '255',
+        'not null' => FALSE,
+        'default' => NULL,
+      ),
+      'entity_uri' => array(
+        'description' => 'Entity cached URL path',
+        'type' => 'varchar',
+        'length' => '255',
+        'not null' => FALSE,
+        'default' => NULL,
+      ),
+      'goods_on_request' => array(
+        'description' => 'Available on request',
+        'type' => 'int',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+        'default' => 0,
+      ),
+      'supply_time' => array(
+        'description' => 'Product supply time',
+        'type' => 'int',
+        'unsigned' => TRUE,
+        'not null' => FALSE,
+        'default' => NULL,
+      ),
+    ),
+    'unique keys' => array(
+      'entity_id' => array('entity_id', 'revision_id', 'entity_type')
+    ),
+    'indexes' => array(
+      'currency' => array('currency'),
+      'price' => array('price'),
+      'qty' => array('qty'),
+      'qty_type' => array('qty_type'),
+    ),
+  );
+
+  $schema['shop_cart'] = array(
+    'description' => 'Shop carts storage',
+    'fields' => array(
+      'cart_id' => array(
+        'description' => 'Record id',
+        'type' => 'serial',
+        'not null' => TRUE,
+      ),
+      'uid' => array(
+        'description' => 'Account id',
+        'type' => 'int',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+      ),
+      'anonymous_key' => array(
+        'description' => 'Anonymous identifier in cookies',
+        'type' => 'varchar',
+        'length' => '128',
+        'not null' => TRUE,
+      ),
+      'created' => array(
+        'description' => 'Date of creation',
+        'type' => 'int',
+        'not null' => TRUE,
+        'default' => 0,
+      ),
+      'changed' => array(
+        'description' => 'Last changes in cart',
+        'type' => 'int',
+        'not null' => TRUE,
+      ),
+      'data' => array(
+        'description' => 'A serialized array of name value pairs that are related to the cart. Any form values posted during user edit not-ordered shop cart.',
+        'type' => 'blob',
+        'size' => 'big',
+        'not null' => FALSE,
+      ),
+    ),
+    'primary key' => array('cart_id'),
+    'indexes' => array(
+      'anonymous_key' => array('anonymous_key'),
+      'changed' => array('changed'),
+      'uid' => array('uid'),
+    ),
+  );
+  $schema['shop_cart_items'] = array(
+    'description' => 'Products in shop cart',
+    'fields' => array(
+      'cart_id' => array(
+        'description' => 'Id in shop_cart table',
+        'type' => 'int',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+      ),
+      'entity_type' => array(
+        'description' => 'Type of entity',
+        'type' => 'varchar',
+        'length' => '32',
+        'not null' => TRUE,
+      ),
+      'entity_id' => array(
+        'description' => 'Id of entity',
+        'type' => 'int',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+      ),
+      'qty' => array(
+        'description' => 'Quantity in cart',
+        'type' => 'numeric',
+        'unsigned' => TRUE,
+        'not null' => FALSE,
+        'precision' => '30',
+        'scale' => '2',
+      ),
+      'snapshot_id' => array(
+        'type' => 'int',
+        'default' => 0,
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+        'description' => 'Snapshot id',
+      ),
+    ),
+    'unique keys' => array(
+      'cart_id_entity' => array('cart_id', 'entity_type', 'entity_id', 'snapshot_id')
+    ),
+    'indexes' => array(
+      'qty' => array('qty'),
+    ),
+  );
+  $schema['shop_cart_items_ordered'] = array(
+    'description' => 'Ordered nodes in shop',
+    'fields' => array(
+      'oid' => array(
+        'description' => 'Order nid',
+        'type' => 'int',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+      ),
+      'qty' => array(
+        'description' => 'Node quantity',
+        'type' => 'numeric',
+        'unsigned' => TRUE,
+        'not null' => FALSE,
+        'precision' => '30',
+        'scale' => '2',
+      ),
+      'price' => array(
+        'description' => 'Price of product',
+        'type' => 'float',
+        'not null' => FALSE,
+      ),
+      'title' => array(
+        'description' => 'Node title.',
+        'type' => 'varchar',
+        'length' => '255',
+        'not null' => FALSE,
+      ),
+      'data' => array(
+        'description' => 'Serialized node',
+        'type' => 'blob',
+        'size' => 'big',
+        'not null' => FALSE,
+      ),
+      'currency' => array(
+        'description' => 'Price currency',
+        'type' => 'varchar',
+        'length' => '32',
+        'not null' => FALSE,
+      ),
+      'changed' => array(
+        'description' => 'Last change of this cart.',
+        'type' => 'int',
+        'not null' => TRUE,
+        'default' => 0,
+      ),
+      'entity_type' => array(
+        'description' => 'Type of entity',
+        'type' => 'varchar',
+        'length' => '128',
+        'not null' => FALSE,
+      ),
+      'entity_id' => array(
+        'description' => 'ID of entity',
+        'type' => 'int',
+        'unsigned' => TRUE,
+        'not null' => FALSE,
+      ),
+      'frozen' => array(
+        'description' => 'Item is frozen (order completed or entity deleted from database)',
+        'type' => 'int',
+        'unsigned' => TRUE,
+        'not null' => FALSE,
+        'default' => 0,
+      ),
+      'snapshot_id' => array(
+        'type' => 'int',
+        'default' => 0,
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+        'description' => 'Snapshot id',
+      ),
+    ),
+    'indexes' => array(
+      'changed' => array('changed'),
+      'currency' => array('currency'),
+      'entity_id' => array('entity_id'),
+      'entity_type' => array('entity_type'),
+      'oid' => array('oid'),
+      'price' => array('price'),
+      'qty' => array('qty'),
+      'title' => array('title'),
+      'frozen' => array('frozen'),
+    ),
+  );
+
+  $schema['shop_product_requests'] = array(
+    'description' => 'Store user requests for products not in stock',
+    'fields' => array(
+      'id' => array(
+        'description' => 'Record id',
+        'type' => 'serial',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+      ),
+      'entity_type' => array(
+        'description' => 'Type of product entity',
+        'type' => 'varchar',
+        'length' => '64',
+        'not null' => TRUE,
+      ),
+      'entity_id' => array(
+        'description' => 'Primary ID of product entity',
+        'type' => 'int',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+      ),
+      'qty' => array(
+        'description' => 'Desired qty of product',
+        'type' => 'int',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+      ),
+      'user_name' => array(
+        'description' => 'User name',
+        'type' => 'varchar',
+        'length' => '255',
+        'not null' => TRUE,
+      ),
+      'user_phone' => array(
+        'description' => 'Phone',
+        'type' => 'varchar',
+        'length' => '255',
+        'not null' => TRUE,
+      ),
+      'user_email' => array(
+        'description' => 'User e-mail for receive notifications when the product is back in stock',
+        'type' => 'varchar',
+        'length' => '255',
+        'not null' => TRUE,
+      ),
+      'created' => array(
+        'description' => 'Timestamp of request creation datetime',
+        'type' => 'int',
+        'not null' => TRUE,
+      ),
+      'uri' => array(
+        'description' => 'The page where the request is created',
+        'type' => 'varchar',
+        'length' => '255',
+        'not null' => TRUE,
+      ),
+      'processed' => array(
+        'description' => 'User notified flag. Default is 0, set to event timestamp where product has returned to store and mail was sent.',
+        'type' => 'int',
+        'not null' => TRUE,
+        'default' => 0,
+      ),
+    ),
+    'primary key' => array('id'),
+    'indexes' => array(
+      'created' => array('created'),
+      'entity_id' => array('entity_id'),
+      'entity_type' => array('entity_type'),
+      'user_email' => array('user_email'),
+    ),
+  );
+
+  return $schema;
+}
+
+
+function shop_update_last_removed() {
+  return 7078;
+  /**
+   * 7078 annotation:
+   * All updates up to 7078 is obsolete.
+   * If you want to use old database dump, use shop_v7078_rev3741.zip (or get revision #3741 from SVN) instead of actual scripts.
+   * You must restore all files from archive (or revision #3741), run updates, revert back to latest version and run update again.
+   */
+}
+
+/**
+ * Uninstall deprecated intellect_money
+ */
+function shop_update_7079() {
+  drupal_uninstall_modules(array('intellect_money'));
+}
+
+/**
+ * Update settings
+ */
+function shop_update_7080() {
+  if ($shop_info = utils_load_packed_var('shop_info')) {
+    $need_update = FALSE;
+    if (isset($shop_info['delivery']['self']['enabled'])) {
+      $need_update = TRUE;
+      $shop_info['delivery']['self']['variants']['default']['enabled'] = $shop_info['delivery']['self']['enabled'];
+      unset($shop_info['delivery']['self']['enabled']);
+    }
+    if (isset($shop_info['delivery']['courier']['settings'])) {
+      foreach ($shop_info['delivery']['courier']['settings'] as $delta => $data) {
+        $d = ctype_digit($delta . '') ? $delta : (!empty($shop_info['delivery']['courier']['variants']) ? count($shop_info['delivery']['courier']['variants']) : 0);
+        if (empty($data['name']) && (!empty($data['address']['country']) || !empty($data['address']['state']) || !empty($data['address']['city']))) {
+          $shop_info['delivery']['courier']['variants'][$d]['name'] = trim(truncate_utf8(implode(', ', array_reverse($data['address'])), 16, TRUE, FALSE), ' ,');
+          $shop_info['delivery']['courier']['variants'][$d]['enabled'] = !empty($shop_info['delivery']['courier']['enabled']);
+          $shop_info['delivery']['courier']['variants'][$d]['address'] = $data['address'];
+          $need_update = TRUE;
+        }
+        if (!empty($data['price']) && is_scalar($data['price'])) {
+          $shop_info['delivery']['courier']['variants'][$d]['price'] = array();
+          $shop_info['delivery']['courier']['variants'][$d]['price']['cost'] = $data['price'];
+          if (isset($data['threshold'])) {
+            $shop_info['delivery']['courier']['variants'][$d]['price']['threshold'] = $data['threshold'];
+          }
+          $need_update = TRUE;
+        }
+      }
+    }
+    if ($need_update) {
+      unset($shop_info['delivery']['courier']['settings']);
+      unset($shop_info['delivery']['courier']['enabled']);
+      $shop_info['delivery'] = array('self' => $shop_info['delivery']['self'], 'courier' => $shop_info['delivery']['courier']) + $shop_info['delivery'];
+      utils_save_packed_var('shop_info', $shop_info);
+    }
+  }
+}
+
+/**
+ * Install new user roles for shop
+ */
+function shop_update_7081() {
+  /*foreach (_shop_get_shop_roles() as $shop_role) {
+    if (!empty($shop_role->rid) || user_role_save($shop_role) == SAVED_NEW) {
+      if (!empty($shop_role->permissions)) {
+        user_role_grant_permissions($shop_role->rid, $shop_role->permissions);
+      }
+    }
+  }*/
+}
+
+/**
+ * IKW: Enable status module in all shops.
+ */
+function shop_update_7082() {
+  module_enable(array('status'));
+}
+
+/**
+ * Update settings
+ */
+function shop_update_7083() {
+  if (($shop_info = utils_load_packed_var('shop_info'))) {
+    if (!empty($shop_info['delivery']['courier']['variants'])) {
+      foreach ($shop_info['delivery']['courier']['variants'] as $delta => $data) {
+        if (!empty($data['address'])) {
+          $shop_info['delivery']['courier']['variants'][$delta]['description'] = trim(implode(', ', $data['address']), '.') . (!empty($data['description']) ? '. ' . $data['description'] : '');
+        }
+        unset($shop_info['delivery']['courier']['variants'][$delta]['address']);
+      }
+    }
+    if (!empty($shop_info['delivery']['self']['variants'])) {
+      foreach ($shop_info['delivery']['self']['variants'] as $delta => $data) {
+        if ($delta !== 'default') {
+          $shop_info['delivery']['self']['variants'][$delta]['description'] = trim($data['name'], '.') . ($shop_info['delivery']['self']['variants'][$delta]['description'] && $data['name'] ? '. ' . $shop_info['delivery']['self']['variants'][$delta]['description'] : '');
+          unset($shop_info['delivery']['self']['variants'][$delta]['name']);
+        }
+      }
+    }
+    utils_save_packed_var('shop_info', $shop_info);
+  }
+}
+
+
+/**
+ * Enable node_rank module
+ */
+function shop_update_7084() {
+  module_enable(array('node_rank'));
+}
+
+
+/**
+ * Update settings
+ */
+function shop_update_7085() {
+  if ($shop_info = utils_load_packed_var('shop_info')) {
+    if (!empty($shop_info['balances']['settings']['not_in_stock']['allow_buy'])) {
+      unset($shop_info['balances']['settings']['not_in_stock']['allow_buy']);
+      $shop_info['balances']['settings']['not_in_stock'] = 'buy';
+    }
+    else {
+      unset($shop_info['balances']['settings']['not_in_stock']);
+    }
+    utils_save_packed_var('shop_info', $shop_info);
+  }
+}
+
+
+/**
+ * Update settings
+ */
+function shop_update_7086() {
+  if (($shop_info = utils_load_packed_var('shop_info')) && isset($shop_info['balances']['settings']['not_in_stock'])) {
+    if ($shop_info['balances']['settings']['not_in_stock'] === 'request') {
+      $shop_info['balances']['settings']['accept_requests'] = TRUE;
+    }
+    unset($shop_info['balances']['settings']['not_in_stock']);
+    utils_save_packed_var('shop_info', $shop_info);
+  }
+}
+
+
+/**
+ * Update settings
+ */
+function shop_update_7087() {
+  if (($shop_info = utils_load_packed_var('shop_info')) && isset($shop_info['balances']['settings']['product_debit_condition'])) {
+    if ($shop_info['balances']['settings']['product_debit_condition'] == 'delivered') {
+      $shop_info['balances']['settings']['product_debit_condition'] = 'completed';
+    }
+    else {
+      if ($shop_info['balances']['settings']['product_debit_condition'] == 'delivery_prepared') {
+        $shop_info['balances']['settings']['product_debit_condition'] = 'created';
+      }
+    }
+    utils_save_packed_var('shop_info', $shop_info);
+  }
+}
+
+/**
+ * Add table for user desired products not in stock (@see {shop_product_requests})
+ */
+function shop_update_7088() {
+  if (!db_table_exists('shop_product_requests')) {
+    $shop_schema = shop_schema();
+    db_create_table('shop_product_requests', $shop_schema['shop_product_requests']);
+  }
+}
+
+
+/**
+ * Update settings
+ */
+function shop_update_7089() {
+  if (variable_get('shop_cart_block_settings', 'default') === 'default') {
+    variable_del('shop_cart_block_settings');
+  }
+  else {
+    db_query('UPDATE {variable} SET name = \'shop_cart_block_view\' WHERE name = \'shop_cart_block_settings\'');
+    cache_clear_all('variables', 'cache_bootstrap');
+  }
+}
+
+/**
+ * Add payment timestamp in order table
+ */
+function shop_update_7090() {
+  if (db_table_exists('shop_orders')) {
+    db_add_field('shop_orders', 'payment_timestamp', array(
+      'description' => 'Datetime of payment for order.',
+      'type' => 'int',
+      'unsigned' => TRUE,
+      'not null' => FALSE,
+      'default' => 0,
+    ));
+    foreach (db_query('SELECT n.nid, n.changed FROM {node} n INNER JOIN {shop_orders} o ON o.nid = n.nid WHERE o.is_paid') as $n) {
+      db_query('UPDATE {shop_orders} SET payment_timestamp = :t WHERE nid = :n', array(':t' => $n->changed, ':n' => $n->nid));
+    }
+  }
+
+}
+
+/**
+ * FIX {shop_index} currency
+ */
+function shop_update_7091() {
+  drupal_set_time_limit(1800);
+  foreach (db_query('SELECT currency, entity_id, revision_id, entity_type FROM {shop_index} WHERE currency IS NOT NULL AND currency != \'\' AND currency != \'RUB\'') as $r) {
+    $curr = _shop_fix_currency($r->currency);
+    if ($curr && $curr !== $r->currency) {
+      db_query('UPDATE {shop_index} SET currency = :curr WHERE entity_id = :id AND revision_id = :rev AND entity_type = :type', array(':curr' => $curr, ':id' => $r->entity_id, ':rev' => $r->revision_id, ':type' => $r->entity_type,));
+    }
+  }
+}
+
+/**
+ * FIX {shop_cart_items_ordered} currency
+ */
+function shop_update_7092() {
+  drupal_set_time_limit(1800);
+  foreach (db_query('SELECT oid, entity_type, entity_id, currency FROM {shop_cart_items_ordered} WHERE currency IS NOT NULL AND currency != \'\' AND currency != \'RUB\'') as $r) {
+    $curr = _shop_fix_currency($r->currency);
+    if ($curr && $curr !== $r->currency) {
+      db_query('UPDATE {shop_cart_items_ordered} SET currency = :curr WHERE oid = :oid AND entity_type = :type AND entity_id = :id', array(':curr' => $curr, ':oid' => $r->oid, ':type' => $r->entity_type, ':id' => $r->entity_id,));
+    }
+  }
+}
+
+/**
+ * Update {shop_product_requests}
+ */
+function shop_update_7093() {
+  db_change_field('shop_product_requests', 'is_spent', 'processed', array(
+    'description' => 'User notified flag. Default is 0, set to event timestamp where product has returned to store and mail was sent.',
+    'type' => 'int',
+    'not null' => TRUE,
+    'default' => 0,
+  ));
+  db_add_index('shop_product_requests', 'processed', array('processed'));
+}
+
+
+/**
+ * Update shop_info setting
+ */
+function shop_update_7094() {
+  $shop_settings = utils_load_packed_var('shop_info', array());
+  if (!empty($shop_settings['payment'])) {
+    foreach ($shop_settings['payment'] as $key => $data) {
+      if (!empty($data['widget callback'])) {
+        $data['form callback'] = $data['widget callback'];
+        unset($data['widget callback']);
+        foreach (
+          array(
+            '_shop_payment_in_shop_widget' => '_shop_payment_in_shop_form',
+            '_bank_gateway_sberbank_widget' => '_bank_gateway_sberbank_form',
+            '_bank_gateway_settlement_account_widget' => '_bank_gateway_settlement_account_form',
+            '_yandex_money_display_widget' => '_yandex_money_form',
+          ) as $from => $to
+        ) {
+          if ($data['form callback'] === $form) {
+            $data['form callback'] = $to;
+          }
+        }
+      }
+      $shop_settings['payment'][$key] = $data;
+    }
+    utils_save_packed_var('shop_info', $shop_settings);
+  }
+  drupal_static_reset('shop_get_info');
+  variable_set('menu_rebuild_needed', 1);
+}
+
+/**
+ * Enable changelog module
+ */
+function shop_update_7095() {
+  module_enable(array('changelog'));
+}
+
+
+/**
+ * Update settings
+ */
+function shop_update_7096() {
+  $shop_info = utils_load_packed_var('shop_info', array());
+  if (empty($shop_info['currency']['default'])) {
+    $def_currency = variable_get('site_default_currency', 'RUB');
+    $shop_info['currency']['default'] = $def_currency;
+    utils_save_packed_var('shop_info', $shop_info);
+  }
+  variable_del('site_default_currency');
+}
+
+/**
+ * Grant new "submit orders" permissions for authentificated users
+ */
+function shop_update_7097() {
+  user_role_grant_permissions(DRUPAL_AUTHENTICATED_RID, array('submit orders'));
+}
+
+/**
+ * Update settings for shop cart
+ */
+function shop_update_7098() {
+  if (variable_get('shop_cart_block_view', 'default') === 'default') {
+    variable_del('shop_cart_sum_purchases');
+    variable_set('shop_cart_layout', 'vertical');
+  }
+  else {
+    variable_set('shop_cart_sum_purchases', TRUE);
+    variable_set('shop_cart_layout', 'horizontal');
+  }
+}
+
+/**
+ * Revoke old order perms from authentificated/anonymous users
+ */
+function shop_update_7099() {
+  user_role_revoke_permissions(DRUPAL_AUTHENTICATED_RID, array('create order content'));
+  user_role_revoke_permissions(DRUPAL_ANONYMOUS_RID, array('create order content'));
+}
+
+
+/**
+ * Enable money.module
+ */
+function shop_update_7100() {
+  module_enable(array('money'));
+}
+
+/**
+ * Migrate from rbk.module to new robokassa.module, part 1
+ */
+function shop_update_7101() {
+  if ($rbk_settings = variable_get('rbk_settings', array())) {
+    $money_payment_systems_settings = variable_get('money_payment_systems_settings', array());
+    $shop_info = utils_load_packed_var('shop_info', array());
+    if (empty($money_payment_systems_settings['robokassa']['settings'])) {
+      $money_payment_systems_settings['robokassa']['settings'] = $rbk_settings;
+    }
+    if (empty($shop_info['payment']['robokassa']['enabled']) && !isset($money_payment_systems_settings['robokassa']['enabled'])) {
+      $money_payment_systems_settings['robokassa']['enabled'] = 0;
+    }
+    variable_set('money_payment_systems_settings', $money_payment_systems_settings);
+  }
+  if (module_exists('rbk')) {
+    module_disable(array('rbk'));
+    module_enable(array('robokassa'));
+  }
+}
+
+/**
+ * Migrate from rbk.module to new robokassa.module, part 2
+ */
+function shop_update_7102() {
+  drupal_uninstall_modules(array('rbk'));
+  $shop_info = utils_load_packed_var('shop_info', array());
+  unset($shop_info['payment']['robokassa']);
+  utils_save_packed_var('shop_info', $shop_info);
+}
+
+/**
+ * Migrate to money api pt.1
+ */
+function shop_update_7103() {
+  module_enable(array('cash'));
+  if (module_exists('bank_gateway')) {
+    module_enable(array('invoice'));
+  }
+  module_disable(array('bank_gateway'));
+}
+
+
+/**
+ * Migrate to money api pt.2
+ */
+function shop_update_7104() {
+  if ($shop_info = utils_load_packed_var('shop_info')) {
+    if (!empty($shop_info['payment'])) {
+      $money_payment_systems_settings = variable_get('money_payment_systems_settings');
+
+      $invoice_enabled = FALSE;
+      $bank_enabled = FALSE;
+      $cash_enabled = FALSE;
+      foreach ($shop_info['payment'] as $idx => $item) {
+        if (!empty($item['enabled']) || !isset($item['enabled'])) {
+          if ($idx === 'settlement_account') {
+            $invoice_enabled = TRUE;
+          }
+          elseif ($idx === 'sberbank') {
+            $bank_enabled = TRUE;
+          }
+          elseif ($idx === 'shop' || ctype_digit($idx . '')) {
+            $cash_enabled = TRUE;
+          }
+        }
+        if ($idx === 'shop') {
+          if ($item['title'] && $item['title'] !== drupal_convert_to_utf8('Наличными', 'cp1251')) {
+            $money_payment_systems_settings['cash']['title'] = $item['title'];
+          }
+          if ($item['description'] && $item['description'] !== drupal_convert_to_utf8('Оплата при самовывозе или курьеру', 'cp1251')) {
+            $money_payment_systems_settings['cash']['description'] = $item['description'];
+          }
+        }
+        if ($idx === 'settlement_account') {
+          if ($item['title'] && $item['title'] !== drupal_convert_to_utf8('Безналичными через банк', 'cp1251')) {
+            $money_payment_systems_settings['invoice']['title'] = $item['title'];
+          }
+          if ($item['description'] && $item['description'] !== drupal_convert_to_utf8('Покупатель получит реквизиты для оплаты', 'cp1251')) {
+            $money_payment_systems_settings['invoice']['description'] = $item['description'];
+          }
+        }
+      }
+      if (!$bank_enabled && !$invoice_enabled) {
+        $money_payment_systems_settings['invoice']['enabled'] = FALSE;
+      }
+      if (!$cash_enabled) {
+        $money_payment_systems_settings['cash']['enabled'] = FALSE;
+      }
+      variable_set('money_payment_systems_settings', $money_payment_systems_settings);
+    }
+  }
+}
+
+
+/**
+ * Migrate to money api pt.3 - rename permission "access others carts" to "administer moneys"
+ */
+function shop_update_7105() {
+  foreach (db_query('SELECT rid FROM {role_permission} WHERE permission = \'access others carts\'') as $r) {
+    if (!db_query('SELECT rid FROM {role_permission} WHERE rid = :rid AND permission = \'administer moneys\'', array(':rid' => $r->rid))->fetchField()) {
+      db_query('UPDATE {role_permission} SET permission = \'administer moneys\', module = \'money\' WHERE permission = \'access others carts\' AND rid = :rid', array(':rid' => $r->rid));
+    }
+  }
+}
+
+
+/**
+ * Delete obsolete settings
+ */
+function shop_update_7106() {
+  drupal_uninstall_modules(array('bank_gateway'));
+  if ($shop_info = utils_load_packed_var('shop_info')) {
+    unset($shop_info['payment']);
+    utils_save_packed_var('shop_info', $shop_info);
+  }
+}
+
+
+/**
+ * Update delivery settings structure
+ */
+function shop_update_7107() {
+  if ($shop_info = utils_load_packed_var('shop_info')) {
+    $old = isset($shop_info['delivery']) ? $shop_info['delivery'] : array();
+    $new = array();
+    // inherrit weights
+    foreach (array_keys($old) as $key) {
+      $new[$key] = array();
+    }
+    $new += array('courier' => array(), 'self' => array());
+    $new['courier'] = array('enabled' => TRUE, 'settings' => array());
+    $new['self'] = array('enabled' => TRUE, 'settings' => array());
+
+    if (!empty($old['courier']['variants'])) {
+      foreach ($old['courier']['variants'] as $idx => $data) {
+        $data['threshold'] = isset($data['price']['threshold']) ? $data['price']['threshold'] : 0;
+        $data['price'] = isset($data['price']['cost']) ? $data['price']['cost'] : 0;
+        $new['courier']['settings']['variants'][$idx ? $idx : 'default'] = $data; // $idx = 0 -->> 'default'
+      }
+    }
+    if (!empty($old['self']['variants'])) {
+      foreach ($old['self']['variants'] as $idx => $data) {
+        if ($idx !== 'default') { // 'default' key is pragrammable
+          $new['self']['settings']['points'][$idx]['enabled'] = !empty($data['enabled']);
+          $new['self']['settings']['points'][$idx]['name'] = $data['description'];
+        }
+        elseif (!empty($data['enabled'])) {
+          $new['self']['settings']['points'][$idx]['enabled'] = TRUE;
+          $t = get_t();
+          $new['self']['settings']['points'][$idx]['name'] = $t('From store');
+        }
+      }
+    }
+    variable_set('shop_delivery_info', $new);
+  }
+}
+
+/**
+* Implements hook_update_dependencies()
+*/
+function shop_update_dependencies() {
+  $dependencies['shop'][7108] = array(
+    'order' => 7035,
+  );
+  return $dependencies;
+}
+
+
+/**
+ * Update delivery params in {shop_orders}
+ */
+function shop_update_7108() {
+  if (db_table_exists('shop_orders')) {
+    foreach (db_query('SELECT nid, delivery_method, delivery_variant, delivery_address, delivery_params FROM {shop_orders} WHERE delivery_method IN (\'courier\', \'self\')') as $r) {
+      if (!$r->delivery_params) {
+        if ($r->delivery_method === 'courier') {
+          $r->delivery_params = array(
+            'variant' => $r->delivery_variant ? $r->delivery_variant : 'default',
+            'address' => $r->delivery_address,
+          );
+        }
+        else { // self
+          $r->delivery_params = array(
+            'point' => $r->delivery_variant ? $r->delivery_variant : 'default',
+          );
+        }
+        db_query('UPDATE {shop_orders} SET delivery_params = :p WHERE nid = :nid', array(
+          ':p' => serialize($r->delivery_params),
+          ':nid' => $r->nid,
+        ));
+      }
+    }
+  }
+}
+
+
+/**
+ * Update delivery settings
+ */
+function shop_update_7109() {
+  module_load_include('inc', 'shop', 'shop.delivery.api');
+  if ($shop_delivery_info = variable_get('shop_delivery_info')) {
+    if (!empty($shop_delivery_info['self']['settings']['points'])) {
+      if ($info = shop_shop_delivery_info()) {
+        if ($descr = $info['self']['settings']['points']['default']['description']) {
+          $shop_delivery_info['self']['settings']['points']['default']['description'] = $descr;
+          variable_set('shop_delivery_info', $shop_delivery_info);
+        }
+      }
+    }
+  }
+}
+
+
+/**
+ * Rename/delete some variables
+ */
+function shop_update_7110() {
+  if (($caption = variable_get('shop_cart_subtitle', NULL)) !== NULL) {
+    variable_set('shop_cart_caption', $caption);
+  }
+  variable_del('shop_cart_subtitle');
+  variable_del('shop_cart_block_hide_empty');
+}
+
+
+/**
+ * Rename shop cart block view modes
+ */
+function shop_update_7111() {
+  if ($shop_cart_block_view = variable_get('shop_cart_block_view')) {
+    if ($shop_cart_block_view === 'min' || $shop_cart_block_view === 'min_digit') {
+      $shop_cart_block_view = 'summary';
+    }
+    elseif ($shop_cart_block_view === 'list_without_prices') {
+      $shop_cart_block_view = 'simple';
+    }
+    elseif ($shop_cart_block_view === 'default') {
+      $shop_cart_block_view = NULL;
+    }
+  }
+  if ($shop_cart_block_view) {
+    variable_set('shop_cart_block_view', $shop_cart_block_view);
+  }
+  else {
+    variable_del('shop_cart_block_view');
+  }
+  if (variable_get('shop_cart_layout', 'horizontal') !== 'horizontal') {
+    variable_set('shop_cart_horizontal', FALSE);
+  }
+  variable_del('shop_cart_layout');
+  variable_del('shop_cart_sum_purchases');
+}
+
+
+/**
+ * Update delivery settings structure
+ */
+function shop_update_7112() {
+  if ($shop_delivery_info = variable_get('shop_delivery_info', array())) {
+    if (isset($shop_delivery_info['self']['settings']['points'])) {
+      $shop_delivery_info['self']['settings']['variants'] = $shop_delivery_info['self']['settings']['points'];
+      unset($shop_delivery_info['self']['settings']['points']);
+      variable_set('shop_delivery_info', $shop_delivery_info);
+    }
+  }
+
+}
+
+
+/**
+ * Update delivery settings structure
+ */
+function shop_update_7113() {
+  foreach (db_query('SELECT cart_id, data FROM {shop_cart}') as $r) {
+    if ($r->data && ($data = @unserialize($r->data)) && isset($data['delivery_params']['self']['point'])) {
+      $data['delivery_params']['self']['variant'] = $data['delivery_params']['self']['point'];
+      unset($data['delivery_params']['self']['point']);
+      db_query('UPDATE {shop_cart} SET data = :data WHERE cart_id = :id', array(':data' => serialize($data), ':id' => $r->cart_id));
+    }
+  }
+  if (db_table_exists('shop_orders')) {
+    foreach (db_query('SELECT order_num, delivery_params, delivery_method FROM {shop_orders} WHERE delivery_method = \'self\'') as $r) {
+      if ($r->delivery_params && ($params = @unserialize($r->delivery_params)) && isset($params['point'])) {
+        $params['variant'] = $params['point'];
+        unset($params['point']);
+        db_query('UPDATE {shop_orders} SET delivery_params = :params WHERE order_num = :n AND delivery_method = :m', array(':params' => serialize($params), ':n' => $r->order_num, ':m' => $r->delivery_method));
+      }
+    }
+  }
+
+}
+
+
+/**
+ * Delete duplicates from {shop_cart}
+ */
+function shop_update_7114() {
+  foreach (db_query('SELECT cart_id, uid FROM {shop_cart} WHERE uid > 0 GROUP BY uid ORDER BY changed DESC') as $r) {
+    db_query('DELETE FROM {shop_cart} WHERE uid = :uid AND cart_id <> :id', array(':uid' => $r->uid, ':id' => $r->cart_id,));
+  }
+  db_query('DELETE FROM {shop_cart_items} WHERE cart_id NOT IN (SELECT cart_id FROM {shop_cart})');
+}
+
+
+/**
+ * Enable required anonymous_tracker module
+ */
+function shop_update_7115() {
+  module_enable(array('anonymous_tracker'));
+}
+
+
+/**
+* Move shop cart ids to anonymous tracker system
+*/
+function shop_update_7116() {
+  drupal_get_schema('anonymous_tracker', TRUE);
+  db_query('DELETE FROM {shop_cart} WHERE uid = 0');
+  foreach (db_query('SELECT cart_id, uid, changed FROM {shop_cart} WHERE uid > 0 ORDER BY changed DESC') as $r) {
+    $record = (object) array('uid' => $r->uid, 'updated' => $r->changed);
+    if ($id = db_query('SELECT id FROM {anonymous_tracker} WHERE uid = :uid', array(':uid' => $r->uid))->fetchCol()) {
+      $record->id = $id;
+    }
+    if (drupal_write_record('anonymous_tracker', $record, $id ? 'id' : array())) {
+      db_query('UPDATE {shop_cart} SET anonymous_key = :id WHERE cart_id = :cart_id', array(':id' => $record->id, ':cart_id' => $r->cart_id));
+    }
+  }  
+}
+
+/**
+ * Add snapshot functionality to tables: shop_cart_items, shop_cart_items_ordered
+ */
+function shop_update_7117() {
+  if (!db_field_exists('shop_cart_items', 'snapshot_id')) {
+    db_add_field('shop_cart_items', 'snapshot_id', array(
+      'type' => 'int',
+      'default' => 0,
+      'unsigned' => TRUE,
+      'not null' => TRUE,
+      'description' => 'Snapshot id',
+    ));
+  }
+
+  if (!db_index_exists('shop_cart_items', 'snapshot_id')) {
+    db_add_index('shop_cart_items', 'snapshot_id', array('snapshot_id'));
+  }
+
+  if (!db_field_exists('shop_cart_items_ordered', 'snapshot_id')) {
+    db_add_field('shop_cart_items_ordered', 'snapshot_id', array(
+      'type' => 'int',
+      'default' => 0,
+      'unsigned' => TRUE,
+      'not null' => TRUE,
+      'description' => 'Snapshot id',
+    ));
+  }
+
+  if (!db_index_exists('shop_cart_items_ordered', 'snapshot_id')) {
+    db_add_index('shop_cart_items_ordered', 'snapshot_id', array('snapshot_id'));
+  }
+
+
+  try {
+    db_drop_unique_key('shop_cart_items', 'cart_id_entity');
+    db_add_unique_key('shop_cart_items', 'cart_id_entity', array('cart_id', 'entity_type', 'entity_id', 'snapshot_id'));
+  } catch (PDOException $e) {
+    throw new DrupalUpdateException($e->getMessage());
+  }
+}
+
+
+/**
+ * Enable 'snapshot' module
+ */
+function shop_update_7118() {
+  module_enable(array('snapshot'));
+}
+
+
+/**
+ * Sync database structure with defined schema
+*/
+function shop_update_7119() {
+  db_change_field('shop_index', 'entity_id', 'entity_id', array(
+    'description' => 'Product entity identifier',
+    'type' => 'int',
+    'unsigned' => TRUE,
+    'not null' => TRUE,
+  ));
+  db_change_field('shop_index', 'entity_type', 'entity_type', array(
+      'description' => 'Type of entity of product',
+      'type' => 'varchar',
+      'length' => '128',
+      'not null' => FALSE,
+      'default' => NULL,
+  ));
+  db_change_field('shop_index', 'qty', 'qty', array(
+    'description' => 'Quantity of products in stock. NULL is indented as infinity quantity.',
+    'type' => 'numeric',
+    'unsigned' => TRUE,
+    'not null' => FALSE,
+    'precision' => '30',
+    'scale' => '2',
+  ));
+  db_drop_index('shop_index', 'title');
+}
+
+
+/**
+* Strong sync of shop entity_types settings with actual list of node types
+*/
+function shop_update_7120() {
+    $shop_settings = utils_load_packed_var('shop_info', array());
+    $update = FALSE;
+    if (!empty($shop_settings['entity_types']['node'])) {
+      foreach ($shop_settings['entity_types']['node'] as $nt => $enabled) {
+        if (!node_type_load($nt)) {
+          unset($shop_settings['entity_types']['node'][$nt]);
+          $update = TRUE;
+        }
+      }
+    }
+    if ($update) {
+      utils_save_packed_var('shop_info', $shop_settings);
+    }
+}
+
+
+/**
+* Admin menu bugfix
+*/
+function shop_update_7121() {
+  db_query('DELETE FROM {menu_links} WHERE link_path LIKE \'admin/shop\/%\' AND module = \'system\' AND customized = 0');
+  variable_set('menu_rebuild_needed', TRUE);
+}
+
+
+/**
+ * Add 'goods_on_request' and 'supply_time' fields to shop_index
+ */
+function shop_update_7122() {
+  if (db_table_exists('shop_index')) {
+    if (!db_field_exists('shop_index', 'goods_on_request')) {
+      db_add_field('shop_index', 'goods_on_request', array(
+        'description' => 'Available on request',
+        'type' => 'int',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+        'default' => 0,
+      ));
+    }
+
+    if (!db_field_exists('shop_index', 'supply_time')) {
+      db_add_field('shop_index', 'supply_time', array(
+        'description' => 'Product supply time',
+        'type' => 'int',
+        'unsigned' => TRUE,
+        'not null' => FALSE,
+        'default' => NULL,
+      ));
+    }
+  }
+}
+
+
+/**
+ * Add 'created' column to 'shop_cart' table
+ */
+function shop_update_7123() {
+  if (db_table_exists('shop_cart')) {
+    if (!db_field_exists('shop_cart', 'created')) {
+      db_add_field('shop_cart', 'created', array(
+        'description' => 'Date of creation',
+        'type' => 'int',
+        'not null' => TRUE,
+        'default' => 0,
+      ));
+    }
+  }
+}
+
+/**
+ * Fill 'created' column with values from 'changed' column
+ */
+function shop_update_7124() {
+  if (db_table_exists('shop_cart')) {
+    if (db_field_exists('shop_cart', 'created')) {
+      db_query('UPDATE `shop_cart` SET `created` = `changed` WHERE 1')->execute();
+    }
+  }
+}
+
+
+// @TODO: delete 'delivery' array from shop_info
+// @TODO: drop shop_orders.delivery_variant
+// @TODO: drop shop_orders.delivery_address
+// @TODO: delete 'general' array from shop_info
+
+
+
+
+
+
+
+
+
+
+
+
+
+

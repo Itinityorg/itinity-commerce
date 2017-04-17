@@ -1,0 +1,16 @@
+; $Id: shop.info, v 1.0 2011/04/11 10:08:57 Ivan Demenkov Exp $
+name = Shop
+description = Add required site elements for create shop.
+package = ITK/Shop
+version = 7.x
+core = 7.x
+dependencies[] = money
+dependencies[] = anonymous_tracker
+dependencies[] = shop_units
+dependencies[] = contacts
+dependencies[] = changelog
+dependencies[] = addons
+dependencies[] = snapshot
+
+
+

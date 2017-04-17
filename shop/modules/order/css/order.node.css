@@ -1,0 +1,52 @@
+.node form[id*="-order-payment-method-form"] {
+  padding:0;
+}
+
+.form-type-radio.form-item-payment-method {
+  padding: 0.5em 1em;
+  border: 2px solid transparent;
+}
+
+.form-item-payment-method.checked {
+  border: 2px solid #424242;
+} 
+ 
+.main-content .node .form-item.form-type-radio.form-item-payment-method {
+  margin-left: 0;
+  display: table;
+} 
+
+.form-item-payment-method img { 
+  display: inline-block;
+  vertical-align: bottom;
+  margin: 0 0.4em;
+  -webkit-filter: grayscale(100%);
+  -moz-filter: grayscale(100%);
+  -ms-filter: grayscale(100%);
+  -o-filter: grayscale(100%);
+  filter: grayscale(100%);
+
+}
+
+.checked img {
+  -webkit-filter: grayscale(0);
+  -moz-filter: grayscale(0);
+  -ms-filter: grayscale(0);
+  -o-filter: grayscale(0);
+  filter: grayscale(0);
+}
+
+.payment-method-description {
+  display: block;
+  font-size: 0.8em;  
+  margin-left: 1.4em;
+}
+
+.form-item-payment-method .payment-method-description {
+  display: none;  
+}
+
+.form-item-payment-method.checked .payment-method-description {
+  display: block;  
+}
+

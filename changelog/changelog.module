@@ -1,0 +1,543 @@
+<?php //$Id: changelog.module, v 1.0 2013/12/06 16:27:13 itinity Exp $
+/**
+ * Copyright 2013-2017 Itinity Ltd. (itinity.ru). All rights reserved.
+ * Licensed under the GNU General Public License, version 2 or later.
+ */
+
+function changelog_menu() {
+	$items = array();
+	$items['admin/reports/changelog'] = array(
+		'title' => 'Changelog',
+		'access arguments' => array('view entity changelog',),
+		'page callback' => 'drupal_get_form',
+		'page arguments' => array('changelog_events_overview_form'),
+		'file' => 'changelog.admin.inc',
+	);
+	return $items;
+}
+
+
+function changelog_init() {
+
+}
+
+/**
+* Multiple load changelog records by passed ids or conditions
+*/
+function changelog_event_load_multiple(array $ids = NULL, $conditions = array()) {
+	$conditions = $ids ? array('changelog_id' => $ids) : ($conditions ? $conditions : array());
+	$query = db_select('changelog', 'ch')->fields('ch');
+	foreach ($conditions as $col => $val) {
+		$query->condition('ch.' . $col, $val);
+	}
+	$result = array();
+	foreach ($query->execute()->fetchAllAssoc('changelog_id') as $event) {
+		$event->message_params = $event->message_params ? unserialize($event->message_params) : array();
+		$event->op_params = unserialize($event->op_params);
+		$result[$event->changelog_id] = $event;
+	}
+	// Ensure that the returned array is ordered the same as the original
+	if (!empty($ids)) {
+		$passed_ids = array_intersect_key(array_flip($ids), $result);
+		foreach ($result as $event) {
+			$passed_ids[$event->changelog_id] = $event;
+		}
+		$result = $passed_ids;
+	}
+	return $result;
+}
+
+/**
+* Load changelog record by passed id
+*/
+function changelog_event_load($changelog_id) {
+	if ($result = changelog_event_load_multiple(array($changelog_id))) {
+		return reset($result);
+	}
+}
+
+/**
+* Save changelog event into database
+*/
+function changelog_event_save($event) {
+	if (!is_object($event) && !is_array($event)) {
+		throw new Exception('Invalid event object!');
+	}
+	if ($is_object = is_object($event)) {
+		$event = (array)$event;
+	}
+	if (!$event['entity_type'] || !$event['entity_id']) {
+		throw new Exception('Entity type or id not specified!');
+	}
+	if ($event['entity_type'] === 'comment' || !($entities = entity_load($event['entity_type'], array($event['entity_id'])))) {
+		return;
+	}
+	else {
+		$entity = reset($entities);
+		list(, , $bundle) = entity_extract_ids($event['entity_type'], $entity);
+		if (!changelog_entity_is_supported($event['entity_type'], $bundle)) {
+			return;
+		}
+	}
+	$is_new = empty($event['changelog_id']);
+	$event += array(
+		'module' => '',
+		'op' => '',
+		'result' => '',
+		'op_params' => array(),
+		'created' => REQUEST_TIME,
+		'uid' => $GLOBALS['user']->uid,
+		'message' => '',
+		'message_params' => array(),
+		'raw_text' => '',
+		'hostname' => ip_address(),
+		'comment_cid' => 0,
+	);
+	$result = FALSE;
+	$transaction = db_transaction();
+	try {
+
+
+		// sanitize values
+
+		$event['result'] = truncate_utf8($event['result'], 255);
+		$event['op'] = truncate_utf8($event['op'], 64);
+
+		$event['message_params'] = serialize($event['message_params'] ? $event['message_params'] : array());
+		$event['op_params'] = serialize($event['op_params']);
+
+		if ($result = drupal_write_record('changelog', $event, $is_new ? array() : 'changelog_id')) {
+			// Create or update attached comment
+      
+			if (module_exists('comment') && $event['entity_type'] === 'node') {
+        $comment = NULL;
+				if ($is_new) {
+					// create comment object
+					$comment = (object)array(
+						'cid' => NULL,
+						'nid' => $event['entity_id'],
+						'uid' => $event['uid'],
+						'pid' => NULL,
+						'subject' => 'Status message', // not use t()
+						'changelog_id' => $event['changelog_id'], // @see changelog_comment_insert()
+						'comment_body' => array(
+							LANGUAGE_NONE => array(
+								array(
+									'value' => $event['raw_text'],
+									'format' => filter_fallback_format(),
+								),
+							),
+						),
+					);
+				}
+				elseif (!empty($event['comment_cid'])) {
+					// load existing comment object
+					$comment = comment_load($event['comment_cid']);
+					if (!$event['raw_text']) {
+						$event['raw_text'] = $comment->comment_body[LANGUAGE_NONE][0]['value'];
+					}
+					if (!$comment->comment_body[LANGUAGE_NONE][0]['value']) {
+						$comment->comment_body[LANGUAGE_NONE][0]['value'] = $event['raw_text'];
+					}
+				}
+        if ($comment) {
+          // save comment object to db and get his cid
+          comment_save($comment);
+          $event['comment_cid'] = $comment->cid;
+        }
+			}
+			$event['message_params'] = $event['message_params'] ? unserialize($event['message_params']) : NULL;
+			$event['op_params'] = unserialize($event['op_params']);
+		}
+	}
+	catch (Exception $e) {
+		$transaction->rollback();
+		watchdog_exception('changelog', $e);
+		throw $e;
+	}
+	if ($is_object) {
+		$event = (object)$event;
+	}
+	return $result ? $event : FALSE;
+}
+
+
+/**
+* Implenents hook_comment_insert()
+*/
+function changelog_comment_insert($comment) {
+	if (!empty($comment->changelog_id)) {
+		db_query('UPDATE {changelog} SET comment_cid = :comment_cid WHERE changelog_id = :changelog_id', array(':comment_cid' => $comment->cid, ':changelog_id' => $comment->changelog_id));
+	}
+}
+
+
+/**
+* Implenents hook_comment_update()
+*/
+function changelog_comment_update($comment) {
+	if (!empty($comment->changelog_id)) {
+		db_query('UPDATE {changelog} SET raw_text = :txt WHERE changelog_id = :id', array(':txt' => $comment->comment_body[LANGUAGE_NONE][0]['value'], ':id' => $comment->changelog_id));
+	}
+}
+
+
+/**
+* Delete changelog event from database
+*/
+function changelog_event_delete($changelog_id) {
+	changelog_delete_multiple(array($changelog_id));
+	return TRUE;
+}
+
+
+/**
+* Multiple delete changelog events by passed parameters
+*/
+function changelog_delete_multiple(array $ids = NULL, $conditions = array()) {
+	if ($events = changelog_event_load_multiple($ids, $conditions)) {
+		$ids = array_keys($events);
+		$transaction = db_transaction();
+		try {
+			db_delete('changelog')
+			->condition('changelog_id', $ids)
+			->execute();
+			foreach ($events as $event) {
+				module_invoke_all('changelog_event_delete', $event);
+			}
+		}
+		catch (Exception $e) {
+			$transaction->rollback();
+			watchdog_exception('changelog', $e);
+			throw $e;
+		}
+	}
+}
+
+
+/**
+* Implements hook_entity_delete()
+*/
+function changelog_entity_delete($entity, $entity_type) {
+	if ($entity_type !== 'comment') {
+		// Delete events attached to deleted entity
+		list($id, $vid, $bundle) = entity_extract_ids($entity_type, $entity);
+		changelog_delete_multiple(NULL, array('entity_type' => $entity_type, 'entity_id' => $id,));
+	}
+	else {
+		// Detach event from deleted comment
+		db_query('UPDATE {changelog} SET comment_cid = 0 WHERE comment_cid = :cid', array(':cid' => $entity->cid,));
+	}
+}
+
+/**
+* Implements hook_user_delete()
+*/
+function changelog_user_delete($account) {
+	db_query('UPDATE {changelog} SET uid = 0 WHERE uid = :uid', array(':uid' => $account->uid,));
+}
+
+/**
+* Implements hook_permission()
+*/
+function changelog_permission() {
+	return array(
+		'view entity changelog' => array(
+			'title' => t('View entity events track'),
+			'restrict access' => TRUE,
+		),
+	);
+}
+
+
+/**
+* Public function for quick write changelog records
+*/
+function changelog_add($entity, $entity_type, $module, $message, array $message_params = NULL, $op = NULL, array $op_params = NULL, $uid = NULL, $raw_text = NULL) {
+	list($id,,) = entity_extract_ids($entity_type, $entity);
+	return changelog_event_save(array(
+		'entity_type' => $entity_type,
+		'entity_id' => $id,
+		'module' => $module,
+		'message' => $message,
+		'message_params' => $message_params ? $message_params : array(),
+		'op' => $op,
+		'op_params' => $op_params ? $op_params : array(),
+		'uid' => $uid ? $uid : $GLOBALS['user']->uid,
+		'raw_text' => $raw_text ? $raw_text : '',
+	));
+}
+
+
+/**
+* Build renderable array with loaded changelog events
+*/
+function changelog_event_view_multiple($events) {
+	$build = array();
+	$i = 0;
+	foreach ($events as $idx => $event) {
+		$build[$idx] = changelog_event_view($event);
+		if (!$i) {
+			$build[$idx]['#attributes']['class'][] = 'first';
+		}
+		$build[$idx]['#attributes']['class'][] = ($i++%2) ? 'odd' : 'even';
+	}
+	$build[$idx]['#attributes']['class'][] = 'last';
+	return $build;
+}
+
+
+/**
+* Build renderable array by passed changelog event
+*/
+function changelog_event_view($event) {
+  $comment = isset($event->raw_text) ? nl2br(preg_replace('/(^\s+)|(\s+$)/u', '', strip_tags($event->raw_text))) : '';
+  $comment = $comment ? '<br /><small><strong>' . t('comment') . ':</strong> <em>' . $comment . '</em></small>' : '';
+	return array(
+			'#type' => 'item',
+			'#inline' => TRUE,
+			'#title' => format_date($event->created) . ($event->uid > 0 ? theme('username', array('account' => user_load($event->uid))) : t('System')),
+			'#attributes' => array(
+				'class' => array('changelog-event', $event->op ? 'op-' . drupal_html_class($event->op) : ''),
+			),
+			'#attached' => array(
+				'css' => array(drupal_get_path('module', 'changelog') . '/changelog.css',),
+			),
+			'body' => array(
+				'#access' => !empty($event->message),
+				'message' => array(
+					'#markup' => t($event->message, $event->message_params),
+				),
+				'raw_text' => array(
+					'#access' => !empty($comment),// && ($event->entity_type !== 'node' || !module_exists('comment') || variable_get('comment_' . $event->entity->type, COMMENT_NODE_OPEN) == COMMENT_NODE_HIDDEN),
+					'#markup' => $comment,
+				),
+			),
+		);
+}
+
+function changelog_event_view_in_comment($event) {
+	$view = changelog_event_view($event);
+	unset($view['body']['raw_text']);
+	return array('#inline' => TRUE, '#title' => t('Changes')) + $view;
+}
+
+/**
+* Implements hook_comment_load();
+*/
+function changelog_comment_load($comments)  {
+	foreach ($comments as $comment) {
+		$comment->changelog_id = 0;
+	}
+	foreach (db_query('SELECT changelog_id, comment_cid FROM {changelog} WHERE comment_cid IN (:cids)', array(':cids' => array_keys($comments))) as $r) {
+		$comments[$r->comment_cid]->changelog_id = $r->changelog_id;
+	}
+
+}
+
+function changelog_form_alter(&$form, &$form_state, $form_id) {
+	if (preg_match('/^comment_node_[a-zA-Z0-9_]+_form$/', $form_id)) {
+		if (arg(0) === 'comment' && arg(2) === 'edit') {
+			if (preg_match('/>Status message<\/em>$/', $title = drupal_get_title())) {
+				drupal_set_title(preg_replace('/>Status message<\/em>$/', '>' . t('Status message') . '</em>', $title), PASS_THROUGH);
+			}
+		}
+	}
+}
+
+function changelog_preprocess_comment(&$variables) {
+	if (!variable_get('comment_subject_field_' . $variables['node']->type) && !empty($variables['elements']['changelog_message'])) {
+		$variables['title'] = '';
+	}
+}
+
+/**
+* Implements hook_entity_view()
+*/
+function changelog_entity_view($entity, $entity_type, $view_mode, $langcode) {
+	global $user;
+	if ($entity_type === 'comment') {
+		if ($entity->uid === $user->uid || user_access('view entity changelog')) {
+			if (!isset($entity->changelog_id)) {
+				// In some cases comment object can be loaded directly from database and hook_comment_load() is not passed. @see comment_reply() -->> if ($pid) { ... $comment = db_query(..); ...  }
+				changelog_comment_load(array($entity->cid => $entity));
+			}
+			if ($entity->changelog_id && changelog_entity_is_supported('node', preg_replace('/^comment_node_/', '', $entity->node_type))) {
+				if ($entity->subject === 'Status message') {
+					$entity->subject = t('Status message');
+				}
+				//m($entity->content['comment_body']);
+				$comment_body_display = field_get_display(field_info_instance('comment', 'comment_body', $entity->node_type), $view_mode, $entity);
+				if ($event = changelog_event_load($entity->changelog_id)) {
+					$entity->content['changelog_message'] = array(
+						'#weight' => $comment_body_display['weight'] - 0.0001,
+						'#attached' => array(
+							'css' => array(
+								drupal_get_path('module', 'changelog') . '/changelog.css',
+							),
+						),
+					) + changelog_event_view_in_comment($event);
+				}
+			}
+		}
+	}
+	elseif (user_access('view entity changelog')) {
+		// Implements extra field vith changelog tracker attached to current entity
+			list($id, $vid, $bundle) = entity_extract_ids($entity_type, $entity);
+			if (changelog_entity_is_supported($entity_type, $bundle)) {
+				$extra_fields = field_extra_fields_get_display($entity_type, $bundle, $view_mode);
+				if (!empty($extra_fields['changelog']['visible'])) {
+					$query = db_select('changelog', 'ch')
+						->fields('ch', array('changelog_id'))
+						->condition('ch.entity_type', $entity_type)
+						->condition('ch.entity_id', $id)
+						->orderBy('ch.created', 'DESC');
+					$pager_element = PagerDefault::$maxElement;
+					$query = $query->extend('PagerDefault')->limit(30)->element($pager_element);
+
+					if ($ids = $query->execute()->fetchCol()) {
+						if ($events = changelog_event_view_multiple(changelog_event_load_multiple($ids))) {
+							$id = drupal_html_id('changelog-list');
+							$entity->content['changelog'] = array(
+								'#type' => 'item',
+								'#title' => t('Changelog'),
+								'#attributes' => array(
+									'class' => array('changelog',),
+								),
+								'events' => $events + array(
+									'#prefix' => '<div class="events-wrapper" id="' . $id . '">',
+									'#suffix' => '</div>',
+								),
+								'pager' => array(
+									'#markup' => preg_replace('/\shref="(.*?)"/', ' href="$1#' . $id . '"', theme('pager', array('element' => $pager_element,))),
+								),
+								'#attached' => array(
+									'css' => array(
+										drupal_get_path('module', 'changelog') . '/changelog.css',
+									),
+								),
+							);
+						}
+					}
+					else {
+						// Paged query not yielded results - restore pager environment.
+						PagerDefault::$maxElement--;
+						global $pager_page_array, $pager_total, $pager_total_items, $pager_limits;
+						unset($pager_total_items[$pager_element], $pager_total[$pager_element], $pager_page_array[$pager_element], $pager_limits[$pager_element]);
+					}
+				}
+			}
+	}
+
+}
+
+
+/**
+* Implements hook_query_TAG_alter()
+*/
+function changelog_query_comment_filter_alter(QueryAlterableInterface $query) {
+	// Hide from untrusted users comments with changelog messages:
+	if (!user_access('view entity changelog') && node_changelog_entity_is_supported('node', $query->getMetaData('node')->type)) {
+		global $user;
+		$query->leftJoin('changelog', 'ch', 'ch.comment_cid = c.cid');
+		$db_or = db_or();
+		$db_or->isNull('ch.changelog_id');
+    if ($user->uid) {
+      $db_or->condition('c.uid', $user->uid);
+    }
+		$query->condition($db_or);
+	}
+}
+
+
+/**
+* Determine what entity type can generate changelog events
+*/
+function changelog_entity_is_supported($entity_type, $bundle) {
+	if ($entity_type === 'comment') { // We do no track comments, but we use comments as container for changelog messages, @see changelog_entity_view()
+		return FALSE;
+	}
+	foreach (module_implements('changelog_entity_is_supported') as $module) {
+		$fn = $module . '_changelog_entity_is_supported';
+		if ($fn($entity_type, $bundle)) {
+			return TRUE;
+		}
+	}
+	return FALSE;
+}
+
+
+/**
+* Implements hook_changelog_entity_is_supported() defined in changelog.module
+*/
+function node_changelog_entity_is_supported($entity_type, $bundle) {
+	if ($entity_type === 'node') {
+		$changelog_nodetypes = variable_get('changelog_nodetypes', array($bundle));
+		return in_array($bundle, $changelog_nodetypes, TRUE) ? TRUE : NULL;
+	}
+}
+
+
+/**
+* Implements hook_changelog_entity_is_supported() defined in changelog.module
+*/
+// @TODO: move to order.module
+function order_changelog_entity_is_supported($entity_type, $bundle) {
+	return $entity_type === 'node' && $bundle === 'order' ? TRUE : NULL;
+}
+
+
+function user_changelog_entity_is_supported($entity_type, $bundle) {
+	return $entity_type === 'user' && $bundle === 'user' ? TRUE : NULL;
+}
+
+
+/**
+* Implements hook_field_extra_field_alter()
+*/
+function changelog_field_extra_fields_alter(&$info) {
+	foreach ($info as $entity_type => $data) {
+		// Define changelog extra field for suppoted entity types
+		foreach ($data as $bundle => $item) {
+			if (changelog_entity_is_supported($entity_type, $bundle)) {
+				$default_visible = TRUE;
+				if ($entity_type === 'node' && module_exists('comment')) {
+					// Display own extra field only where node comments is invisible
+					$default_visible = (variable_get('comment_' . $bundle, COMMENT_NODE_OPEN) == COMMENT_NODE_HIDDEN);
+				}
+				$info[$entity_type][$bundle]['display']['changelog'] = array(
+					'label' => t('Changelog'),
+					'description' => t('Log of entity changes'),
+					'weight' => 99999999999,
+					'default_display' => array(
+						'default' => array(
+							'visible' => FALSE,
+						),
+						'full' => array(
+							'visible' => $default_visible,
+						),
+					),
+				);
+			}
+		}
+	}
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

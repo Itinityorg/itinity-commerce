@@ -1,0 +1,7 @@
+; $Id: multifield.info, v 1.0 2011/02/17 23:34:34 ITKLD Exp $
+name = Multifield
+dependencies[] = utils
+;description = 
+package = ITK/System
+version = "7.x-dev"
+core = 7.x

@@ -1,0 +1,61 @@
+# $Id$
+#
+# Russian translation
+# Copyright YEAR NAME <EMAIL@ADDRESS>
+# Generated from order.module, v 1.0 2011/07/02 12:37:27 ITKLD
+
+msgid ""
+msgstr ""
+"Project-Id-Version: PROJECT VERSION\n"
+"POT-Creation-Date: 2013-08-02 20:48+0300\n"
+"PO-Revision-Date: 2013-08-02 20:48+0300\n"
+"Last-Translator: NAME <EMAIL@ADDRESS>\n"
+"Language-Team: Russian <EMAIL@ADDRESS>\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=utf-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=3; plural=((((n%10)==1)&&((n%100)!=11))?(0):(((((n%10)>=2)&&((n%10)<=4))&&(((n%100)<10)||((n%100)>=20)))?(1):2));\n"
+
+msgctxt "mail:order:new"
+msgid "New @order_title"
+msgstr "Новый @order_title"
+
+msgctxt "mail:order:new"
+msgid "You have created an @order_title"
+msgstr "Вы создали @order_title"
+
+msgctxt "mail:order:new"
+msgid "You have created an !order-link"
+msgstr "Вы создали !order-link"
+
+msgctxt "mail:order:new"
+msgid "Created new !order-link on site @sitename by user !username-link"
+msgstr "Создан новый !order-link на сайте @sitename пользователем !username-link"
+
+msgctxt "mail:order:new"
+msgid "Created new @order-name on site @sitename by user @username"
+msgstr "Создан новый @order-name на сайте @sitename пользователем @username"
+
+msgctxt "mail:order:new"
+msgid "Created new !order-link on site @sitename"
+msgstr "Создан новый !order-link на сайте @sitename"
+
+msgctxt "mail:order:new"
+msgid "Order number is: #@num"
+msgstr "Номер заказа: №@num"
+
+msgctxt "mail:order:new"
+msgid "Go to order"
+msgstr "Перейти в заказ"
+
+msgctxt "mail:order:status"
+msgid "Status of your order [order:title] is changed to [order:status]"
+msgstr "Статус вашего заказа [order:title] изменен на [order:status]"
+
+msgctxt "mail:order:status"
+msgid "Status of your order [order:title] is changed to [order:status]\n\nYou can view the order progress by reference [order:view]"
+msgstr "Статус вашего заказа [order:title] изменен на [order:status]\n\nВы можете отслеживать выполнение заказа по ссылке [order:view]"
+
+
+
+

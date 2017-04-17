@@ -1,0 +1,167 @@
+Длина
+L,MMT,Миллиметр,Millimeter,мм,mm,,"0,001",1
+L,CMT,Сантиметр,Centimeter,см,cm,,"0,01"
+L,DMT,Дециметр,Decimeter,дм,dm,,"0,1"
+L,MTR,Метр,Meter,м,m,+,1
+L,KMT,Километр,Kilometer,км,km,,1000
+L,INH,Дюйм,Inch,дюйм,in,,"0,0254"," (25,4 мм)"
+L,FOT,Фут,Ft,фут,ft,,"0,3048"," (0,3048 м)"
+L,YRD,Ярд,Yard,ярд,yd,,"0,9144"," (0,9144 м)"
+L,NMI,Морская миля,Knot,миля,n mile,,1852, (1852 м)
+L,UNT,Юнит,Unit,юнит,U
+
+Площадь
+S,MMK,Квадратный миллиметр,Square millimeter,мм2,mm2,,"0,000001"
+S,CMK,Квадратный сантиметр,Square centimeter,см2,cm2,,"0,0001"
+S,DMK,Квадратный дециметр,Square decimeter,дм2,dm2,,"0,01"
+S,MTK,Квадратный метр,Square meter,м2,m2,+,1
+S,HAR,Гектар,Hectare,га,ha,,10000
+S,KMK,Квадратный километр,Square kilometer,км2,km2,,1000000
+S,INK,Квадратный дюйм,Square inch,дюйм2,in2,,"0,00064516"," (645,16 мм2)"
+S,FTK,Квадратный фут,Square foot,фут2,Ft 2,,"0,092903"," (0,092903 м2)"
+S,YDK,Квадратный ярд,Square yard,ярд2,yd2,,"0,8361274"," (0,8361274 м2)"
+S,ARE,Ар,Are,а,а,,100,(100 м2)
+S,SOT,Сотка,Sotka,сот,sot,,100
+
+Объем
+V,MMQ,Кубический миллиметр,Cubic millimeter,мм3,mm3,,0.0000000001
+V,CMQ,Кубический сантиметр,Cubic centimeter,см3,cm3,,0.0000001
+V,DMQ,Кубический дециметр,Cubic decimeter,дм3,dm3,,0.0001
+V,MTQ,Кубический метр,Cubic meter,м3,m3,+,1
+V,MLT,Миллилитр,Milliliter,мл,ml,,"0,000000001"
+V,LTR,Литр,liter,л,l,,0.001
+V,INQ,Кубический дюйм ,Cubic inch,дюйм3,in3,,16.387064x10-6,"(16387,1 мм3)"
+V,FTQ,Кубический фут,Cubic foot,фут3,Ft 3,,0.028316846592," (0,02831685 м3)"
+V,YDQ,Кубический ярд,Cubic yard,ярд3,yd3,,0.764554857984," (0,764555 м3)"
+
+
+Масса
+M,MGM,Миллиграмм,Milligram,мг,mg,,0.000001
+M,GRM,Грамм,Gram,г,g,,0.001
+M,KGM,Килограмм,Kilogram,кг,kg,+,1
+M,TNE,Тонна,Ton,т,t,,1000, метрическая тонна (1000 кг)
+M,DTN,Центнер,Hundredweight,ц,q,,100, (метрический) (100 кг);
+M,GLL,Галлон,Gallon,гал,gal,,?
+M,ONC,Унция,Ounce,унц,y,,?
+M,BRR,Баррель,Barrel,барл,barl,,?
+
+
+Экономические единицы
+E,NBB,Бобина,Reel,боб.,reel
+E,LEF,Лист,Sheet,л.,sht
+E,SET,Набор,Set,набор,set
+E,NPR,Пара,Pair,пар,pr,,, (2 шт.)
+E,NPL,Посылка,Parcel,посыл,prcl
+E,NPT,Часть,Part,часть,prt
+E,NPL,Рулон,Roll,рул,roll
+E,NCL,Элемент,Element,элем,CI
+E,NMP,Упаковка,Packaging,упак,pack.
+E,PCE,Штука,Thing,шт,pc
+E,CEN,Сто штук,A hundred,100 шт,hundr.
+E,MIL,Тысяча штук,A thousand pieces,тыс. шт,ths.hdr.
+E,BX,Ящик,Box,ящ.,box
+E,BTL,Бутылка,Bottle,бут.,botl.
+E,MH,Человеко-час,Man-hour,чел.ч,man/h
+E,MD,Человеко-день,Man-day,чел.дн,man/d
+E,TKM,Тонно-километр,Tonne-km,т.км,tone/km
+E,HD,Голова,Head,гол.,head
+
+
+Время
+T,SEC,Секунда,Second,с,s,+,1
+T,MIN,Минута,Minute,мин,min,,60
+T,HUR,Час,Hour,ч,h,,3600
+T,DAY,Сутки,Day,сут,d,,86400
+T,WEE,Неделя,Week,нед,w,,604800
+T,MON,Месяц,Month,мес,m,,18144000
+T,QAN,Квартал,Quarter,кварт,q,,7905600
+T,SAN,Полугодие,Half-year,полгода,h/y,,15811200
+T,ANN,Год,Year,г (лет),y,,31622400
+
+Информация
+IN,bit,Бит,Bit,б,b,,"0,125"
+IN,B,Байт,Byte,Б,B,+,1
+IN,kB,Килобайт,Kilobyte,кБ,kB,,1024
+IN,MB,Мегабайт,Megabyte,МБ,MB,,1048576
+IN,GB,Гигабайт,Gigabyte,ГБ,GB,,1073741824
+IN,TB,Терабайт,Terabyte,ТБ,TB,,1099511627776
+
+
+Скорость передачи данных
+INS,b/s,Бит/сек,Bits / sec,б/c,b/s,+,1
+INS,kb/s,Килобит/сек,Kilobit/sec,кб/c,kb/s,,1024
+INS,Mb/s,Мегабит/сек,megabit/sec,Мб/c,Mb/s,,1048576
+INS,Gb/s,Гигабит/сек,gigabit/sec,Гб/c,Gb/s,,1073741824
+INS,Tb/s,Терабит/сек,terabit/sec,Тб/c,Tb/s,,1099511627776
+
+Скорость
+SP,km/h,Километр в час,Kilometer per hour,км/ч,km/h,,0.266666666
+SP,m/s,Метр в секунду,Meter per second,м/с,m/s,+,1
+SP,mph,Миля в час,Mile per hour,?,mph,,"0,44704","1,609344 км/ч."
+SP,mi/h,Узел,Knot,?,mi/h,,"0,514444444","1,852 км/ч."
+
+Температура
+C,DCE,Градус Цельсия,Degree Celsius,°C,C,,"$b+273,15"
+C,DKE,Градус Кельвина,Degree Kelvin, K, K,+,1
+C,DFH,Градус Фаренгейта,Degree Fahrenheit,°Ф,F,,"($b+459,67)*0,5", 1 градус Фаренгейта равен 5/9 градуса Цельсия.
+
+Энергия
+W,JOL,Джоуль,Joule,Дж,J,+,1
+W,CAL,Калория,Calorie,кал,cal,,"4,1868"
+W,KCAL,Килокалория,Kilocalorie,ккал,kcal,,"4186,8"
+W,KWH,Киловатт-час,Kilowatt-hour,кВт/ч,kW/h,,3600000
+
+Мощность
+P,WTT,Ватт,Watt,Вт,W,+,1
+P,KWTT,Киловатт,Kilowatt,кВт,kW,,1000
+P,KCALH,Килокалория в час,Kilocalories per hour,ккал/ч,ccal/h,,"0,85985"
+P,HPW,Лошадиная сила,Horsepower,л. с,hp,,"0,00136"
+P,AHR,ампер-час,ampere hour,А.ч,ah
+P,WAM,Вольт-ампер,volt-ampere,В.А,va
+
+Сила
+F,NWT,Ньютон,newton,Н,N,+,1
+F,KGF,Килограмм-сила,kilogram force,кгс,kgf,,"9,80665"
+
+Частота
+FR,HZ,Герц,Hertz,Гц,Hz,+,1
+FR,KHZ,Килогерц,Kilohertz,кГц,kHz,,1000
+FR,MHZ,Мегагерц,Megahertz,МГц,MHz,,1000000
+FR,GHZ,Гигагерц,Gigahertz,ГГц,GHz,,1000000000
+
+Давление
+PR,PSC,Паскаль,Pascal,Па,Pa,,1
+PR,SATM,Физическая атмосфера,Standard atmosphere,атм,atm,,101325
+PR,BR,Бар,Bar,бар,b,+,100000
+PR,TRR,Миллиметр ртутного столба,Torr,мм рт. ст,torr,,133.3224
+
+Сила тока
+I,µA,Микроампер,Microampere,мкА,µA,,"0,000001"
+I,mlA,Миллиампер,Milliampere,мА,mA,,"0,001"
+I,A,Ампер,Ampere,A,A,+,1
+I,kA,Килоампер,Kiloampere,кА,kA,,1000
+I,MA,Мегаампер,Vegaampere,МА,MA,,1000000
+
+
+
+Напряжение
+U,V,Вольт,Volt,В,V,+,1
+U,KV,Киловольт,Kilovolt,КВ,KV,,1000
+
+
+
+Прочие
+UND,px,Пиксель,pixel,,px
+
+Яркость
+UND,CDMQ,Кандел на м²,candela per square,кд/м2, cd/m2
+
+Частота
+UND,FPS,Кадров в секунду, frames per second ,кадров/с,FPS
+
+воздухообмен
+UND,MQH,Кубических метров в час, cubic meter per hour,куб.м/ч,m3/h
+
+крутящий момент (момент силы)
+UND,NWTM,Ньютон-метр,newton-meter, Н*м,N*m
+UND,dp,Диоптрия,diopter,,dp

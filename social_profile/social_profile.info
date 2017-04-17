@@ -1,0 +1,6 @@
+name = Social Profile
+description = Social profile
+dependencies[] = addons
+package = ITK/User
+version = "7.x-dev"
+core = 7.x

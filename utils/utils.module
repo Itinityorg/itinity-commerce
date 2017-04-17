@@ -1,0 +1,1213 @@
+<?php // $Id: utils.module, v 1.0 2011/01/17 15:23:13 ITKLD Exp $
+/**
+ * Copyright 2011-2017 Itinity Ltd. (itinity.ru). All rights reserved.
+ * Licensed under the GNU General Public License, version 2 or later.
+ */
+
+
+define('UTILS_EMAIL_REGEXP', "[a-z0-9!#$%&'*+=?^_`{|}~-]+(?:\.[a-z0-9!#$%&'*+=?^_`{|}~-]+)*@(?:([\x{0430}-\x{044F}a-z0-9]+(-[\x{0430}-\x{044F}a-z0-9]+)*\.)+[\x{0430}-\x{044F}a-z]{2,})");
+
+
+/**
+* Implements hook_init()
+*/
+function utils_init() {
+	if (utils_is_robot()) { // Search crawler detected. Switch cache settings to maximum.
+		global $conf;
+		$conf['cache'] = 1;
+		$conf['cache_lifetime'] = 21600;
+		$conf['block_cache'] = 1;
+		$conf['page_compression'] = 1;
+		$conf['preprocess_css'] = 1;
+		$conf['preprocess_js'] = 1;
+		//drupal_save_session(FALSE);
+	}
+}
+
+/**
+* Implements hook_boot()
+*/
+function utils_boot() {
+	if (!empty($GLOBALS['is_local_site'])) {
+		// Enable/disable modules by $_GET param in local mode. Used in dumper.php
+    $modules_enable = !empty($_GET['modules_enable']) ? array_filter(explode(',', preg_replace('/[^a-z0-9_,]/', '', strtolower($_GET['modules_enable'])))) : array();
+    $modules_disable = !empty($_GET['modules_disable']) ? array_filter(explode(',', preg_replace('/[^a-z0-9_,]/', '', strtolower($_GET['modules_disable'])))) : array();
+    if ($modules_enable || $modules_disable) {
+			// crutches:
+			defined('MAINTENANCE_MODE') || define('MAINTENANCE_MODE', 'update');
+			drupal_bootstrap(DRUPAL_BOOTSTRAP_FULL);
+
+      // Prevent "Notice: Use of undefined constant LOCALE_LANGUAGE_NEGOTIATION_URL - assumed 'LOCALE_LANGUAGE_NEGOTIATION_URL'"
+      require_once DRUPAL_ROOT . '/includes/locale.inc';
+
+      foreach ($modules_enable as $m) {
+        if (module_exists($m)) {
+          drupal_set_message('Module ' . $m . ' already enabled.', 'warning');
+        }
+        elseif (!drupal_get_path('module', $m)) {
+          drupal_set_message('Module ' . $m . ' not found.', 'error');
+        }
+        else {
+          module_enable(array($m));
+          if (module_exists($m)) {
+            drupal_set_message('Module ' . $m . ' was enabled.');
+          }
+          else {
+            drupal_set_message('Can not enable ' . $m . ' module.', 'error');
+          }
+        }
+      }
+      foreach ($modules_disable as $m) {
+        if (module_exists($m)) {
+          module_disable(array($m));
+          if (!module_exists($m)) {
+            drupal_set_message('Module ' . $m . ' was disabled.');
+          }
+          else {
+            drupal_set_message('Can not disable ' . $m . ' module.', 'error');
+          }
+        }
+        elseif (!drupal_get_path('module', $m)) {
+          drupal_set_message('Module ' . $m . ' not found.', 'error');
+        }
+        else {
+          drupal_set_message('Module ' . $m . ' already disabled.', 'warning');
+        }
+      }
+      menu_rebuild();
+      unset($_GET['modules_enable'], $_GET['modules_disable']);
+      header('Location: ' . $_SERVER['PHP_SELF'] . ($_GET ? '?' . http_build_query($_GET) : ''), TRUE, 307);
+      exit;
+
+		}
+	}
+	// Store server http host information for using in other modules if possible
+
+
+	// Remove redundant information from host url (http protocol and port 80, https protocol and port 443)
+	$http_host =  preg_replace('/\:80$/', '', $GLOBALS['base_url']);
+	$http_host =  preg_replace('/^https\:\/\/(.*?)\:443$/i', 'https://$1', $GLOBALS['base_url']);
+	$http_host = trim($http_host, '.;');
+	// write requested host information once per 24hrs
+	$active_http_hosts = variable_get('active_http_hosts', array());
+	if ($http_host && (empty($active_http_hosts[$http_host]) || ($active_http_hosts[$http_host] < (REQUEST_TIME - (3600 * 24))))) {
+		variable_set('active_http_hosts', array($http_host => REQUEST_TIME) + $active_http_hosts);
+	}
+
+
+	// Allow access to update.php for anonymous locale users
+	if (basename($_SERVER['PHP_SELF']) === 'update.php' && empty($GLOBALS['update_free_access']) && !empty($GLOBALS['is_local_site']/* << must be defined in sites.php for local use*/)) {
+		require_once DRUPAL_ROOT . '/' . drupal_get_path('module', 'user') . '/user.module';
+		if (!user_access('administer software updates')) {
+			// Fix white screen trouble
+			if (empty($_REQUEST['op'])) {
+        require_once DRUPAL_ROOT . '/includes/path.inc'; // ... because drupal_goto() calls current_path() which may be not exists at hook_boot() stage.
+				drupal_goto('update.php', array('alias' => TRUE, 'query' => array('op' => 'info')));
+			}
+			$GLOBALS['update_free_access'] = TRUE;
+		}
+	}
+}
+
+
+/**
+* Dump of variables content into standard messages area.
+* Recieve arbitrary parameters
+* Returns last passed parameter as is
+*/
+function m() {
+	// We not use standard module_load_include(), because m() may be called from any bootstrap phases where module_load_include() not working
+	require_once 'utils.m.inc';
+	return _utils_m(func_get_args());
+}
+
+
+/**
+ * Show query in the form in which it will be transferred to the database.
+ */
+function q($query, $connection = 'default') {
+  $query_clone = clone $query;
+	$connection = Database::getConnection($connection);
+	$quoted = array();
+	$sql = '' . $query_clone;
+	foreach ((array)$query_clone->arguments() as $key => $val) {
+    $val = (array) $val;
+    foreach ($val as $idx => $v) {
+      if (is_string($v)) {
+        $val[$idx] = $connection->quote($v);
+      }
+    }
+		$quoted[$key] = implode(', ', $val);
+	}
+	$sql = strtr($sql, $quoted);
+	m($sql);
+}
+
+
+/**
+* Search crawlers detection
+*/
+function utils_is_robot() {
+	module_load_include('inc', 'utils', 'utils.funcs');
+	return _utils_is_robot();
+}
+
+/**
+* Implements hook_form_alter()
+*/
+function utils_form_alter(&$form, &$form_state, $form_id) {
+	if ($form_id === 'system_performance_settings') {
+    $form['bandwidth_optimization']['utils_minify_js'] = array(
+      '#type' => 'checkbox',
+      '#title' => t('Minify code'),
+      '#default_value' => variable_get('utils_minify_js', TRUE),
+      '#field_prefix' => '&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;',
+      '#inline' => TRUE,
+      '#states' => array(
+        'visible' => array(
+          'input[name="preprocess_js"]' => array('checked' => TRUE,),
+        ),
+      ),
+    );
+		$form['utils_is_robot_detection'] = array(
+			'#type' => 'checkbox',
+			'#title' => t('Adapt to the search engines'),
+			'#description' => t('Detect search crawlers and dynamically optimize site performance.'),
+			'#default_value' => variable_get('utils_is_robot_detection', TRUE),
+			);
+		$form['utils_log_robots'] = array(
+			'#access' => user_is_sysadmin(),
+			'#type' => 'checkbox',
+			'#title' => t('Log robots visits'),
+			'#description' => t('Detect search crawlers and save log to database.'),
+			'#default_value' => variable_get('utils_log_robots', FALSE),
+			);
+	}
+
+	if ($form_id === 'system_regional_settings') {
+
+		// IKW: move "Decimal marker" settings to `system_regional_settings` form
+		// @see http://itinity.ru/node/1561
+		$form['locale']['site_default_decimal_separator'] = array(
+			'#type' => 'select',
+			'#title' => t('Decimal marker'),
+			'#options' => array('.' => t('Decimal point'), ',' => t('Comma')),
+			'#default_value' => variable_get('site_default_decimal_separator', _utils_site_default_decimal_separator()),
+			'#description' => t('The character users will input to mark the decimal point in forms.'),
+		);
+	}
+
+	if ($form_id === 'field_ui_display_overview_form') {
+		// "Decimal marker" is global now
+		// @see admin/config/regional/settings
+		// @see http://itinity.ru/node/1561
+		foreach (element_children($form['fields']) as $field) {
+			if (isset($form['fields'][$field]['format']['settings_edit_form']['settings']['decimal_separator'])) {
+				$form['fields'][$field]['format']['settings_edit_form']['settings']['decimal_separator']['#default_value'] = variable_get('site_default_decimal_separator', _utils_site_default_decimal_separator());
+				$form['fields'][$field]['format']['settings_edit_form']['settings']['decimal_separator']['#disabled'] = TRUE;
+				$link = l(t('Regional settings'), '/admin/config/regional/settings');
+				$form['fields'][$field]['format']['settings_edit_form']['settings']['decimal_separator']['#description'] = t('This settings can be changed globally on !l page', array('!l' => $link));
+			}
+		}
+	}
+
+	if ($form_id === 'field_ui_field_edit_form') {
+		// Hide 'Decimal marker' setting in field_ui_field_edit_form
+		// "Decimal marker" is global now
+		// @see admin/config/regional/settings
+		// @see http://itinity.ru/node/1561
+		if ($form['#field']['type'] === 'number_decimal' || $form['#field']['type'] === 'number_float') {
+			$form['field']['settings']['decimal_separator'] = array(
+				'#type' => 'value',
+				'#value' => variable_get('site_default_decimal_separator', _utils_site_default_decimal_separator()),
+			);
+		}
+	}
+}
+
+
+/**
+ * Implements hook_field_display_alter().
+ */
+function utils_field_display_alter(&$display, $context) {
+	// Use global site_default_decimal_separator setting for numeric fields
+	// @see admin/config/regional/settings
+	// @see http://itinity.ru/node/1561
+	if ($display['type'] === 'number_decimal' || $display['type'] === 'number_float') {
+		$display['settings']['decimal_separator'] = variable_get('site_default_decimal_separator', _utils_site_default_decimal_separator());
+	}
+}
+
+
+/**
+ * Implements hook_field_widget_form_alter().
+ */
+function utils_field_widget_form_alter(&$element, &$form_state, $context) {
+	// Use global site_default_decimal_separator setting for numeric fields
+	// @see admin/config/regional/settings
+	// @see http://itinity.ru/node/1561
+
+	if (isset($context['field']['type'])) {
+		if ($context['field']['type'] === 'number_decimal' || $context['field']['type'] === 'number_float') {
+			$decimal_separator = variable_get('site_default_decimal_separator', _utils_site_default_decimal_separator());
+			$delta = $context['delta'];
+			$langcode = $context['langcode'];
+			$field_name = $context['field']['field_name'];
+
+			// replace decimal_separator with the global one
+			// to pass number_field_widget_validate successfully
+			$form_state['field'][$field_name][$langcode]['field']['settings']['decimal_separator'] = $decimal_separator;
+
+			if (!empty($context['items'][$delta])) {
+				foreach ($context['items'][$delta] as $key => $item) {
+					$element[$key]['#default_value'] = strtr($item, '.', $decimal_separator);
+				}
+			}
+		}
+	}
+}
+
+
+/**
+ * Returns decimal separator based on site_default_country variable
+ * @see https://ru.wikipedia.org/wiki/%D0%94%D0%B5%D1%81%D1%8F%D1%82%D0%B8%D1%87%D0%BD%D1%8B%D0%B9_%D1%80%D0%B0%D0%B7%D0%B4%D0%B5%D0%BB%D0%B8%D1%82%D0%B5%D0%BB%D1%8C
+ */
+function _utils_site_default_decimal_separator() {
+	$country = variable_get('site_default_country', '');
+
+	// dot separator
+	$dot = array('AU', 'NZ', 'CA', 'MX', 'US', 'BN', 'IL', 'IN', 'CN', 'KP', 'MY', 'PK', 'SG', 'PH', 'TH', 'TW', 'LK', 'JP', 'KR', 'BW', 'EG', 'NG', 'ZW', 'GB', 'IE', 'CH',);
+	// arabic decimal separator
+	$mumayyiz = array('AF', 'BH', 'IQ', 'IR', 'QA', 'KW', 'AE', 'SA', 'SY',);
+
+	if (in_array($country, $dot)) {
+		return '.';
+	}
+	elseif (in_array($country, $mumayyiz)) {
+		return '&#1643;';
+	}
+	else { // comma
+		return ',';
+	}
+}
+
+
+
+/**
+* Implements hook_page_alter()
+*/
+function utils_page_alter(&$page) {
+	if ($detected_as = utils_is_robot()) {
+		if (isset($_SESSION['messages'])) { // hide user messages from search crawlers
+			unset($_SESSION['messages']);
+		}
+		if (variable_get('utils_log_robots', FALSE)) {
+			$record = array(
+				'timestamp' => REQUEST_TIME,
+				'detected_as' => drupal_substr($detected_as, 0, 255),
+				'url' => drupal_substr(request_uri(), 0, 255),
+				'referer' => isset($_SERVER['HTTP_REFERER']) ? drupal_substr($_SERVER['HTTP_REFERER'], 0, 255) : '',
+				'user_agent' => isset($_SERVER['HTTP_USER_AGENT']) ? drupal_substr($_SERVER['HTTP_USER_AGENT'], 0, 255) : '',
+				'cookie' => !empty($_COOKIE) ? 1 : 0,
+				'ip' => ip_address(),
+				);
+			drupal_write_record('utils_robots_log', $record);
+		}
+	}
+	//Add JavaScript mirror of some functions in utils
+	// Using in other js files: Utils.function_name(params) {}
+	drupal_add_js(drupal_get_path('module', 'utils').'/js/utils.js', array('scope' => 'header', /*'weight' => -1000,*/));
+
+	//add imagecache presets on every page
+	if (module_exists('image')) {
+		foreach (image_styles() as $preset_id => $preset) {
+			$imagecachePresets[$preset_id] = $preset_id;
+		}
+		drupal_add_js(array('imagecachePresets' => $imagecachePresets,), 'setting');
+	}
+	// add sites/site_name.domain/files path for javascripts
+	drupal_add_js(array('mediaPath' => rtrim(file_create_url('public://'), '/')), 'setting');
+
+}
+
+
+
+/**
+* Compress and save long variables into variables table
+* See also utils_load_packed_var()
+*/
+function utils_save_packed_var($name, $data) {
+	variable_set($name, base64_encode(gzdeflate(serialize($data), -1)));
+}
+
+/**
+* Load and unpack compressed long variables from variables table (see utils_save_packed_var)
+* See also utils_save_packed_var()
+*/
+function utils_load_packed_var($name, $def_value = '') {
+	if (!($data = variable_get($name, NULL))) {
+		return $def_value;
+	}
+	$data = unserialize(gzinflate(base64_decode($data)));
+	return $data;
+}
+/*********************************/
+
+/**
+*	For quick using in menu access callbacks (See hook_menu() -> $items -> 'access callback' property.
+*	@param object $account
+*		User object with uid
+*/
+function user_is_sysadmin($account = NULL) {
+	if (!$account) {
+		$account = $GLOBALS['user'];
+	}
+	return $account->uid == 1;
+}
+
+/**
+*	Simple set of most used fonts in web-development
+*/
+function utils_get_web_fonts($font_name = NULL) {
+	module_load_include('inc', 'utils', 'utils.funcs');
+	return _utils_get_web_fonts($font_name);
+}
+
+
+
+/**
+ * Inverses a provided hex color. If you pass a hex string with a
+ * hash(#), the function will return a string with a hash prepended
+ * @param string $hex
+ * 		Hex color to flip
+ * @return string
+ * 		Reversed hex color
+ * @author Koncept
+ *
+ * Last Update: 2008-10-05
+ * ---------
+ * Modified for utils.module
+ */
+function utils_inverse_hex($hex) {
+	$hex = trim($hex);
+	$prepend_hash = FALSE;
+
+	if(strpos($hex,'#') === 0) {
+		$prepend_hash = TRUE;
+		$hex = substr($hex, 1);
+	}
+
+	switch($len = strlen($hex)) {
+		case 3: // color like #81F
+			$hex = preg_replace("/(.)(.)(.)/","\\1\\1\\2\\2\\3\\3",$hex);
+			break;
+		case 6: // color like #81FE77
+			break;
+		default:
+			trigger_error(t("Invalid hex length (@len). Must be a minimum length of (3) or maxium of (6) characters", array('@len' => $len), array('langcode' => 'en')), E_USER_ERROR);
+	}
+
+	if (!preg_match('/^[a-f0-9]{6}$/i',$hex)) {
+		trigger_error(t("Invalid hex string #@color", array('@color' => $hex), array('langcode' => 'en')), E_USER_ERROR );
+	}
+	$new_hex = '';
+	foreach (array('r', 'g', 'b',) as $idx => $c) {
+		$new_hex .= (strlen($c = dechex(255 - hexdec(substr($hex, $idx * 2, 2)))) > 1) ? $c : '0' . $c;
+	}
+	return ($prepend_hash ? '#' : NULL).($len == 3 ? preg_replace("/(.).(.).(.)./", "\\1\\2\\3", $new_hex) : $new_hex);
+}
+
+
+/**
+ * Convert hex color into rgb array.
+ * @param string $hex
+ * 		Hex HTML color to convert
+ * @return array
+ * 		array(red, green, blue)
+ */
+function utils_hex_to_rgb($hex) {
+	if (strlen($hex = strtoupper(substr(is_int($hex) ? dechex($hex) : preg_replace('/([^A-F0-9])/i', '', $hex), 0, 6))) < 3) {
+		$hex = str_pad($hex, 3, $hex ? $hex{strlen($hex)-1} : '0');
+	}
+	if (strlen($hex) == 3) {
+		$hex = $hex{0}.$hex{0}.$hex{1}.$hex{1}.$hex{2}.$hex{2};
+	} else {
+		if (strlen($hex) < 6) {
+			$hex = str_pad($hex, 6, '0');
+		}
+	}
+	return array(
+		hexdec($hex{0}.$hex{1}), //red
+		hexdec($hex{2}.$hex{3}), //green
+		hexdec($hex{4}.$hex{5}), //blue
+		);
+}
+
+
+/**
+ * Convert array of rgb values to hex value.
+ * @param array $rgb
+ * 		array(int red, int green, int blue)
+ * @return string
+ */
+function utils_rgb_to_hex($rgb = array()) {
+	if (is_string($rgb)) {
+		if (preg_match('/^\s*rgba?\s*\(\s*(\d+)\s*,\s*(\d+),\s*(\d+)/i', $rgb, $m)) {
+			$rgb = array($m[1], $m[2], $m[3]);
+		}
+	}
+	// Fix input
+	$rgb = array_pad(!$rgb || !is_array($rgb) ? array() : $rgb, 3, '0');
+	foreach ($rgb as &$v) {
+		if (!ctype_digit($v = '' . round($v)) || $v > 255 || $v < 0) {
+			$v = $v > 255 ? '255' : '0';
+		}
+		// Add left zero in each byte, when <= 0x0F
+		$v = str_pad(dechex($v), 2, '0', STR_PAD_LEFT);
+	}
+	return strtoupper(implode($rgb));
+}
+
+/**
+ * Create colors gradient map based on two colors
+ * @param string or array (rgb case) $start_color
+ * @param string or array (rgb case) $end_color
+ * 		Two HTML hex or rgb() colors
+ * @param int $count
+ * 		Total count of colors in resulting gradient. Must be greater than 2
+ * @return array
+ *		sorted array of colors, included $start_color and $end_color
+ */
+function utils_make_gradient($start_color, $end_color, $count = 2) {
+	// Check and fix input params
+	$count = round(abs($count));
+	$count = ctype_digit(''.$count) && $count >= 2 ? $count : 2;
+	if (!is_array($start_color)) {
+		if (preg_match('/^\s*rgba?\s*\(\s*(\d+)\s*,\s*(\d+),\s*(\d+)/i', $start_color, $m)) {
+			$start_color = array($m[1], $m[2], $m[3]);
+		}
+		else {
+			$start_color = utils_hex_to_rgb($start_color);
+		}
+	}
+	if (!is_array($end_color)) {
+		if (preg_match('/^\s*rgba?\s*\(\s*(\d+)\s*,\s*(\d+),\s*(\d+)/i', $end_color, $m)) {
+			$end_color = array($m[1], $m[2], $m[3]);
+		}
+		else {
+			$end_color = utils_hex_to_rgb($end_color);
+		}
+	}
+	 // Remove named keys (if exists) from arrays and fix arrays sizes
+	$start_color = array_pad(array_values($start_color), 3, 0);
+	$end_color = array_pad(array_values($end_color), 3, 0);
+
+	// Make gradient:
+
+	// First in gradient
+	$result = array(utils_rgb_to_hex($start_color));
+
+	if ($count > 2) {
+		// Generate incremental(distance) color constant for all steps
+		$dst = array(
+			($end_color[0] - $start_color[0]) / ($count - 1), // red
+			($end_color[1] - $start_color[1]) / ($count - 1), // green
+			($end_color[2] - $start_color[2]) / ($count - 1), // blue
+		);
+		for ($i = 1; $i <= $count - 2; $i++) {
+			$color = utils_rgb_to_hex(array(
+				$start_color[0] + round($dst[0] * $i), // red
+				$start_color[1] + round($dst[1] * $i), // green
+				$start_color[2] + round($dst[2] * $i), // blue
+				));
+			$result[] = $color;
+		}
+	}
+	$result[] = utils_rgb_to_hex($end_color); // Last in gradient
+	return $result;
+}
+
+
+/**
+ * Helper function for filling all form elements #default_value's with values passed in $defaults array
+ *
+ * @param $property_name
+ * 		'default_value' or 'value' or other ?
+ * @param $safe
+ * 		Do not overwrite existing (default_)values
+ *		Do not overwrite (default_)values in protected elements contains flag '#access' = FALSE
+ */
+function utils_fill_form_defaults(&$form, $defaults = array(), $property_name = 'default_value', $safe = FALSE) {
+	if (!$defaults || !is_array($defaults) || empty($property_name)) {
+		return;
+	}
+	//$property_name = $property_name == 'default_value' || $property_name == 'value' ? $property_name : 'default_value';
+	foreach ($defaults as $key => $data) {
+		if (isset($form[$key]) && is_array($form[$key])) { // element exists?
+
+			if (!empty($form[$key]['#type']) && ($info = element_info($form[$key]['#type']))) { // this is valid form element?
+
+				if ($property_name == 'default_value' || $property_name == 'value') {
+					if (!$safe || (!isset($form[$key]['#access']) || $form[$key]['#access'])) { // NOT safe mode OR element not protected?
+
+						if (!empty($info['#input']) || in_array($form[$key]['#type'], array('text_format'))) { // element has support #(default_)value ?
+
+							if (!$safe || (!isset($form[$key]['#'.$property_name]))) { // NOT safe OR element allready has value?
+
+								if ($property_name == 'value' || !in_array($form[$key]['#type'], array('button', 'image_button', 'submit', 'value', ))) { // element has support '#default_value' ?
+
+									if (is_array($data) || (!in_array($form[$key]['#type'], array('checkboxes', /*'radios',*/ 'data',)))) {
+
+										$form[$key]['#'.$property_name] = $data;
+										// m($form[$key]);
+									}
+								}
+							}
+						}
+					}
+				} else {
+					$form[$key]['#'.$property_name] = $data;
+				}
+			}
+		}
+		if (is_array($data)) {
+			utils_fill_form_defaults($form[$key], $data, $property_name, $safe);
+		}
+	}
+}
+
+
+/**
+* Parse input HTML and change html attributes for found DOM-elements specified in $selector.
+*	@param &$html
+*		reference to HTML to processing.
+*	@param $selector
+*		Element identifier, with CSS/jQuery-like syntax (e.g. "html>body div.node img, #left .block img").
+*	@param $attributes
+*		Keyed array of attributes=>values. For change or add properties to each element.
+*		For remove any html-attribute, specify his value as empty string ('') or NULL. Do not use 0 and '0', this will set attribute to zero.
+*	@param $callback
+*		Optional user function name, will be called as function_name($attribute_name, $attribute_current_value, $user_data);
+*		This callback will be applied for each found element, and must return string for using as value of element attribute,
+*		based on current attribute name key, current attribute value and passed current user data. Recommended for override default logic (key = value).
+*/
+
+function utils_change_html_element_attributes(&$html, $selector, $attributes, $callback = NULL) {
+	require_once drupal_get_path('module', 'utils') . '/classes/simplehtmldom/simple_html_dom.php';
+	if ($html && $attributes && is_array($attributes) && $selector && ($html_object = str_get_html($html)) && ($elements = $html_object->find($selector))) {
+		if ($callback && !function_exists($callback)) {
+			$callback = NULL;
+		}
+		foreach ($elements as $e) {
+			foreach ($attributes as $key=>$data) {
+				if ($callback) {
+					$old_val = $e->{$key};
+					$e->{$key} = call_user_func($callback, drupal_strtolower($key), $old_val, $data);
+				} else {
+					$e->{$key} = $data;
+				}
+				if ($e->{$key} === '' || !isset($e->{$key})) {//!$e->$key && $e->$key !== '0' && $e->$key !== 0) {
+					unset($e->{$key});
+				}
+			}
+		}
+		$html = $html_object->save();
+	}
+}
+
+
+function utils_menu() {
+	$items = array();
+	if (variable_get('utils_log_robots', FALSE)) {
+		$items['admin/reports/robots'] = array(
+			'title' => 'Crawlers visits',
+			'page callback' => 'drupal_get_form',
+			'page arguments' => array('utils_log_robots_form'),
+			'access arguments' => array('access site reports'),
+			'file' => 'utils.admin.forms.inc',
+			);
+	}
+	return $items;
+}
+
+
+/**
+* Helper function for some modules (e.g. features, supermenu)
+* Return TRUE where block provide menu.
+* $module - module name
+* $delta - block delta
+*/
+function utils_block_contains_menu($module, $delta) {
+	$result = $module == 'menu' || ($module == 'system' && array_key_exists($delta, menu_list_system_menus())) || ($module == 'TODO_book' && $delta == 'navigation');
+	drupal_alter('block_contains_menu', $result, $module, $delta);
+	return $result;
+}
+
+/**
+* Universal string encoding. Grabbed from drupal_convert_to_utf8().
+*/
+function utils_convert_encoding($string, $from, $to) {
+	if (function_exists('iconv')) {
+		$string = @iconv($from, $to, $string);
+	}
+	elseif (function_exists('mb_convert_encoding')) {
+		$string = @mb_convert_encoding($string, $to, $from);
+	}
+	elseif (function_exists('recode_string')) {
+		$string = @recode_string($from . '..' . $to, $string);
+	}
+	else {
+		watchdog('php', 'Unsupported encoding from @from to @to. Please install iconv, GNU recode or mbstring for PHP.', array('@from' => $from, '@to' => $to,), WATCHDOG_ERROR);
+		return FALSE;
+	}
+	return $string;
+}
+
+
+function utils_db_update_schema($module = NULL) {
+	$result = array();
+	$schema_all = drupal_get_complete_schema(TRUE);
+	foreach ($schema_all as $table => $schema) {
+		if (!$module || $schema['module'] === $module) {
+			if (!db_table_exists($table)) {
+				db_create_table($table, $schema);
+				$result[$table] = $schema;
+			} else {
+				$schema += array('fields' => array(), 'indexes' => array());
+				foreach ($schema['fields'] as $field_name => $data) {
+					if (!db_field_exists($table, $field_name)) {
+						db_add_field($table, $field_name, $data);
+						$result[$table]['fields'][] = $field_name;
+					}
+				}
+				foreach ($schema['indexes'] as $field_name => $data) {
+					if (!db_index_exists($table, $field_name)) {
+						db_add_index($table, $field_name, $data);
+						$result[$table]['indexes'][] = $field_name;
+					}
+				}
+			}
+		}
+	}
+	return $result ? $result : NULL;
+}
+
+
+/**
+* Helper function for replacing field instance label string
+*/
+function utils_fix_field_label($entity_type, $field_name, $bundle, $search, $replace) {
+	if ($search !== $replace && ($inst = field_info_instance($entity_type, $field_name, $bundle)) && stripos($inst['label'], $search = drupal_convert_to_utf8($search, 'cp1251')) !== FALSE) {
+		$inst['label'] = str_replace($search, drupal_convert_to_utf8($replace, 'cp1251'), $inst['label']);
+		try {
+			field_update_instance($inst);
+		} catch (Exception $e) {}
+	}
+}
+
+
+/**
+* Reverse translation from custom langcode to english
+*/
+function rt($string, $langcode = NULL) {
+	global $language;
+	$result = FALSE;
+	$context = '';
+	if (($langcode || !empty($language->language)) && ($locale_t = &drupal_static('locale'))) {
+		if (!$langcode) {
+			$langcode = $language->language;
+		}
+		$s = trim($string);
+		foreach ($locale_t[$langcode][$context] as $source => $data) {
+			if (($data = trim($data)) === $s && $data !== trim($source)) {
+				$result = $source;
+				break;
+			}
+		}
+	}
+	if (!$result) {
+		static $results = array();
+		$md5 = md5($string);
+		if (!isset($results[$md5])) {
+			$results[$md5] = db_query('SELECT ls.source FROM {locales_target} lt INNER JOIN {locales_source} ls ON ls.lid = lt.lid WHERE lt.translation = :str AND ls.context = :context', array(':str' => $s, ':context' => $context,))->fetchField();
+		}
+		$result = $results[$md5];
+	}
+	return $result ? $result : $string;
+}
+
+
+/** IN CONSTRUCTION */
+
+function utils_zip_files($files, $archive_name, $strip_from_path = DRUPAL_ROOT, $excluded_files = '') {
+	module_load_include('inc', 'utils', 'utils.funcs');
+	return _utils_zip_files($files, $archive_name, $strip_from_path , $excluded_files);
+}
+
+function utils_backup_drupal_database($output_dir, $mysqldump_bin, $output_filename = NULL, $db_name = NULL, $db_user = NULL, $db_pass = NULL, $db_host = NULL, $db_port = NULL, $gzip = FALSE) {
+	module_load_include('inc', 'utils', 'utils.funcs');
+	return _utils_backup_drupal_database($output_dir, $mysqldump_bin, $output_filename, $db_name, $db_user, $db_pass, $db_host, $db_port, $gzip);
+}
+
+
+///VALIDATIONS
+/**
+* Validate url address
+*/
+function utils_valid_url($url) {
+	$regexp = "/^((?:ftp|https?):\/\/|)
+	(?:
+		(?:([\x{0430}-\x{044F}a-z0-9]+(-[\x{0430}-\x{044F}a-z0-9]+)*\.)+[\x{0430}-\x{044F}a-z]{2,})
+		|(?:\[(?:[0-9a-f]{0,4}:)*(?:[0-9a-f]{0,4})\])
+	)
+	(?::[0-9]+)?
+	(?:[\/|\?]
+		(?:[\w#!:\.\?\+=&@$'~*,;\/\(\)\[\]\-]|%[0-9a-f]{2})
+	*)?
+	$/xiu";
+	return preg_match($regexp, $url);
+}
+
+/**
+* Validate e-mail address
+*/
+function utils_valid_email($email) {
+	$regexp = "/^" . UTILS_EMAIL_REGEXP . "$/iu";
+	return preg_match($regexp, $email);
+}
+
+
+
+/**
+* Encode IDN (cyrillic/other domain names) to Punicode (e.g.,  ******.πτ --> xn--*******.xn--p1ai)
+*/
+function utils_idn_encode($domain_name) {
+	if (function_exists('idn_to_ascii')) {
+		return idn_to_ascii($domain_name);
+	}
+	//module_load_include('php', 'utils', 'classes/idna_convert.class');
+	require_once(dirname(__FILE__) . '/classes/idna_convert.class.php');
+	static $converter = NULL;
+	if (!isset($converter)) {
+		$converter = new idna_convert();
+	}
+	return $converter->encode($domain_name);
+}
+
+
+/**
+* Decode Punicode to IDN
+*/
+function utils_idn_decode($punicode) {
+	if (function_exists('idn_to_utf8')) {
+		// idn_to_utf8() works only with domain names. This function not accept protocols (http://, ftp:// , etc) and url params (query, fragment, etc)
+		if (preg_match('/^(.*?:\/+)?([^\?#\/]+)(.*)/u', $punicode, $m)) {
+			return $m[1] . idn_to_utf8($m[2]) . $m[3];
+		}
+		return $punicode;
+	}
+	//module_load_include('php', 'utils', 'classes/idna_convert.class');
+	require_once(dirname(__FILE__) . '/classes/idna_convert.class.php');
+	static $converter = NULL;
+	if (!isset($converter)) {
+		$converter = new idna_convert();
+	}
+	return $converter->decode($punicode);
+}
+
+/**
+* Search relevant strings in array.
+*/
+function utils_relevance_search($search_value, $in_array, $return_all_variants = FALSE) {
+	module_load_include('inc', 'utils', 'utils.funcs');
+	return _utils_relevance_search($search_value, $in_array, $return_all_variants);
+}
+
+
+/**
+* Another translation function.
+* Like t() but only get translation from specified module .po file
+* Can be needed on installation stages, e.g. when modules creates own taxonomy vocabulary or node type and etc, contains special name
+* For more information see st(). An st() function parse only files placed in install profle/translations/* directory.
+*/
+function utils_translate_from_module($module, $string, array $args = array(), $langcode = NULL) {
+	if (!$langcode) {
+		global $language;
+		$langcode = $language->language;
+	}
+	static $locale_strings = NULL;
+	if (!isset($locale_strings[$module])) {
+		$locale_strings[$module] = array();
+		// If the given locale was selected, there should be at least one .po file
+		// with its name ending in {$install_state['parameters']['locale']}.po
+		// This might or might not be the entire filename. It is also possible
+		// that multiple files end with the same extension, even if unlikely.
+		$po_files = file_scan_directory(drupal_get_path('module', $module) . '/translations', '/'. $langcode .'\.po$/', array('recurse' => FALSE));
+		if (count($po_files)) {
+			require_once DRUPAL_ROOT . '/includes/locale.inc';
+			foreach ($po_files as $po_file) {
+				_locale_import_read_po('mem-store', $po_file);
+			}
+			$locale_strings[$module] = _locale_import_one_string('mem-report');
+		}
+	}
+	/////////////// require_once DRUPAL_ROOT . '/includes/theme.inc';
+	// Transform arguments before inserting them
+	foreach ($args as $key => $value) {
+		switch ($key[0]) {
+			// Escaped only
+			case '@':
+				$args[$key] = check_plain($value);
+				break;
+			// Escaped and placeholder
+			case '%':
+			default:
+				$args[$key] = '<em>' . check_plain($value) . '</em>';
+				break;
+			// Pass-through
+			case '!':
+		}
+	}
+	return strtr(!empty($locale_strings[$module][''][$string]) ? $locale_strings[$module][''][$string] : $string, $args);
+}
+
+
+define('DEVMODE', 0); // Used in utils_html_debug()
+
+/**
+* Generates HTML-comment that contains default information about caller function and optional text.
+* Use it for insertion debug information in places where there may be questions with the definition of sources of problems (own or modified forms and other renderable elements).
+* This information will display only where const DEVMODE is on or any of development modules are enabled.
+* Usage:
+	$element['#suffix'] = module_invoke('utils', 'html_debug');
+	or
+	$element['#suffix'] .= module_invoke('utils', 'html_debug');
+	or
+	$element['#suffix'] =  utils_html_debug();
+	or
+	$element['#suffix'] =  utils_html_debug('we convert this fieldset into 'item' type because our designer hates fieldsets.');
+*/
+function utils_html_debug($extra_comment = NULL) {
+	if ((defined('DEVMODE') && DEVMODE) || module_exists('programmer') || module_exists('devel')) {
+		$debug = debug_backtrace(FALSE, 10);
+		if ($debug[1]['function'] == 'module_invoke' || ($debug[1]['function'] == 'call_user_func_array' && $debug[2]['function'] == 'module_invoke')) {
+      $offset = $debug[1]['function'] == 'module_invoke' ? -1 : 0; // php7 vs php5 crutch
+			$line = isset($debug[2 + $offset]['line']) ? $debug[2 + $offset]['line'] : '';
+			$func = $debug[3 + $offset]['function'];
+			if ($debug[3 + $offset]['function'] == '__lambda_func') {
+				$line = (isset($debug[4 + $offset]['line']) ? $debug[4 + $offset]['line'] : '') . ' in ' .  check_plain(preg_replace('/^' . preg_quote(DRUPAL_ROOT, '/') . '/', '', $debug[4 + $offset]['file']));
+				$func = $debug[4]['function'];
+			}
+		}
+    else {
+			$line = isset($debug[0]['line']) ? $debug[0]['line'] : '';
+			$func = $debug[1]['function'];
+			if ($func == 'utils_html_debug_element') {
+				$line = isset($debug[1]['line']) ? $debug[1]['line'] : '';
+				$func = $debug[2]['function'];
+			}
+		}
+		return '<!-- ' . ($extra_comment ? check_plain($extra_comment) . '; ' : '') . ('@see ' . $func . '()' . ($line != '' ? ':' . $line : '')) . ' -->';
+	}
+}
+
+
+function utils_html_debug_element(array &$element, $extra_comment = NULL) {
+	$element += array(
+		'#suffix' => '',
+	);
+	$element['#suffix'] .= utils_html_debug($extra_comment);
+}
+
+
+/**
+ * Implements hook_requirements.
+ */
+function utils_requirements($phase) {
+	$requirements = array();
+	if ($phase == 'runtime') {
+		$requirements['idn'] = array(
+			'title'		=> t('IDN library'),
+		);
+		if (function_exists('idn_to_ascii') && function_exists('idn_to_utf8')) {
+			$requirements['idn']['severity'] = REQUIREMENT_OK;
+			$requirements['idn']['value'] = t('Installed');
+		}
+		else {
+			$requirements['idn']['severity'] = REQUIREMENT_ERROR;
+			$requirements['idn']['value'] = t('Not installed');
+			$requirements['idn']['description'] = t('The IDN library for PHP is missing. Check the <a href="@url">PHP IDN documentation</a> for information on how to correct this.', array('@url' => 'http://www.php.net/manual/en/ref.intl.idn.php'));
+		}
+	}
+	return $requirements;
+}
+
+
+/**
+* Fix keyboard layout
+*/
+function utils_fix_keyboard_layout($string) {
+	if (!class_exists('ReflectionTypeHint')) {
+		// Override useless class
+		class ReflectionTypeHint {
+			public static function isValid() {
+				return TRUE;
+			}
+		}
+	}
+	require_once('classes/Text_LangCorrect-1.4.3/Text/LangCorrect.php');
+	require_once ('classes/Text_LangCorrect-1.4.3/UTF8.php');
+	$string = preg_replace('/(^\s+)|(\s+$)/u', '', $string); // UTF8 trim
+	$string = preg_replace('/\s+/u', ' ', $string); // Remove double spaces
+
+	$spaces_map = array();
+	foreach (preg_split('/\s/u', $string) as $s) {
+		$spaces_map[] = drupal_strlen($s);
+	}
+
+
+	$uppercase_map = array();
+	foreach (preg_split('//u', $string, -1, PREG_SPLIT_NO_EMPTY) as $idx => $char) {
+		if (drupal_strtolower($char) !== $char) {
+			$uppercase_map[$idx] = $idx;
+		}
+	}
+	$string = drupal_strtolower($string);
+	$corrector = new Text_LangCorrect();
+	$fixed = $corrector->parse(preg_replace('/(\s)/u', '', $string), Text_LangCorrect::SIMILAR_CHARS + Text_LangCorrect::KEYBOARD_LAYOUT);
+
+  if ($spaces_map) {
+    $offset = 0;
+    $f = array();
+    foreach ($spaces_map as $pos) {
+      $f[] = drupal_substr($fixed, $offset, $pos);
+      $offset += $pos;
+    }
+    $fixed = implode(' ', $f);
+  }
+
+	if ($fixed !== $string) {
+    $rus_map = preg_split('//u', drupal_convert_to_utf8('Έ¨"Ή;:?', 'cp1251'), -1, PREG_SPLIT_NO_EMPTY);
+    $lat_map = preg_split('//u', '`~@#$^&', -1, PREG_SPLIT_NO_EMPTY);
+		$rus_found = preg_match('/[' . implode('\\', $rus_map) . ']/u', $string);
+		$lat_found = preg_match('/[' . implode('\\', $lat_map) . ']/u', $string);
+		if ($rus_found && !$lat_found) {
+			$fixed = str_replace($rus_map, $lat_map, $fixed);
+		}
+		elseif (!$rus_found && $lat_found) {
+			$fixed = str_replace($lat_map, $rus_map, $fixed);
+		}
+		if ($fixed && $uppercase_map) {
+			$fixed_new = array();
+			foreach (preg_split('//u', $fixed, -1, PREG_SPLIT_NO_EMPTY) as $idx => $char) {
+				if (isset($uppercase_map[$idx])) {
+					$fixed_new[$idx] = drupal_strtoupper($char);
+				}
+				else {
+					$fixed_new[$idx] = $char;
+				}
+			}
+			$fixed = implode($fixed_new);
+		}
+
+		return $fixed;
+	}
+}
+
+
+/**
+* Detect client device type by UA string.
+* Returns: 'tablet', 'phone' or 'computer'.
+*/
+function utils_client_device_type() {
+  if (!empty($_GET['device']) && in_array($_GET['device'], array('tablet', 'phone', 'computer'), TRUE)) {
+    return $_GET['device'];
+  }
+	static $result;
+	if (!isset($result))  {
+      $detect = utils_load_class('Mobile_Detect');
+      $result = $detect->isMobile() ? ($detect->isTablet() ? 'tablet' : 'phone') : 'computer';
+	}
+	return $result;
+}
+
+
+/**
+ * Implements hook_process_html()
+ * Add device type class into html tag
+ */
+function utils_process_html(&$variables) {
+	// Needs to add classes in 'html' tag. Standard templates html.tpl.php do not use $classes[_array] variable in <html> code like '<php print $classes; ? > in body.
+	// Solution: append classes in $variables['rdf_namespaces'] variable.
+  $html_classes = array();
+  if (preg_match('/\sclass\s*="(.*?)"/', $variables['rdf_namespaces'], $m)) {
+    $html_classes = preg_split('/\s+/', $m[1]);
+    $variables['rdf_namespaces'] = preg_replace('/\sclass\s*="(.*?)"/', '', $variables['rdf_namespaces']);
+  }
+  $html_classes[] = 'device-' . utils_client_device_type();
+  $variables['rdf_namespaces'] .= ' class="' . check_plain(implode(' ', $html_classes)) . '"';
+}
+
+function utils_minify_js($js) {
+  utils_load_class('Minifier', FALSE);
+	//$t = microtime(TRUE);
+	$js = \jShrink\Minifier::minify($js, array(
+		'flaggedComments' => FALSE,
+	));
+	//m(microtime(TRUE) - $t); // 6.41 sec
+	return $js;
+	//
+	//module_load_include('php', 'utils', 'classes/JSMin/jsmin');
+	//$t = microtime(TRUE);
+	//$js = '// This file was minified by utils.module. @See ' . __FUNCTION__ . '()-->' . __LINE__ . "\n" . JSMin::minify($js);
+	////m(microtime(TRUE) - $t); // 6.71 sec
+	//return $js;
+  //
+	//module_load_include('php', 'utils', 'classes/jsminplus-1.4/jsminplus');
+	//$t = microtime(TRUE);
+	//$js = '// This file was minified by utils.module. @See ' . __FUNCTION__ . '()-->' . __LINE__ . "\n" . JSMinPlus::minify($js);
+	////m(microtime(TRUE) - $t); // 15.7 sec
+	//return $js;
+
+}
+
+
+function utils_minify_css($css) {
+
+	module_load_include('inc', 'utils', 'classes/utils.css.class');
+	$packed = "/* THIS FILE WAS MINIFIED BY " . __FUNCTION__ . "() -->> " . __LINE__ . "} */\r\n" . (new UtilsCSS($css))->process()->css;
+	return $packed;
+}
+
+
+/**
+* Implements hook_module_implements_alter()
+*/
+function utils_module_implements_alter(&$implementations, $hook) {
+  if ($hook === 'js_alter') {
+    // Move utils_js_alter() to the end of hooks queue 
+    $group = $implementations['utils'];
+    unset($implementations['utils']);
+    $implementations['utils'] = $group;
+  }
+}
+
+
+/**
+* Implements hook_js_alter()
+*/
+function utils_js_alter(&$javascript) {
+  // Minify js before aggregation by Drupal core.
+  if (variable_get('preprocess_js', FALSE) && variable_get('utils_minify_js', TRUE)) {
+    $new_js = array();
+    // try to minify file and place it to public://js directory
+    foreach ($javascript as $key => $data) {
+      if ($data['type'] === 'file' &&  $data['preprocess'] && preg_match('/(\.(min|pack(ed)?))?\.js$/i', $data['data'], $m) && empty($m[1]) && is_file($data['data'])) { // skip already minified files (.min.js)
+        $dest = 'public://js';
+        if (!is_file($path = $dest . '/' . md5($data['data']) . '.' . basename(preg_replace('/\.js$/i', '', $data['data'])) . '.min.js')) {
+          try { // Wrap code into try/catch because jShrink class can throws exception and breaks site execution (e.g. on UTF8+BOM files such as ckeditor.js)
+            $min = utils_minify_js(file_get_contents($data['data']));
+            if ((defined('DEVMODE') && DEVMODE) || module_exists('programmer') || module_exists('devel')) {
+              $min = "\n// This is minified copy of \"" . $data['data'] . "\" file. @See " . __FUNCTION__ . "(), line " . __LINE__ . ":\n$min\n";
+            }
+            if (!is_dir($dest)) {
+              drupal_mkdir($dest);
+            }
+            if (file_unmanaged_save_data($min, $path, FILE_EXISTS_REPLACE)) {
+               $key = $data['data'] = $path;
+            }
+          }
+          catch (Exception $e) {
+            watchdog_exception('utils', $e, NULL, array(), WATCHDOG_ERROR, l(basename($data['data']), file_create_url($data['data'])));
+          }
+        }
+        else {
+          $key = $data['data'] = $path;
+        }
+      }
+      $new_js[$key] = $data;
+    }
+    $javascript = $new_js;    
+  }
+}
+
+
+/**
+* Helper func.
+* Simple load php class form utils/classes directory and optionally create new instance of class
+* returns instance of class or NULL
+*/
+function utils_load_class($class_name, $create_instance = TRUE) {
+  switch ($class_name) {
+    case 'PHPExcel':
+      module_load_include('php', 'utils', 'classes/PHPExcel_1.8.0/PHPExcel');
+      if ($create_instance) {
+        return new PHPExcel();
+      }
+    break;
+    case 'Mobile_Detect':
+      module_load_include('php', 'utils', 'classes/Mobile_detect/Mobile_Detect');
+      if ($create_instance) {
+        return new Mobile_Detect();
+      }
+    break;
+    case 'Emogrifier':
+      module_load_include('php', 'utils', 'classes/emogrifier/emogrifier');
+      if ($create_instance) {
+        return new \Pelago\Emogrifier();
+      }
+    break;
+    case 'Minifier': // jShrink
+      module_load_include('php', 'utils', 'classes/jShrink/Minifier');
+    break;
+    case 'UtilsCSS': // CSS optimizer
+      module_load_include('inc', 'utils', 'classes/utils.css.class');
+      if ($create_instance) {
+        return new UtilsCSS();
+      }
+    break;
+  }
+}
+
+
+/**
+* Helper utility
+* Returns number of column in excel format (1 = A, 52 = AZ, 53 = BA, 54 = BB,...)
+*/
+function utils_num_to_alpha($num) {
+  $num = abs($num) - 1;
+  return ($num >= 26 ? utils_num_to_alpha(intval($num / 26)) : '') . chr(65 + $num % 26);
+}
+
+
+/**
+ * Helper utility
+ * Reverse operation for
+ * @see utils_num_to_alpha()
+ */
+function utils_alpha_to_num($alpha, $counter = 0) {
+  if (empty($alpha)) {
+    return 0;
+  }
+  $symbol = mb_substr($alpha, -1);
+  $rest = mb_substr($alpha, 0, -1);
+  return (ord($symbol) - 65 + 1) * pow(26, $counter++) + utils_alpha_to_num($rest, $counter);
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

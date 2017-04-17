@@ -1,0 +1,109 @@
+/**
+* Custom overrides for colorpicker spectrum library
+*/
+
+
+/**
+* IKW: biggest size, more size, mmmmmonster size
+*/
+body .sp-picker-container {
+	width: 516px; /* def 172px*/
+}
+
+body .sp-clear-enabled .sp-clear {
+	height: 48px; /* def 28px */
+	top:auto;
+}
+
+body .sp-clear-enabled .sp-hue {
+	top: 0px; /* def 33px */
+}
+
+body .sp-clear-enabled .sp-hue {
+	height: 86%; /* def 77.5%*/
+}
+
+body .sp-input-container {
+	width: 170px; /* def 100px */
+}
+
+body .sp-palette .sp-thumb-el {
+	width: 23px;
+	height: 23px;
+	margin: 3px 3px;
+}
+
+
+body .sp-initial span {
+	width: 60px;
+	height: 60px;
+}
+
+.sp-top {
+	margin-bottom: 10px; /* def 3px */
+}
+
+.sp-alpha-enabled .sp-top {
+	margin-bottom: 25px; /* def 18px */
+}
+
+
+body .sp-alpha {
+	height: 12px;  /* def 8px */ 
+	bottom: -17px; /* def -14px */
+}
+
+/**
+* End of IKW
+*/
+
+
+body .sp-button-container {
+	clear:left;
+}
+
+
+.field-suffix .sp-replacer .sp-dd {
+	display: none;
+}
+
+html.js .field-suffix .sp-replacer .sp-dd {
+	display: inline-block;
+}
+
+.sp-clear {
+	cursor: pointer;
+}
+
+
+.clicked {
+	border: 2px solid #f00 !important;
+}
+
+.sp-replacer.form-submit {
+	margin: 0;
+}
+
+.sp-container {
+	box-shadow: 0 0 20px rgba(0,0,0,0.5);
+}
+
+.sp-container button.sp-choose {
+	padding-left: 1em;
+	padding-right: 1em;
+	margin-right: 1em;
+	font-weight:700;
+}
+
+.sp-replacer .sp-dd {
+	float:right;
+}
+.sp-replacer.form-submit {
+	display:none;
+}
+html.js .sp-replacer.form-submit {
+	display:inline-block;
+}
+
+
+

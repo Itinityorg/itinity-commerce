@@ -1,0 +1,392 @@
+# $Id$
+#
+# Russian translation of Drupal (general)
+# Copyright YEAR NAME <EMAIL@ADDRESS>
+# Generated from files:
+#  addons.module: n/a
+#  addons.info: n/a
+#  js_behaviors/address_field.js: n/a
+#  js_behaviors/spin.js: n/a
+#  js_behaviors/graph.init.js: n/a
+#  lib/colorpicker/js/colorpicker.js: n/a
+#
+#, fuzzy
+msgid ""
+msgstr ""
+"Project-Id-Version: PROJECT VERSION\n"
+"POT-Creation-Date: 2012-01-23 14:33+0300\n"
+"PO-Revision-Date: 2012-01-23 14:33+0300\n"
+"Last-Translator: NAME <EMAIL@ADDRESS>\n"
+"Language-Team: Russian <EMAIL@ADDRESS>\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=utf-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=3; plural=((((n%10)==1)&&((n%100)!=11))?(0):(((((n%10)>=2)&&((n%10)<=4))&&(((n%100)<10)||((n%100)>=20)))?(1):2));\n"
+
+#: addons.module:215
+msgid "Specify value from @min to @max."
+msgstr "Укажите значение от @min до @max."
+
+msgid "Invalid date format in !name field."
+msgstr "Неверный формат даты в поле !name"
+
+msgid "Invalid time in !name field."
+msgstr "Неправильное время указано в поле !name."
+
+msgid "Date/time in !name field must be later or equal to @val."
+msgstr "Дата/время в поле !name должно быть позже или равно @val."
+
+msgid "Date/time in !name field must be before or equal to @val."
+msgstr "Дата/время в поле !name должно быть раньше или равно @val."
+
+
+msgid "Invalid input format in !field field."
+msgstr "Неправильный формат данных в поле !field."
+
+
+msgid "Value of !field field must be no less than %min."
+msgstr "Значение поля !field должно быть не менее %min."
+
+msgid "Value of !field field must be no greater than %max."
+msgstr "Значение поля !field должно быть не более %max."
+
+#: addons.module:285
+msgid "Internal URL on this site. Type relative system path or alias."
+msgstr "Внутренний URL на этом сайте. Введите относительный системный путь или синоним."
+
+#: addons.module:305
+msgid "URL \"%url\" not found on this site"
+msgstr "URL \"%url\" не найден на этом сайте"
+
+#: addons.module:325
+msgid "Color value in HTML format (e.c. \"%sample\")."
+msgstr "Цветовое значение в формате HTML  (например \"%sample\")."
+
+#: addons.module:392
+msgid "Invalid color value in !field field. Use HTML specified HEX-value (e.g. \"#AADD00\", \"#FF0000\")"
+msgstr "Неправильное значение цвета в поле !field. Используйте 16-ричное представление в стандарте HTML (например \"#AADD00\", \"#FF0000\")"
+
+#: addons.module:415
+msgid "Start typing material name, seek it in popup list and select here. Else, if you know material number (see URL, eg \"node/12345\") - type this number."
+msgstr "Начинайте вводить наименование материала, найдите требуемый во всплывающей подсказке и выберите его. Либо, если вы знаете номер материала (см. URL, например \"/node/12345\"), во введите этот номер."
+
+#: addons.module:431;474
+msgid "Allowed types is: %types"
+msgstr "Допустимые типы: %types"
+
+#: addons.module:448
+msgid "<UNTITLED>"
+msgstr "<БЕЗЫМЯННЫЙ>"
+
+
+#: addons.module:462
+msgid "Invalid value in field !field. Type number of existing material."
+msgstr "Неправильное значение в поле !field. Укажите идентификатор существующего материала."
+
+#: addons.module:466
+msgid "Non existing material in !field field."
+msgstr "Несуществующий материал в поле !field"
+
+#: addons.module:473
+msgid "Incorrect type of material in !field field."
+msgstr "Некорректный тип содержимого в поле !field."
+
+#: addons.module:481
+msgid "Access denied for material inserted into !field field"
+msgstr "Доступ запрещен для материала, указанного в поле !field"
+
+#: addons.module:560
+msgid "\"%url\" is not a valid url"
+msgstr "URL \"%url\" неверен"
+
+#: addons.module:571
+msgid "\"%mail\" is not a valid email address"
+msgstr "неправильный почтовый адрес \"%mail\""
+
+#: addons.module:583
+msgid "%phone is not a valid phone"
+msgstr "%phone некорректный номер телефона"
+
+#: addons.module:591
+msgid "\"%icq\" is not a valid icq"
+msgstr "некорректный номер ICQ \"%icq\""
+
+
+#: addons.module:680
+msgid "Skype"
+msgstr "Скайп"
+
+
+#: addons.module:711
+msgid "Country"
+msgstr "Страна"
+
+#: addons.module:715
+msgid "Territory, area, township"
+msgstr "Край, область, район"
+
+#: addons.module:719
+msgid "City (settlement)"
+msgstr "Город (населённый пункт)"
+
+#: addons.module:723
+msgid "Postcode"
+msgstr "Почтовый индекс"
+
+#: addons.module:727
+msgid "Street"
+msgstr "Улица"
+
+#: addons.module:731
+msgid "Building"
+msgstr "Дом"
+
+#: addons.module:735
+msgid "Office"
+msgstr "Офис"
+
+
+#: addons.module:795
+msgid "Location on the map"
+msgstr "Местоположение на карте"
+
+
+
+#: js_behaviors/spin.js:0
+msgid "You can use mouse scroll to change value."
+msgstr "Вы можете использовать прокрутку мыши, чтобы изменить значение."
+
+#: lib/colorpicker/js/colorpicker.js:0
+msgid "Current color"
+msgstr "Текущий цвет"
+
+#: lib/colorpicker/js/colorpicker.js:0
+msgid "Previous color"
+msgstr "Предыдущий цвет"
+
+msgid "Fill in all fields or leave them blank."
+msgstr "Заполните все поля или оставьте их пустым."
+
+msgid "Warning! Changes will be lost!"
+msgstr "Внимание! Изменения будут утеряны!"
+
+msgid "Without label"
+msgstr "Без метки"
+
+msgid "add new item into \"!title\""
+msgstr "добавить новый пункт в \"!title\""
+
+msgid "maybe you meant <br />%string"
+msgstr "возможно вы имели ввиду %string"
+
+msgid "DD.MM.YYYY"
+msgstr "ДД.ММ.ГГГГ"
+
+#: js_behaviors/graph.init.js:0
+msgid "Chart context menu"
+msgstr "Контекстное меню графика"
+
+#: js_behaviors/graph.init.js:0
+msgid "Download JPEG image"
+msgstr "Загрузить JPEG изображение"
+
+#: js_behaviors/graph.init.js:0
+msgid "Download PDF document"
+msgstr "Загрузить PDF документ"
+
+#: js_behaviors/graph.init.js:0
+msgid "Download PNG image"
+msgstr "Загрузить PNG изображение"
+
+#: js_behaviors/graph.init.js:0
+msgid "Download SVG vector image"
+msgstr "Загрузить SVG векторное изображение"
+
+#: js_behaviors/graph.init.js:0
+msgid "Loading..."
+msgstr "Загрузка..."
+
+#: js_behaviors/graph.init.js:0
+msgid "Print chart"
+msgstr "Распечатать график"
+
+#: js_behaviors/graph.init.js:0
+msgid "Reset zoom"
+msgstr "Сбросить увеличение"
+
+#: js_behaviors/graph.init.js:0
+msgid "Reset zoom level 1:1"
+msgstr "Сбросить уровень увеличения до 1:1"
+
+#: js_behaviors/graph.init.js:0
+msgid "Jan"
+msgstr "Янв"
+
+#: js_behaviors/graph.init.js:0
+msgid "Feb"
+msgstr "Фев"
+
+#: js_behaviors/graph.init.js:0
+msgid "Mar"
+msgstr "Мар"
+
+#: js_behaviors/graph.init.js:0
+msgid "Apr"
+msgstr "Апр"
+
+#: js_behaviors/graph.init.js:0;0
+msgid "May"
+msgstr "Май"
+
+#: js_behaviors/graph.init.js:0
+msgid "Jun"
+msgstr "Июн"
+
+#: js_behaviors/graph.init.js:0
+msgid "Jul"
+msgstr "Июл"
+
+#: js_behaviors/graph.init.js:0
+msgid "Sep"
+msgstr "Сен"
+
+#: js_behaviors/graph.init.js:0
+msgid "Oct"
+msgstr "Окт"
+
+#: js_behaviors/graph.init.js:0
+msgid "Nov"
+msgstr "Ноя"
+
+#: js_behaviors/graph.init.js:0
+msgid "Dec"
+msgstr "Дек"
+
+#: js_behaviors/graph.init.js:0
+msgid "January"
+msgstr "Январь"
+
+#: js_behaviors/graph.init.js:0
+msgid "February"
+msgstr "Февраль"
+
+#: js_behaviors/graph.init.js:0
+msgid "March"
+msgstr "Март"
+
+#: js_behaviors/graph.init.js:0
+msgid "April"
+msgstr "Апрель"
+
+#: js_behaviors/graph.init.js:0
+msgid "June"
+msgstr "Июнь"
+
+#: js_behaviors/graph.init.js:0
+msgid "July"
+msgstr "Июль"
+
+#: js_behaviors/graph.init.js:0
+msgid "August"
+msgstr "Август"
+
+#: js_behaviors/graph.init.js:0
+msgid "September"
+msgstr "Сентябрь"
+
+#: js_behaviors/graph.init.js:0
+msgid "October"
+msgstr "Октябрь"
+
+#: js_behaviors/graph.init.js:0
+msgid "November"
+msgstr "Ноябрь"
+
+#: js_behaviors/graph.init.js:0
+msgid "December"
+msgstr "Декабрь"
+
+#: js_behaviors/graph.init.js:0
+msgid "Sunday"
+msgstr "Воскресенье"
+
+#: js_behaviors/graph.init.js:0
+msgid "Monday"
+msgstr "Понедельник"
+
+#: js_behaviors/graph.init.js:0
+msgid "Tuesday"
+msgstr "Вторник"
+
+#: js_behaviors/graph.init.js:0
+msgid "Wednesday"
+msgstr "Среда"
+
+#: js_behaviors/graph.init.js:0
+msgid "Thursday"
+msgstr "Четверг"
+
+#: js_behaviors/graph.init.js:0
+msgid "Friday"
+msgstr "Пятница"
+
+#: js_behaviors/graph.init.js:0
+msgid "Saturday"
+msgstr "Суббота"
+
+msgid "Value of !field field must be be a multiple of %m."
+msgstr "Значение поля !field должно быть кратным числу %m."
+
+msgid "Allowed content types is: %types"
+msgstr "Разрешенные типы содержимого: %types"
+
+msgid "HH:MM"
+msgstr "ЧЧ:ММ"
+
+msgid "DD.MM.YYYY"
+msgstr "ДД.ММ.ГГГГ"
+
+msgid "@entity_name %label1 has been renamed to %label2"
+msgstr "@entity_name %label1 был(о,а) переименован(о,а) в %label2"
+
+msgid "Reduce"
+msgstr "Вычесть"
+
+msgid "Increase"
+msgstr "Прибавить"
+
+
+
+#: .js:
+msgid "1 symbol remains"
+msgid_plural "@count symbols remains"
+msgstr[0] "@count знак остался"
+msgstr[1] "@count знака осталось"
+msgstr[2] "@count знаков осталось"
+
+#: .js:
+msgid "Please remove 1 extra character"
+msgid_plural "Please remove @count extra characters"
+msgstr[0] "Пожалуйста удалите @count знак"
+msgstr[1] "Пожалуйста удалите @count знака"
+msgstr[2] "Пожалуйста удалите @count знаков"
+
+
+
+
+msgid "Create new user"
+msgstr "Создать нового пользователя"
+
+msgid "Content not found"
+msgstr "Содержимое остутствует"
+
+msgid "New @role_name"
+msgstr "Создать @role_name"
+
+
+msgid "--- NOT EXISTING OBJECT #@num ---"
+msgstr "--- НЕСУЩЕСТВУЮЩИЙ ОБЪЕКТ #@num ---"
+
+msgid "Custom field name"
+msgstr "Свое название поля"
+

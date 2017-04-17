@@ -1,0 +1,9 @@
+; $Id: shop_units.info, v 1.0 2011/02/08 11:40:42 Ivan Demenkov Exp $
+name = Shop units
+description = Adding systems of measurement for shop
+package = ITK/Shop
+version = 7.x
+core = 7.x
+
+dependencies[] = multifield
+

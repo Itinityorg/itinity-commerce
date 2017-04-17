@@ -1,0 +1,177 @@
+<?php
+
+function utils_install() {
+
+}
+
+function utils_schema() {
+	$schema = array();
+$schema['utils_robots_log'] = array(
+  'description' => 'TODO: please describe this table!',
+  'fields' => array(
+    'id' => array(
+      'description' => '',
+      'type' => 'serial',
+      'not null' => TRUE,
+    ),
+    'timestamp' => array(
+      'description' => '',
+      'type' => 'int',
+      'not null' => TRUE,
+    ),
+    'detected_as' => array(
+      'description' => '',
+      'type' => 'varchar',
+      'length' => '255',
+      'not null' => TRUE,
+    ),
+    'url' => array(
+      'description' => '',
+      'type' => 'varchar',
+      'length' => '255',
+      'not null' => TRUE,
+    ),
+    'referer' => array(
+      'description' => '',
+      'type' => 'varchar',
+      'length' => '255',
+      'not null' => TRUE,
+    ),
+    'user_agent' => array(
+      'description' => '',
+      'type' => 'varchar',
+      'length' => '255',
+      'not null' => TRUE,
+    ),
+    'cookie' => array(
+      'description' => '',
+      'type' => 'int',
+      'not null' => TRUE,
+    ),
+    'ip' => array(
+      'description' => '',
+      'type' => 'varchar',
+      'length' => '32',
+      'not null' => TRUE,
+    ),
+  ),
+  'primary key' => array('id'),
+  'indexes' => array(
+    'referer' => array('referer'),
+    'timestamp' => array('timestamp'),
+    'detected_as' => array('detected_as'),
+    'url' => array('url'),
+    'user_agent' => array('user_agent'),
+	'cookie' => array('cookie',),
+    'ip' => array('ip'),
+  ),
+);
+
+	
+	return $schema;
+}
+function utils_uninstall() {
+	variable_del('utils_is_robot_detection');
+	variable_del('utils_log_robots');
+	variable_del('active_http_hosts');
+  variable_del('utils_minify_js');
+}
+
+/**
+* Robots log database added
+*/
+function utils_update_7001() {
+	if (!db_table_exists('utils_robots_log')) {
+		drupal_install_schema('utils');	
+	}
+}
+
+/**
+* Update robots_log database, variable names
+*/
+function utils_update_7002() {
+	if (!db_field_exists('utils_robots_log', 'detected_as')) {
+		db_add_field('utils_robots_log', 'detected_as', array(
+		  'description' => '',
+		  'type' => 'varchar',
+		  'length' => '255',
+		  'not null' => TRUE,
+		));
+	}
+	if (!db_index_exists('utils_robots_log', 'detected_as')) {
+		db_add_index('utils_robots_log', 'detected_as', array('detected_as'));
+	}
+	if (!db_field_exists('utils_robots_log', 'cookie')) {
+		db_add_field('utils_robots_log', 'cookie', array(
+		  'description' => '',
+		  'type' => 'int',
+		  'not null' => TRUE,
+		));
+	}
+	if (!db_index_exists('utils_robots_log', 'cookie')) {
+		db_add_index('utils_robots_log', 'cookie', array('cookie'));
+	}
+	db_query('UPDATE {variable} SET name = \'utils_is_robot_detection\' WHERE name = \'utls_is_robot_detection\'');
+	db_query('UPDATE {variable} SET name = \'utils_log_robots\' WHERE name = \'utils_log_robots\'');
+	cache_clear_all('variables', 'cache_bootstrap');
+}
+
+/**
+* Update accessed http hosts records
+*/
+function utils_update_7003() {
+	if ($active_http_hosts = variable_get('active_http_hosts', array())) {
+		$new_active_http_hosts = array();
+		foreach ($active_http_hosts as  $http_host => $timestamp) {
+			$http_host = preg_replace('/\:80$/', '', $http_host);
+			$new_active_http_hosts[$http_host] = $timestamp;
+		}
+		variable_set('active_http_hosts', $new_active_http_hosts);		
+	}
+
+}
+
+/**
+* Update invalid storage for site active hosts
+*/
+function utils_update_7004() {
+	$active_http_hosts = variable_get('active_http_hosts', array());
+	$new_active_http_hosts = array();
+	foreach ($active_http_hosts as $host => $time) {
+		$http_host = preg_replace('/\:80$/', '', $http_host);
+		$http_host = preg_replace('/^http\:\/\//', '', $http_host);
+		if (!preg_match('/\:\d+$/', $http_host)) {
+			$http_host = 'http://' . $http_host;
+		}
+		$new_active_http_hosts[$http_host] = $time;
+	}
+	variable_set('active_http_hosts', $new_active_http_hosts);
+}
+
+
+/**
+* Update invalid storage for site active hosts
+*/
+function utils_update_7005() {
+	$active_http_hosts = variable_get('active_http_hosts', array());
+	$new_active_http_hosts = array();
+	foreach ($active_http_hosts as $http_host => $time) {
+		if ($http_host == trim($http_host, '.;')) {
+			$new_active_http_hosts[$http_host] = $time;
+		}		
+	}
+	variable_set('active_http_hosts', $new_active_http_hosts);
+}
+
+/**
+* Rebuild classes registry
+*/
+function utils_update_7006() {
+	registry_rebuild();
+}
+
+
+
+
+
+

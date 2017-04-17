@@ -1,0 +1,14 @@
+.contains-user-picture img {
+  margin-right: 0.4em;  
+}
+
+.contains-user-picture a > .sf-sub-indicator, .sf-menu.rtl .contains-user-picture a > .sf-sub-indicator {
+  top: auto;
+  bottom: 0.4em;
+}
+
+.sf-menu.sf-horizontal li.contains-user-picture:hover ul.sf-level-2,
+.sf-menu.sf-horizontal li.contains-user-picture.sfHover ul.sf-level-2 {
+  top: 100%;  
+}
+

@@ -1,0 +1,901 @@
+<?php //$Id: shop.module, v 1.0 2011/04/11 10:08:57 Ivan Demenkov Exp $
+/**
+ * Copyright 2011-2017 Itinity Ltd. (itinity.ru). All rights reserved.
+ * Licensed under the GNU General Public License, version 2 or later.
+ */
+
+// @formatter:off
+
+
+require_once __DIR__ . '/shop.delivery.api.inc'; // Delivery API
+require_once __DIR__ . '/shop.price.api.inc'; // Prices API
+require_once __DIR__ . '/shop.cart.class.inc'; // Shopping cart class
+
+/**
+ * Implements hook_menu().
+ */
+function shop_menu() {
+  $items = array();
+
+  /**
+   * IKW: Настройки для магазина во вкладке "Коммерция" -> "Общие"
+   * IKW: Не будем плодить страницы настроек,
+   * пусть чекбокс "Оплата без регистрации" будет в разделе "Коммерция" - "Конфигурация"
+   * @see shop_form_money_config_form_alter()
+   */
+//  $items['admin/config/money/shop'] = array(
+//    'title' => 'Shop settings',
+//    'page callback' => 'drupal_get_form',
+//    'page arguments' => array('shop_general_settings_form'),
+//    'access arguments' => array('administer site configuration'),
+//    'file' => 'shop.settings.inc',
+//    'type' => MENU_LOCAL_TASK,
+//    'weight' => 0,
+//  );
+
+  /**
+   * IKW: переместить в раздел "Коммерция" -> "Доставка"
+   * ex admin/config/shop
+   * ex admin/config/shop/delivery
+   */
+  $items['admin/config/money/delivery'] = array(
+    'title' => 'Delivery',
+    'page callback' => 'drupal_get_form',
+    'page arguments'  => array('shop_settings_delivery_form', ),
+    'access arguments' => array('administer site configuration'),
+    'file' => 'shop.settings.delivery.inc',
+    'type'  => MENU_LOCAL_TASK,
+    'weight' => 3,
+  );
+  $items['admin/config/money/delivery/%'] = array(
+    'title' => 'Delivery settings',
+    'page callback' => 'drupal_get_form',
+    'page arguments'  => array('shop_settings_delivery_method_form', 4, ),
+    'access arguments' => array('administer site configuration'),
+    'file' => 'shop.settings.delivery.inc',
+    'type'  => MENU_CALLBACK,
+    'weight' => 3,
+  );
+
+  /**
+   * IKW переместить в раздел "Коммерция" -> "Товары"
+   * ex admin/config/shop/entity_types
+   * ex admin/config/shop/balances
+   * @see shop_settings_form()
+   */
+  $items['admin/config/money/entity_types'] = array( //
+    'title' => 'Goods',
+    'type' => MENU_LOCAL_TASK,
+    'page callback' => 'drupal_get_form',
+    'page arguments'  => array('shop_settings_form'),
+    'access arguments'  => array('administer site configuration'),
+    'weight' => 1,
+    'file' => 'shop.settings.inc',
+  );
+
+  if (module_exists('order')) {
+    $items['admin/shop'] = array(
+      'title' => 'Shop',
+      'page callback' => 'shop_admin_panel_page',
+      'access arguments' => array('administer site configuration'),
+      'weight' => 10,
+      'file' => 'shop.admin.panel.inc'
+    );
+    $items['admin/shop/panel'] = array(
+      'title' => 'Panel',
+      'weight' => -10,
+      'type' => MENU_DEFAULT_LOCAL_TASK,
+    );    
+  }
+
+  $items['admin/shop/carts'] = array(
+    'title' => 'Carts',
+    'page callback' => 'drupal_get_form',
+    'page arguments'  => array('shop_carts_list_form'),
+    'access arguments' => array('administer moneys',),
+    'type' => MENU_LOCAL_TASK,
+    'file' => 'shop.admin.inc'
+  );
+  $items['admin/shop/carts/list'] = array(
+    'title' => 'List',
+    'weight' => -10,
+    'type' => MENU_DEFAULT_LOCAL_TASK,
+  );
+  $items['admin/shop/carts/graph'] = array(
+    'title' => 'Graph',
+    'page callback' => 'drupal_get_form',
+    'page arguments'  => array('shop_carts_graph_form'),
+    'access arguments' => array('administer moneys',),
+    'type' => MENU_LOCAL_TASK,
+    'file' => 'shop.admin.inc',
+  );
+  if (module_exists('order')) {
+    $items['admin/shop/payments'] = array(
+      'title' => 'Payments',
+      'page callback' => 'drupal_get_form',
+      'page arguments' => array('shop_payments_form'),
+      'access arguments' => array('administer moneys',),
+      'type' => MENU_LOCAL_TASK,
+      'file' => 'shop.admin.inc',
+    );
+    $items['admin/shop/payments/list'] = array(
+      'title' => 'List',
+      'weight' => -10,
+      'type' => MENU_DEFAULT_LOCAL_TASK,
+    );
+
+    $items['admin/shop/payments/graph'] = array(
+      'title' => 'Graph',
+      'page callback' => 'drupal_get_form',
+      'page arguments'  => array('shop_payments_graph_form'),
+      'access arguments' => array('administer moneys',),
+      'type' => MENU_LOCAL_TASK,
+      'file' => 'shop.admin.inc',
+    );
+  }
+
+  $items['admin/shop/profit'] = array(
+    'title' => 'Shop profit',
+    'page callback' => 'drupal_goto',
+    'page arguments' => array('admin/config/money/transactions/site'),
+    'access arguments' => array('administer moneys'),
+    'type' => MENU_LOCAL_TASK,
+  );
+
+  // @todo Is this part deprecated and should be deleted?
+  $items['js/shop_cart_add'] = array(
+    'title' => 'Shop cart AJAX callback',
+    'access callback' => TRUE,
+    'page callback' => '_shop_add_to_cart_ajax',
+    'delivery callback' => '_shop_add_to_cart_ajax_deliver',
+    'theme callback' => 'ajax_base_page_theme',
+    'file' => 'shop.cart.block.inc',
+    'type' => MENU_CALLBACK,
+  );
+  
+  $items['js/shop-cart-ajax'] = array(
+    'title' => 'Shop cart AJAX callback',
+    'access arguments' => array('access content'),
+    'page callback' => '_shop_cart_ajax',
+    'delivery callback' => 'shop_cart_ajax_deliver',
+    'theme callback' => 'ajax_base_page_theme',
+    'file' => 'shop.cart.block.inc',
+    'type' => MENU_CALLBACK,
+  );
+
+  
+  $items['js/shop-cart-payment-button-ajax'] = array(
+    'title' => 'Shop payment button reloader AJAX callback',
+    'access arguments' => array('access content'),
+    'page callback' => '_shop_cart_payment_button_ajax',
+    'delivery callback' => 'shop_cart_ajax_deliver',
+    'theme callback' => 'ajax_base_page_theme',
+    'file' => 'shop.cart.block.inc',
+    'type' => MENU_CALLBACK,
+  );
+  
+  $items['shop/delivery-conditions-overview'] = array(
+    'title' => 'Delivery methods',
+    'access arguments' => array('access content'),
+    'page callback' => 'shop_delivery_conditions_overview',
+    'file' => 'shop.pages.inc',
+  );
+  
+  
+  return $items;
+}
+
+
+/**
+ * Implements hook_settings_permission().
+ */
+function shop_permission() {
+  return array(
+    'submit orders' => array(
+      'title' => t('Submit orders'),
+    ),
+  );
+}
+
+
+/**
+* Implements hook_node_type_update()
+*/
+function shop_node_type_update($info) {
+  if (!empty($info->old_type) && $info->old_type != $info->type) {
+    if (shop_get_info('entity_types', 'node', $info->old_type)) { //!empty($shop_settings['node_types']['settings'][$info->old_type])) {
+      $shop_settings = shop_get_info();
+      unset($shop_settings['entity_types']['node'][$info->old_type]);
+      $shop_settings['entity_types']['node'][$info->type] = $info->type;
+      shop_update_info($shop_settings);
+    }
+  }
+}
+
+
+/**
+* Implements hook_node_type_delete()
+*/
+function shop_node_type_delete($info) {
+  $shop_settings = shop_get_info();
+  unset($shop_settings['entity_types']['node'][$info->type]);
+  shop_update_info($shop_settings);
+}
+
+
+/**
+ * Implements hook_theme().
+ */
+function shop_theme($existing, $type, $theme, $path) {
+  return array(
+    'shop_cart' => array(
+      'variables' => array(
+        'shop_cart' => NULL,
+        'mode' => 'default' /* max, min, default,  mail, */,
+        'has_links' => NULL /*allow <A> tag*/,
+        'langcode' => NULL /*only for mail mode*/,
+      ),
+      'file' => 'shop.theme.inc',
+    ),
+    'shop_admin_panel_page' => array(
+      'file' => 'shop.theme.inc',
+      'render element' => 'panel',
+    ),
+    'shop_cart_inblock_form' => array(
+      'file' => 'shop.cart.block.inc',
+      'render element' => 'form',
+    ),
+  );
+}
+
+
+/**
+ * Implements hook_cron().
+ */
+function shop_cron() {
+  // Synchronize not indexed entities with {shop_index}
+  foreach (shop_get_info('entity_types') as $entity_type => $bundles) {
+    if ($bundles = array_filter($bundles)) {
+      $entity_info = entity_get_info($entity_type);
+      if (!empty($entity_info['base table']) && !empty($entity_info['entity keys']['id']) && !empty($entity_info['bundles'])) {
+        $t = $entity_info['base table'];
+        $query = db_select($t, $t)->fields($t, array($entity_info['entity keys']['id']));
+        if (!empty($entity_info['bundle keys']['bundle'])) {
+          $query->condition($t . '.' .$entity_info['bundle keys']['bundle'], array_keys($bundles));
+        }
+        // select not indexed entities
+        $query->leftJoin('shop_index', 'si', 'si.entity_id = ' . $t . '.' . $entity_info['entity keys']['id']);
+        $query->isNull('si.entity_id');
+        $query->range(0, 1000);
+        if ($ids = $query->execute()->fetchCol()) {
+          foreach (entity_load($entity_type, $ids, array(), TRUE) as $entity) {
+            shop_field_attach_update($entity_type, $entity);
+          }
+        }
+      }      
+    }
+  }
+   // ///delete cart items of anonymous users older than 1 month
+  ///foreach (db_query('SELECT cart_id FROM {shop_cart} WHERE changed <= :t AND uid = 0', array(':t' => REQUEST_TIME - (30.5 * 24 * 3600))) as $r) {
+   // /db_delete('shop_cart')->condition('cart_id', $r->cart_id)->execute();
+   // /db_delete('shop_cart_items')->condition('cart_id', $r->cart_id)->execute();
+  ///}
+}
+
+
+/**
+* Implements hook_user_delete()
+*/
+function shop_user_delete($account) {
+  // Set account uid in shopping cart to zero
+  db_query('UPDATE {shop_cart} SET uid = 0 WHERE uid = :uid', array(':uid' => $account->uid,));
+}
+
+
+/**
+ * Implements hook_init().
+ */
+function shop_init() {
+
+  ////if ($router_item = menu_get_item()) {
+  ////  if (!$router_item['delivery_callback'] || $router_item['delivery_callback'] === 'drupal_deliver_html_page') {
+  ////    _shop_set_cart_cookie();
+  ////  }
+  ////}
+  drupal_add_css(drupal_get_path('module', 'shop') . '/css/shop.css');
+}
+
+
+/**
+@TODO:
+IKW: Если аноним сделал заказ и тут же зарегистрировался или вошел под таким же емейлом, 
+то заказ не должен исчезнуть, а закрепился за ним (поле заказчик как раз для этого)
+
+*/
+/**
+ * Implements hook_user_login().
+ * Attach anonymous cart to user
+ */
+function shop_user_login(&$edit, $account) {
+ //// if (!empty($_COOKIE['shop_cart']['anonymous_key'])) {
+ ////   // wtf:
+ ////   db_query('UPDATE {shop_cart} SET uid = :uid WHERE anonymous_key = :key', array(':uid' => $account->uid, ':key' => $_COOKIE['shop_cart']['anonymous_key'],));
+ ////   db_query('UPDATE {shop_cart} SET anonymous_key = :key WHERE uid = :uid', array(':uid' => $account->uid, ':key' => $_COOKIE['shop_cart']['anonymous_key'],));
+ //// }
+}
+
+
+function DEPRECATED______shop_set_cart_cookie() {
+  // Grant or refresh a personal unique cookie key for anonymous identification in shop cart. 
+  // For best performance we NOT use sessions mechanism because any changes in $_SESSION will always written into database (session table). 
+  // For more information see drupal_session_initialize() ->> session_set_save_handler()
+  if (
+    empty($_COOKIE['shop_cart']['anonymous_key']) 
+    || 
+    empty($_COOKIE['shop_cart']['checksum'])
+    ||
+    // Cookie hack detected:
+    $_COOKIE['shop_cart']['checksum'] !== ($checksum = drupal_hash_base64(drupal_get_private_key() . ':' . $_COOKIE['shop_cart']['anonymous_key']))        
+    ) {
+    // Validate anonymous_key of user shop cart. Generate new key if current is not valid.
+    if (
+      empty($_COOKIE['shop_cart']['anonymous_key']) ||
+      empty($_COOKIE['shop_cart']['checksum']) ||
+      (isset($checksum) && $_COOKIE['shop_cart']['checksum'] !== $checksum)) {
+      $anonymous_key = drupal_get_token(drupal_random_bytes(55) . 'shop_cart_anonymous_key');
+      $checksum = drupal_hash_base64(drupal_get_private_key() . ':' . $anonymous_key);
+    }
+    else {
+      $anonymous_key = $_COOKIE['shop_cart']['anonymous_key'];
+    }
+    $params = session_get_cookie_params();
+    $expire = REQUEST_TIME + (3600 * 24 * 365);
+    $keys = array(
+      'anonymous_key' => $anonymous_key,
+    );
+    if (isset($checksum)) {
+      $keys['checksum'] = $checksum;
+    }
+    $_COOKIE['shop_cart'] = array();
+    foreach ($keys as $key => $val) {
+      setcookie('shop_cart[' . $key . ']', $val, $expire, $params['path'], $params['domain'], $params['secure'], $params['httponly']);
+      $_COOKIE['shop_cart'][$key] = $val;
+    }
+  }  
+}
+
+
+/**
+* Implements hook_entity_load()
+*/
+function shop_entity_load($entities, $type) {
+  if (in_array($type, array_keys(shop_get_supported_entities()), TRUE)) {
+    $ids = array();
+    foreach ($entities as $id => $entity) {
+      list(, , $bundle) = entity_extract_ids($type, $entity);
+      if (shop_get_info('entity_types', $type, $bundle)) {
+        foreach (array('price', 'currency', 'qty', 'qty_fraction') as $key) {
+          if (!property_exists($entity, $key)) {
+            $entity->{$key} = NULL;
+            $ids[$id] = $id;
+            break;
+          }
+        }
+      }
+    }
+    if ($ids) {
+      foreach (db_query('SELECT * FROM {shop_index} WHERE entity_type=:t AND entity_id IN(:ids)', array(':t' => $type, ':ids' => $ids,)) as $r) {
+        $id = $r->entity_id;
+        if (isset($entities[$id])) {
+          foreach ($r as $property => $value) {
+            if (!in_array($property, array('entity_type', 'entity_id', 'revision_id', 'title',), TRUE)) {
+              $entities[$id]->{$property} = $value;
+            }
+          }
+          //$entities[$id]->price = $r->price;
+         // $entities[$id]->currency = $r->currency;
+          $entities[$id]->qty = !is_null($r->qty) ? $r->qty * 1 : NULL;
+         // $entities[$id]->qty_type = $r->qty_type;
+          $entities[$id]->qty_fraction *=  1;
+
+          // Product is available on request if both global and local 'goods_on_request' settings enabled
+          $entities[$id]->goods_on_request = (int) (shop_get_info('balances', 'settings', 'goods_on_request') && !empty($entities[$id]->goods_on_request));
+        }
+      }
+    }
+  }
+
+}
+
+
+/**
+ * Implements hook_field_attach_presave().
+ */
+function shop_field_attach_presave($entity_type, $entity) {
+  list($id, $vid, $bundle) = entity_extract_ids($entity_type, $entity);
+  if (shop_get_info('entity_types', $entity_type, $bundle)) { // entity is sellable?
+    
+    $entity->currency = isset($entity->currency) ? money_fix_currency($entity->currency) : NULL;
+    $entity->price = isset($entity->price) ? $entity->price * 1 : 0;
+    $entity->qty_type = !empty($entity->qty_type) && is_scalar($entity->qty_type) ? $entity->qty_type : NULL;
+    
+    // qty must be NULL or 0 or more than 0
+    // NULL - where product in stock is unlimited.
+    $entity->qty = isset($entity->qty) && $entity->qty !== '' ? abs($entity->qty * 1) : NULL;
+    $entity->supply_time = (isset($entity->supply_time) && $entity->supply_time !== '') ? abs($entity->supply_time * 1) : NULL;
+
+    $entity->qty_fraction = isset($entity->qty_fraction) && $entity->qty_fraction !== '' ? $entity->qty_fraction * 1 : 0;
+
+    if (!$entity->qty_fraction && $entity->qty && preg_match('/\d+?\.\d+$/', $entity->qty) && shop_get_info('balances', 'settings', 'qty_fraction')) {
+      // Calc minimal fraction for qty. E.g., for 10.2 it will be 0.1; 10.233 --> 0.001; .001 -->> 0.001; 1.9 -->> 0.1
+      $entity->qty_fraction = 1 / (str_replace('.', '', $entity->qty) / $entity->qty); 
+    }
+    
+    
+    // Crutch for 1c import. Different versions of 1c can present or not present qty field in xml where qty is 0. 
+    // See also shop_form_alter() -->> if ($form_id == 'c1_admin_clients_edit_form')
+    if ($entity_type === 'node' && variable_get('shop_set_qty_zero_if_in_1c_not_present', FALSE)) {
+      if (!empty($entity->import_context) && $entity->import_context === '1C' && !isset($entity->raw_c1_import['qty'])) {
+        $entity->qty = 0;
+      }
+    }
+    if ($entity_type === 'node' && !empty($entity->import_context) && $entity->import_context === '1C' && !empty($entity->nid) && !$entity->status && !empty($entity->qty) && shop_get_info('balances', 'settings', 'track')) {
+      $entity->status = 1;
+    }
+  }
+}
+
+
+/**
+ * Implements hook_field_attach_insert().
+ */
+function shop_field_attach_insert($entity_type, $entity) {
+  _shop_index_entity($entity_type, $entity);
+}
+
+
+/**
+ * Implements hook_field_attach_update().
+ */
+function shop_field_attach_update($entity_type, $entity) {
+  _shop_index_entity($entity_type, $entity);
+}
+
+
+/**
+* Helper. Add/update entity in {shop_index} table. @see shop_field_attach_update/insert() functions.
+*/
+function _shop_index_entity($entity_type, $entity) {
+  list($id, $vid, $bundle) = entity_extract_ids($entity_type, $entity);
+  if (shop_get_info('entity_types', $entity_type, $bundle)) { // entity is sellable
+    if (!isset($vid)) {
+      $vid = $id;
+    }
+    
+
+    $url = '';
+    if ($uri = entity_uri($entity_type, $entity)) {
+      $url = $uri['path'];
+    }    
+    $fields = array(
+      'price' => $entity->price,
+      'currency' => $entity->currency,
+      'qty' => $entity->qty,
+      'qty_type' => $entity->qty_type,
+      'qty_fraction' => $entity->qty_fraction,
+      // cache title and url for shop cart routines
+      'title' => entity_label($entity_type, $entity),
+      'entity_uri' => $url,
+      'goods_on_request' => isset($entity->goods_on_request) ? $entity->goods_on_request : 0,
+      'supply_time' => isset($entity->supply_time) ? $entity->supply_time : NULL,
+    );
+    
+    //parse {shop_index} table schema for non shop.module related fields(ex: new_price.module)
+    $schema = drupal_get_schema('shop_index');
+    foreach ($schema['fields'] as $field_name => $field_options) {
+      if (!array_key_exists($field_name, $fields) && !in_array($field_name, array('entity_type', 'entity_id', 'revision_id',))) {
+        if (!empty($field_options['not null']) && isset($field_options['default']) && !isset($entity->{$field_name})) {
+          $fields[$field_name] = $field_options['default'];
+        }
+        elseif (isset($entity->{$field_name})) {
+          $fields[$field_name] = $entity->{$field_name};
+        }
+      }
+    }
+
+    db_merge('shop_index')
+      ->key(array(
+        'entity_type' => $entity_type, 
+        'entity_id' => $id, 
+        'revision_id' => $vid,
+        )
+      )
+      ->fields($fields)
+      ->execute();
+  }
+}
+
+
+/**
+ * Implements hook_field_attach_delete_revision().
+ */
+function shop_field_attach_delete_revision($entity_type, $entity) {
+   list($id, $vid, $bundle) = entity_extract_ids($entity_type, $entity);
+   if (shop_get_info('entity_types', $entity_type, $bundle)) {
+    db_query('DELETE FROM {shop_index} WHERE entity_type = :entity_type AND entity_id = :id AND revision_id = :vid', array(':entity_type' => $entity_type, ':id' => $id, ':vid' => $vid,));
+   }
+}
+
+
+/**
+ * Implements hook_field_attach_delete().
+ * Delete not accepted transactions
+ * Set uid = 0 on account deletion
+ */
+function shop_field_attach_delete($entity_type, $entity) {
+  // Store information about ordered products (price, currency) in db 
+  list($id, $vid, $bundle) = entity_extract_ids($entity_type, $entity);
+  if (shop_get_info('entity_types', $entity_type, $bundle)) {
+    foreach (db_query('SELECT * FROM {shop_cart_items_ordered} WHERE entity_type = :type AND entity_id = :id GROUP BY oid', array(':type' => $entity_type, ':id' => $id)) as $r) {
+      shop_cart(NULL, $r->oid)->freeze($entity_type, $id);
+    }
+  }
+  db_query('DELETE FROM {shop_index} WHERE entity_type = :entity_type AND entity_id = :id', array(':entity_type' => $entity_type, ':id' => $id));
+  //Delete product from user cart if product not exists anymore.
+  db_delete('shop_cart_items')->condition('entity_type', $entity_type)->condition('entity_id', $id)->execute();
+}
+
+
+/**
+* Initialize shop cart object
+*/
+function shop_cart($account = NULL, $order_node = NULL, $cart_id = NULL, $reset = FALSE) {
+  $carts = &drupal_static(__FUNCTION__, array());
+
+//  if(!empty($order_node->customer) || ($order_node && is_scalar($order_node) && ($order_node = node_load($order_node)))){
+//    $uid = $order_node->customer;
+//  }
+//  elseif (!empty($order_node->uid) || ($order_node && is_scalar($order_node) && ($order_node = node_load($order_node)))) {
+//    $uid = $order_node->uid;
+//  }
+//  else {
+//    $uid = $account ? (is_scalar($account) ? $account : $account->uid) : $GLOBALS['user']->uid;
+//  }
+  $order_node = is_scalar($order_node) ? node_load($order_node) : $order_node;
+  $customer = shop_get_customer($order_node);
+  $uid = $customer->uid;
+  $key = $uid . ':' . (!empty($order_node->nid) ? $order_node->nid : 0) . ':' . $cart_id;
+
+  if (!isset($carts[$key]) || $reset) {
+    if (count($carts) >= 20) {// Memory limit - 20 carts in this static storage
+      array_shift($carts);
+    }
+    $carts[$key] =  new Shop\Cart($uid, $order_node, $cart_id);
+  }
+  return $carts[$key];
+}
+
+
+/**
+ * Implements hook_block_info().
+ */
+function shop_block_info() {
+  $blocks['cart'] = array(
+    'info' => t('Cart'),
+    'cache' => DRUPAL_NO_CACHE,
+    'status' => TRUE,
+    'region' => 'sidebar_second',
+    'visibility' => module_exists('features') ? FEATURES_BLOCK_VISIBILITY_NON_ADMINPAGES : 0,
+    'pages' => module_exists('features') ? '' : "shop/*\nadmin/*\nnode/add\nnode/add/*\nnode/*/edit\nuser",
+  );
+  return $blocks;
+}
+
+
+/**
+ * Implements hook_block_configure().
+ */
+function shop_block_configure($delta = '') {
+  module_load_include('inc', 'shop', 'shop.cart.block');
+  return _shop_block_configure($delta);
+}
+
+
+/**
+ * Implements hook_block_save().
+ */
+function shop_block_save($delta = '', $edit = array()) {
+  module_load_include('inc', 'shop', 'shop.cart.block');
+  _shop_block_save($delta, $edit);
+}
+
+
+
+
+/**
+ * Implements hook_block_view().
+ */
+function shop_block_view($delta = '') {
+  module_load_include('inc', 'shop', 'shop.cart.block');
+  return _shop_block_view($delta);
+}
+
+
+/**
+* Implements hook_shop_info() @see shop_get_info()
+*/
+function shop_shop_info() {
+  return array(
+    'currency' => array(
+      'default' => variable_get('money_default_currency', 'RUB'),
+    ),
+    'balances' => array(
+      'settings' => array(
+        'track' => FALSE,
+        'product_debit_condition' => 'paid',
+      ),
+    ),
+    'entity_types' => array(
+      'node'  => array(
+        'product' => 'product',
+      ),
+    ),
+    'general' => array(),
+  );
+}
+
+
+/**
+* Get shop settings.
+* @param_1, ...@param_N
+*    names of nested keys (e.g. shop_get_info('currency', 'default'))
+*/
+function shop_get_info() {
+  // Use the advanced drupal_static() pattern, since this is called very often.
+  static $drupal_static_fast;
+  if (!isset($drupal_static_fast)) {
+    $drupal_static_fast['shop_info'] = &drupal_static(__FUNCTION__);
+  }
+  $result = &$drupal_static_fast['shop_info'];
+
+  if (!isset($result)) {
+    $result = array();
+    $shop_settings = utils_load_packed_var('shop_info', array());
+    foreach (module_implements('shop_info') as $module) {
+      if ($shop_info = module_invoke($module, 'shop_info')) {
+        foreach ($shop_info as $type => $item) {
+          $result[$type] = isset($shop_settings[$type]) ? $shop_settings[$type] : $item;
+        }
+      }
+    }
+    drupal_alter('shop_get_info', $result);
+    $result = drupal_array_merge_deep(module_invoke_all('shop_info'), $result); // Fill non existing keys with defaults
+  }
+
+  return drupal_array_get_nested_value($result, func_get_args());
+}
+
+
+/**
+* Update shop settings storage
+*/
+function shop_update_info($info) {
+    drupal_alter('shop_update_info', $info);
+    variable_set('menu_rebuild_needed', 1);
+    utils_save_packed_var('shop_info', $info);
+    drupal_static_reset('shop_get_info');
+}
+
+
+/**
+* Returns only entities/bundles which may enabled for sell in shop
+*/
+function shop_get_supported_entities() {
+  $entity_info = entity_get_info();
+  foreach ($entity_info as $entity_type => $info) {
+    if ($entity_type === 'node') {
+      unset($entity_info[$entity_type]['bundles']['order']); // Do not sell order. Danger of recursion.
+    }
+    elseif ($entity_type !== 'user') { // Fuck yeah. We may sell users.
+      unset($entity_info[$entity_type]); // Do not sell comments, taxonomy terms , vocabs and other shit
+    }
+  }
+  return $entity_info;
+}
+
+
+/**
+* Implements hook_form_alter()
+* @TODO: move it to c1.module ?
+*/
+function shop_form_alter(&$form, &$form_state, $form_id) {
+  if ($form_id === 'c1_admin_clients_edit_form') {
+    if (shop_get_info('entity_types', 'node', $form['node_type']['#default_value'])) {
+      if (!empty($form['settings']['fields']['qty'])) {
+        // Crutch for 1c import. Different versions of 1c can present or not present qty field in xml where qty is 0. See also shop_field_attach_presave()
+        $form['settings']['fields']['qty']['shop_set_qty_zero_if_in_1c_not_present'] = array(
+          '#parents' => array('shop_set_qty_zero_if_in_1c_not_present'),
+          '#type' => 'checkbox',
+          '#title' => t('Use zero where 1C don\'t present qty'),
+          '#default_value' => variable_get('shop_set_qty_zero_if_in_1c_not_present', FALSE),
+          '#states' => array(
+            'visible' => array(
+              'select[name="settings[fields][qty][5]"]' => array('value' => 'Amount',),
+            ),
+          ),
+        );
+        $form['actions']['submit']['#submit'][] = '_shop_c1_admin_clients_edit_form_submit';
+      }
+    }
+  }
+  if ($form_id === 'system_performance_settings') {
+    $icon = theme('image', array('path' => 'misc/watchdog-warning.png', 'width' => 18, 'height' => 18, 'alt' => t('warning'), 'title' => t('warning')));
+    $form['caching']['shop'] = array(
+      '#type' => 'item',
+      '#title' => t('Shop'),
+      '#markup' => '<span class="icon">' . $icon . '</span> ' .  t('The Shop module will disable the caching of pages that contain a buy buttons or cart.'),
+      '#attributes' => array('class' => array('warning')),
+    );
+  }
+
+  if(($form_id === 'user_login') || ($form_id === 'user_register_form')) {
+    $attributes = drupal_get_query_parameters();
+
+    // IKW: Показывать мотивирующий текст только если пользователь пришел с корзины
+    if (isset($attributes['destination']) && ($attributes['destination'] == 'shop/cart/order')) {
+      $motivational_text = array();
+      $motivational_text[] = t("Please login or register for 2 minutes to complete checkout.");
+      $motivational_text[] = t("Personal account provides extended capabilities for order management and saves your time.");
+
+      if(user_access('submit orders', drupal_anonymous_user())) {
+        $motivational_text[] = t("Also you can proceed to <a href='@shop-cart-order'>checkout without registration</a>.", array('@shop-cart-order' => url('shop/cart/order')));
+      }
+
+      drupal_set_message(implode('<br/>', $motivational_text));
+    }
+  }
+}
+
+
+// See shop_form_alter()  
+// @TODO: move it to c1.module ?
+function _shop_c1_admin_clients_edit_form_submit($form, &$form_state) {
+  if (!empty($form_state['values']['shop_set_qty_zero_if_in_1c_not_present'])) {
+    variable_set('shop_set_qty_zero_if_in_1c_not_present', TRUE);
+  }
+  else {
+    variable_del('shop_set_qty_zero_if_in_1c_not_present');
+  }
+}
+
+
+/**
+* Implements hook_seo_robots_txt().
+* Defined in seo_robots_txt()
+* Add own lines in a generated robots.txt file
+* return array of strings
+*/
+function shop_seo_robots_txt() {
+  return array(
+    'Disallow: /shop/cart',
+    'Disallow: *?q=shop/cart',
+  );
+}
+
+
+/**
+* Implements hook_user_view_alter()
+*/
+function shop_user_view_alter(&$build) {
+  // IKW: Глобально показывать в профиле пользователя поле Емейл ролям: Агент, Завскладом, Курьер, Финансист, Менеджер, Админ
+  if (isset($build['mail']['#access']) && !$build['mail']['#access']) { // For admin/manager see implementation in social_profile_user_view()
+    $build['mail']['#access'] = user_access('administer moneys');
+  }
+}
+
+// @formatter:on
+
+
+/**
+ * Implements hook_form_BASE_FORM_ID_alter().
+ */
+function shop_form_money_config_form_alter(&$form, &$form_state, $form_id) {
+  // duplicate of admin/people/permissions#edit-submit-orders checkbox for anonymous users
+  $form['submit_orders'] = array(
+    '#type' => 'checkbox',
+    '#title' => t('Order without registration'),
+    '#description' => t('"Submit orders" permission for anonymous users'),
+    '#default_value' => user_access('submit orders', drupal_anonymous_user()),
+  );
+
+  $form['rounding'] = array(
+    '#type' => 'radios',
+    '#inline' => TRUE,
+    '#title' => t('Price rounding rule'),
+    '#default_value' => shop_get_info('general', 'rounding'),
+    '#options' => shop_rounding_options(),
+  );
+
+  $form['#submit'][] = 'shop_form_money_config_form_alter_submit';
+}
+
+
+function shop_form_money_config_form_alter_submit($form, $form_state) {
+  if (!empty($form_state['values']['submit_orders'])) {
+    user_role_grant_permissions(DRUPAL_ANONYMOUS_RID, array('submit orders'));
+  }
+  else {
+    user_role_revoke_permissions(DRUPAL_ANONYMOUS_RID, array('submit orders'));
+  }
+
+  if (isset($form_state['values']['rounding'])) {
+    $shop_info = shop_get_info();
+    $shop_info['general']['rounding'] = $form_state['values']['rounding'];
+    shop_update_info($shop_info);
+  }
+}
+
+
+function shop_get_customer($node) {
+  if (empty($node->nid)) { // new order
+    global $user;
+    return user_load($user->uid);
+  }
+  if (!empty($node->customer) && ($user = user_load($node->customer))) { // 'customer' field exists
+    return $user;
+  }
+  elseif (!empty($node->uid) && ($user = user_load($node->uid))) { // node author
+    return $user;
+  }
+  else { // something went wrong
+    return drupal_anonymous_user();
+  }
+}
+
+
+function shop_rounding_options($key = NULL) {
+  $options = array(
+    '' => t('As is'),
+    'floor' => t('Floor value'),
+    'ceil' => t('Ceil value'),
+    'round' => t('Round value'),
+  );
+
+  if ($key) {
+    return isset($options[$key]) ? $options[$key] : NULL;
+  }
+  else {
+    return $options;
+  }
+}
+
+/**
+ * Implements hook_form_FORM_ID_alter().
+ * FORM_ID = money_payment_config_form
+ */
+function shop_form_money_payment_config_form_alter(&$form, &$form_state, $form_id) {
+  $default_payment_method_options = array();
+  foreach (money_sources_info() as $source => $source_info) {
+    if ($source_info['external'] && $source_info['enabled']) {
+      $default_payment_method_options[$source] = $source_info['title'];
+    }
+  }
+
+  $form['default_payment_method'] = array(
+    '#type' => 'select',
+    '#title' => t('Default payment method'),
+    '#options' => array(NULL => t('Empty')) + $default_payment_method_options,
+    '#default_value' => shop_get_info('general', 'default_payment_method'),
+    '#weight' => -1,
+  );
+
+  $form['#submit'][] = 'shop_form_money_payment_config_form_alter_submit';
+}
+
+
+function shop_form_money_payment_config_form_alter_submit($form, $form_state) {
+  $shop_info = shop_get_info();
+  $shop_info['general']['default_payment_method'] = $form_state['values']['default_payment_method'];
+  shop_update_info($shop_info);
+}
+

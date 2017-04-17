@@ -1,0 +1,1536 @@
+<?php
+/**
+ * Copyright 2011-2017 Itinity Ltd. (itinity.ru). All rights reserved.
+ * Licensed under the GNU General Public License, version 2 or later.
+ */
+
+
+_addons_load_all_includes();
+
+
+function _addons_load_all_includes() {
+	$path = dirname(__FILE__) . '/includes/';
+	require_once $path . 'element.digit.inc';
+	require_once $path . 'element.phone.inc';
+	require_once $path . 'element.email.inc';
+	require_once $path . 'element.skype.inc';
+	require_once $path . 'element.url.inc';
+	require_once $path . 'element.address.inc';
+	require_once $path . 'element.table_wrapper.inc';
+	require_once $path . 'element.entity_selector.inc';
+	require_once $path . 'element.colorpicker.inc';
+	require_once $path . 'element.internal_uri.inc';
+	require_once $path . 'element.date.inc';
+	require_once $path . 'element.datepicker.inc';
+	require_once $path . 'element.timepicker.inc';
+
+	require_once $path . 'element.datetime.inc';
+
+	require_once $path . 'element.slider.inc';
+	require_once $path . 'element.days.inc';
+	require_once $path . 'element.contacts.inc';
+	require_once $path . 'element.icq.inc';
+	require_once $path . 'overrides.inc';
+}
+
+
+/**
+* Implements hook_implements_alter()
+*/
+function addons_module_implements_alter(&$implementations, $hook) {
+	if ($hook === 'form_alter') {
+		// Place addons_form_field_ui_display_overview_form_alter() function into end of alteration hooks system queue
+		$bool = $implementations['addons'];
+		unset($implementations['addons']);
+		$implementations['addons'] = $bool;
+	}
+}
+
+
+/**
+* Implements hook_init()
+*/
+function addons_init() {
+
+}
+
+
+/**
+* Implements hook_menu()
+*/
+function addons_menu() {
+	$items = array();
+
+	//callback for entity_selector autocomplete:
+	$items['addons/entity_selector/autocomplete'] = array(
+		'delivery callback' => 'addons_entity_selector_delivery_callback',
+		'page callback' => 'addons_entity_selector_autocomplete',
+		'access arguments' => array('access content'),
+		'type' => MENU_CALLBACK,
+	);
+
+	// callbacks for entity_selector `eye` link
+	$items['addons/entity_selector/node/%node'] = array(
+		'page callback' => 'addons_entity_selector_entity_view_callback',
+		'access callback' => 'node_access',
+		'access arguments' => array('view', 3),
+		'page arguments' => array(3, 4),
+		'type' => MENU_CALLBACK,
+	);
+
+	$items['test/addons'] = array(
+		'title' => 'Addons test',
+		'access callback' => 'user_is_sysadmin',
+		'page callback' => 'drupal_get_form',
+		'page arguments' => array('addons_test_form',),
+		'type' => MENU_CALLBACK,
+		'file' => 'includes/addons.test.inc',
+	);
+	$items['addons/keyboard_fix/js'] = array(
+		'title' => '',
+		'access callback' => TRUE,
+		'delivery callback' => 'addons_keyboard_fix_js_delivery_callback',
+		'page callback' => 'addons_keyboard_fix_js_page_callback',
+		'type' => MENU_CALLBACK,
+	);
+	if (module_exists('field_ui')) {
+		foreach (entity_get_info() as $entity_type => $entity_info) {
+			//m($entity_type, $bundles);
+			foreach ($entity_info['bundles'] as $bundle => $data) {
+				if ($entity_info['fieldable'] && field_info_extra_fields($entity_type, $bundle, 'form')) {
+					if (!empty($data['admin']['path'])) {
+						$access = array_intersect_key($data['admin'], drupal_map_assoc(array('access callback', 'access arguments')));
+						$access += array(
+							'access callback' => 'user_access',
+							'access arguments' => array('administer site configuration'),
+						);
+						$items[$data['admin']['path'] . '/extra/%'] = array(
+							'title' => 'Edit',
+							'type' => MENU_CALLBACK,
+							'page callback' => 'drupal_get_form',
+							'page arguments' => array('_addons_extra_field_widget_settings_form', $entity_type,),
+						) + $access;
+						if (!empty($data['admin']['bundle argument'])) {
+							$items[$data['admin']['path'] . '/extra/%']['page arguments'][] = $data['admin']['bundle argument'];
+						}
+						else {
+							$items[$data['admin']['path'] . '/extra/%']['page arguments'][] = $bundle;
+						}
+						$items[$data['admin']['path'] . '/extra/%']['page arguments'][] = count(arg(NULL, $data['admin']['path'])) + 1;
+					}
+				}
+			}
+		}
+	}
+
+  if (module_exists('field_ui')) {
+    $items['admin/structure/field/custom-view-mode'] = array(
+      'title' => 'Display mode',
+      'access arguments' => array('administer site configuration'),
+      'page callback' => 'drupal_get_form',
+      'page arguments' => array('addons_custom_display_admin_form', 4, 5, 6, ), //entity_type, custom view_mode id , op = new|delete
+      'type' => MENU_CALLBACK,
+      'file' => 'addons.admin.inc',
+    );
+  }
+
+  // for ajax in phone mask
+  $items['addons/format-phone/%'] = array(
+    'page arguments' => array(2,), // phone number
+    'delivery callback' => 'addons_phone_field_ajax_delivery',
+    'page callback' => 'addons_phone_field_ajax',
+    'access callback' => TRUE,
+    'file' => 'includes/element.phone.inc',
+    'type' => MENU_CALLBACK,
+  );
+
+	return $items;
+}
+
+/**
+* Implements hook_entity_info_alter()
+*/
+function addons_entity_info_alter(&$entity_info) {
+  // Process custom created view modes
+  // @see addons_custom_display_admin_form()
+  // @see addons_form_alter() -->> 'field_ui_display_overview_form'
+  $addons_entity_custom_view_modes = variable_get('addons_entity_custom_view_modes', array());
+  foreach ($entity_info as $entity_type => $info) {
+    if (!empty($info['fieldable'])) {
+      if (!empty($addons_entity_custom_view_modes[$entity_type])) {
+        foreach ($addons_entity_custom_view_modes[$entity_type] as $id => $name) {
+          $entity_info[$entity_type]['view modes'][$id] = array(
+            'label' => $name,
+            'custom settings' => FALSE,
+          );
+        }
+      }
+    }
+  }
+}
+
+
+function addons_entity_view_modes($entity_type, $bundle = NULL, $only_created = FALSE, $return_field = NULL, $excludes = array()) {
+  $result = array();
+  $entity_info = entity_get_info($entity_type);
+  if ($bundle) {
+    $field_view_mode_settings = field_view_mode_settings($entity_type, $bundle);
+  }
+  if (!empty($entity_info['fieldable']) && !empty($entity_info['view modes'])) {
+    foreach ($entity_info['view modes'] as $mode => $data) {
+      if (!$bundle || (!empty($field_view_mode_settings[$mode]['custom_settings']))) {
+        $is_addons = preg_match('/^addons_\d+/', $mode);
+        if (!$only_created || $is_addons) {
+          if (!$is_addons) {
+            $data['label'] = t($data['label']);
+          }
+          if ($return_field) {
+            if (isset($data[$return_field])) {
+              $result[$mode] = $data[$return_field];
+            }
+          }
+          else {
+            $result[$mode] = $data;
+          }
+        }
+      }
+    }
+  }
+  foreach ($excludes as $mode) {
+    unset($result[$mode]);
+  }
+  return $result;
+}
+
+
+/**
+* Implements hook_form_alter()
+*/
+function addons_form_alter(&$form, &$form_state, $form_id) {
+
+  if ($form_id === 'field_ui_display_overview_form') {
+    $dest = drupal_get_destination();
+    $dest['destination'] .= '#edit-modes';
+    if ($form['#view_mode'] === 'default') {
+      $form['modes']['view_modes_custom']['add'] = array(
+        '#type' => 'link',
+        '#title' => t('Add'),
+        '#href' => 'admin/structure/field/custom-view-mode/' . $form['#entity_type'],
+        '#options' => array(
+          'query' => $dest,
+        ),
+        '#attributes' => array(
+          'class' => array('ajax-popup',),
+        ),
+        '#weight' => 999,
+      );
+      $link_uri = 'admin/structure/field/custom-view-mode/' . $form['#entity_type'] . '/';
+      $link_opts = array('query' => $dest, 'attributes' => array('class' => array('ajax-popup',), 'target' => '_blank',),);
+      foreach ($form['modes']['view_modes_custom']['#options'] as $idx => $opt) {
+        if (preg_match('/^addons_/', $idx)) {
+          $form['modes']['view_modes_custom']['#options'][$idx] .= ' <small>' . l(t('edit'), $link_uri . $idx, $link_opts);
+          $form['modes']['view_modes_custom']['#options'][$idx] .= '&nbsp;' . l(t('delete'), $link_uri . $idx . '/delete', $link_opts) . '</small>';
+        }
+      }
+    }
+  }
+
+	//Костыль для динамически добавляемых через ajax полей. Заведомо добавляем стили, аякс их не добавит.
+	//DEPRECATED $form['#attached']['css'][] = drupal_get_path('module', 'addons').'/lib/colorpicker/css/colorpicker.css';
+	//$form['#attached']['css'][] = drupal_get_path('module', 'addons').'/lib/datetimeentry/jquery.datetimeentry.css';
+
+
+	/*
+	IKW:
+		Если мы что-то поменяли, то при уходе со страницы сайт должен спросить вы поменяли то и то сохранить изменения?  Человек может забыть сохранял он или нет!
+		Например, Вы изменили цену товара ХХХ на 18000 Сохранить изменения Да/Нет
+	*/
+/*
+	if (!empty($form['#control_changes'])) {
+		$form['#attached']['js'][] = drupal_get_path('module', 'addons') . '/js_behaviors/addons.form-changes-control.js';
+		$form['#attributes']['class'][] = 'changes-control';
+	}
+	*/
+
+	// Implementation of add content in runtime. @see _addons_process_entity_selector()
+	// We in popup window (button "Add" was clicked)
+	if (!empty($_GET['entity-selector']) && !empty($_GET['entity-type']) && !empty($_GET['token']) && drupal_valid_token($_GET['token'], $_GET['entity-selector'] . $_GET['entity-type'])) {
+		if (!empty($form['#' . $_GET['entity-type']])) {
+			// Suppress blocks and etc
+			module_invoke('admin_menu', 'suppress');
+      module_invoke('sticker', 'suppress');
+			drupal_static('menu_local_tasks', array());
+			drupal_static('block_list', array());
+
+			// Insert hidden marker. This will processed at addons_entity_insert() hook.
+			$form['entity_selector_target_element_id'] = array(
+				'#type' => 'hidden',
+				'#value' => $_GET['entity-selector'],
+			);
+			if ($form_id === 'user_register_form' && !empty($_GET['roles'])) { // @see addons_entity_selector_autocomplete() -->> $add_link params
+				$form['account']['roles']['#default_value'] = explode(',', $_GET['roles']);
+			}
+      if (!empty($_GET['entity-label']) && drupal_strlen($_GET['entity-label']) > 1) {
+        if ($_GET['entity-type'] === 'user') {
+          $form['#entity']->lfm = $_GET['entity-label'];
+        }
+        elseif ($info = entity_get_info($_GET['entity-type'])) {
+          if (!empty($info['entity keys']['label'])) {
+            $element_name = $info['entity keys']['label'];
+            if (isset($form[$element_name]['#type']) && $form[$element_name]['#type'] === 'textfield' && !$form[$element_name]['#default_value']) {
+              $form[$element_name]['#default_value'] = $_GET['entity-label'];
+            }
+          }
+        }
+      }
+		}
+	}
+}
+
+
+/**
+* Implements hook_element_info().
+*/
+function addons_element_info() {
+	$types = array();
+	$system_elements = system_element_info();
+
+	//Elements based on standard 'textfield':
+	foreach (array('entity_selector', 'colorpicker', 'digit', 'internal_uri', ) as $element_name) {
+		$types[$element_name] = $system_elements['textfield'];
+		array_unshift($types[$element_name]['#process'], '_addons_process_' . $element_name);
+		$types[$element_name]['#element_validate'][] = 'addons_validate_' . $element_name;
+		if ($element_name === 'entity_selector') {
+			unset($types[$element_name]['#size']);
+		}
+	}
+
+
+	foreach (array('url', 'email', 'phone', 'icq', 'skype') as $element_name) {
+		$types[$element_name] = $system_elements['textfield'];
+		$types[$element_name]['#element_validate'][] = 'addons_validate_' . $element_name;
+		unset($types[$element_name]['#size']);// Remove 60 symbols default width. See also fixes_element_info_alter()
+	}
+	foreach (array('textfield', 'url', 'email', 'phone', 'icq', 'skype',) as $element_name) {
+		$types[$element_name]['#process'][] = '_addons_process_textfield';
+	}
+	$types['url']['#maxlength'] = 255;
+	$types['skype']['#maxlength'] = 255;
+	$types['phone']['#maxlength'] = 25;
+	$types['email']['#maxlength'] = EMAIL_MAX_LENGTH;
+
+  $types['phone']['#pre_render'][] = '_addons_pre_render_phone';
+  $types['phone']['#attributes']['class'][] = 'form-phone-field';
+  $types['phone']['#masked'] = TRUE;
+
+	$types['contacts'] = array(
+		'#input' => TRUE,
+		'#process' => array('_addons_process_contacts', 'ajax_process_form'),
+		'#element_validate' => array('addons_validate_contacts'),
+		'#theme_wrappers' => array('form_element'),
+	);
+	//2011/03/16 15:03:26 Ivan Demenkov
+	$types['address'] = array(
+		'#input' => TRUE,
+		'#process' => array('_addons_process_address', 'ajax_process_form'),
+		'#element_validate' => array('addons_validate_address'),
+		'#theme_wrappers' => array('form_element'),
+	);
+	//2012/03/30 10:52:00 Ivan Demenkov
+
+	$types['days'] = $system_elements['checkboxes'];
+	array_unshift($types['days']['#process'], '_addons_process_days');
+	$types['days']['#element_validate'][] = 'addons_validate_days';
+
+	//2012/04/18 11:15:00 Ivan Demenkov
+	// MODIFY EXISTING ELEMENTS IN HOOK_element_info_alter()
+	//$types['date'] = $system_elements['date'];
+	//$types['date']['#process'][] = '_addons_process_date';
+
+	$types['slider'] = array(
+		'#input' => TRUE,
+		'#process' => array('addons_process_slider'),
+		'#left' => t('Left'),
+		'#right' => t('Right'),
+		'#min' => 0,
+		'#max' => 1000,
+		'#left_value' => 0,
+		'#right_value' => 1000,
+		'#size' => 5,
+		'#field_suffix' => '',
+		'#element_validate' => array('addons_validate_slider'),
+	);
+
+	// Datepicker based on textfield
+	$types['datepicker'] = $system_elements['textfield'];
+	$types['datepicker']['#size'] = 10;
+	$types['datepicker']['#process'][] = '_addons_process_datepicker';
+	$types['datepicker']['#element_validate'] = array('_addons_validate_datepicker');
+
+	// Timepicker based on textfield
+	$types['timepicker'] = $system_elements['textfield'];
+	$types['timepicker']['#size'] = 4;
+	$types['timepicker']['#process'][] = '_addons_process_timepicker';
+	$types['timepicker']['#element_validate'] = array('_addons_validate_timepicker');
+
+	// new
+	$types['datetime'] = $system_elements['container'];
+	$types['datetime']['#input'] = TRUE;
+	$types['datetime']['#process'][] = 'addons_process_datetime';
+//	$types['datetime']['#process'][] = 'form_process_container';
+//	$types['datetime']['#theme_wrappers'][] = 'container';
+	$types['datetime']['#element_validate'][] = 'addons_validate_datetime';
+
+	return $types;
+}
+
+
+/**
+* Implements hook_theme_registry_alter()
+*/
+function addons_theme_registry_alter(&$theme_registry) {
+	if ($theme_registry['form_element']['function'] === 'theme_form_element') {
+		$theme_registry['form_element']['function'] = '_addons_theme_form_element';
+	}
+	// Add and implements support for extra 'picture' parameter in theme('username' ... ) calls.
+	$theme_registry['username']['variables']['picture'] = FALSE;
+	$theme_registry['username']['variables']['_original_func'] = $theme_registry['username']['function'];
+	$theme_registry['username']['function'] = '_addons_theme_username_override';
+  $theme_registry['container']['preprocess functions'][] = '_addons_preprocess_container';
+}
+
+
+/**
+ * Implements hook_element_info_alter()
+ */
+function addons_element_info_alter(&$type) {
+	$type['fieldset']['#process'][] = '_addons_process_fieldset';
+	$type['textarea']['#process'][] = '_addons_process_textarea';
+	$type['date']['#process'][] = '_addons_process_date';
+	$type['date']['#element_validate'] = array('_addons_date_validate');
+
+	$type['text_format']['#process'][] = '_addons_process_text_format';
+	foreach ($type as $key => $data) {
+
+		if (!empty($data['#theme_wrappers']) && in_array('form_element', $data['#theme_wrappers'])) {
+			$type[$key]['#pre_render'][] = '_addons_pre_render_form_element';
+		}
+	}
+
+	$type['select']['#process'][] = '_addons_process_select';
+	$type['radios']['#process'][] = '_addons_radios_process';
+	array_unshift($type['checkboxes']['#process'], '_addons_checkboxes_process');
+}
+
+
+/**
+* Implements hook_theme()
+*/
+function addons_theme($existing, $type, $theme, $path) {
+	return array(
+		'phone' => array(
+			'variables' => array('phone' => NULL, 'country_code' => NULL, 'region_code' => NULL,),
+			'function' => '_addons_theme_phone',
+		),
+		'email' => array(
+			'variables' => array('email' => NULL,),
+			'function' => '_addons_theme_email',
+		),
+		'skype' => array(
+			'variables' => array('skype' => NULL,),
+			'function' => '_addons_theme_skype', // function not found?
+		),
+		'url' => array(
+			'variables' => array('url' => NULL,),
+			'function' => '_addons_theme_url',
+		),
+		'address' => array(
+			'render element' => 'element',
+			'function' => '_addons_theme_address',
+		),
+		'table_wrapper' => array(
+			'render element' => 'element',
+		),
+		'graph' => array(
+      'variables' => array('options' => array(), 'modules' => array(), 'plugins' => array()),
+			'file' => 'includes/addons.graph.inc',
+		),
+		'entity_link' => array(
+			'variables' => array('entity_type' => NULL, 'entity' => NULL, 'context_entity_type' => NULL, 'context_entity' => NULL, 'href' => NULL, 'html' => FALSE, 'text' => NULL, 'extra' => NULL, 'attributes' => array(), 'query' => array(),),
+		),
+	);
+}
+
+
+/**
+* Implements hook_form_FORM_ID_alter()
+*/
+function addons_form_node_form_alter(&$form, &$form_state, $form_id) {
+	if (!empty($form['menu']['link']['parent'])) {
+		$form['menu']['link']['parent']['#hierarchy_prefix'] = '--'; // @see _addons_process_select()
+	}
+}
+
+
+/**
+* Implements hook_form_FORM_ID_alter()
+*/
+function addons_form_menu_edit_item_alter(&$form, &$form_state, $form_id) {
+	$form['parent']['#hierarchy_prefix'] = '--'; // @see _addons_process_select()
+}
+
+
+/**
+* Implements hook_form_FORM_ID_alter()
+*/
+function addons_form_taxonomy_form_term_alter(&$form, &$form_state, $form_id) {
+	$form['relations']['parent']['#hierarchy_prefix'] = '-';// @see _addons_process_select()
+}
+
+
+
+/**
+* Implements hook_entity_insert()
+*/
+function addons_entity_insert($entity, $type) {
+
+	// Implementation of add content in runtime (popup window). @see addons_form_alter() @see _addons_process_entity_selector()
+  // Here we work with entity created at runtime in popup form and send entity id to entity_selector element in parent window form using js placed in drupal_set_message()
+  $entity_selector_target_element_id = NULL;
+  if (!empty($entity->entity_selector_target_element_id)) { // this property was inserted only with submission form in popup context.
+    $entity_selector_target_element_id = $entity->entity_selector_target_element_id;
+  }
+  elseif (!empty($_GET['entity-selector']) && !empty($_GET['entity-type']) && !empty($_GET['token']) && drupal_valid_token($_GET['token'], $_GET['entity-selector'] . $_GET['entity-type'])) {
+    $entity_selector_target_element_id = $_GET['entity-selector'];
+  }
+	if ($entity_selector_target_element_id) {
+    // Suppress blocks and etc
+    module_invoke('admin_menu', 'suppress');
+    module_invoke('sticker', 'suppress');
+    drupal_static('menu_local_tasks', array());
+    drupal_static('block_list', array());
+		$info = entity_get_info($type);
+		list($id, , ) = entity_extract_ids($type, $entity);
+		$uri = entity_uri($type, $entity);
+		$url = url($uri['path']);
+		$val = check_plain(entity_label($type, $entity) . ' [:' . $info['entity keys']['id'] . ':' . $id . ':]');
+		$js = <<< EOT
+<script type="text/javascript">
+<!--//--><![CDATA[//><!--
+(function ($) {
+	Drupal.behaviors.entity_selector_popup = {
+		attach: function (context, settings) {
+			var element = window.opener.jQuery('form input[name="{$entity_selector_target_element_id}"]', window.opener.document);
+			if (element.length) {
+				$('div.messages.status, div.messages.error', context).each(function() {
+					if ($(this).text().replace(/\s+/, '')) {
+						var div = window.opener.jQuery('<div class="' + $(this).attr('class') + '"/>');
+						div.html($(this).html());
+						div.css({'font-size' : '.8em', padding: 0, margin: 0, 'background-image' : 'none', width: '30em'})
+						div.appendTo(element.closest('.form-item'));
+
+					}
+				});
+				element.val('$val');
+				element.change().focus().select();
+
+				element.parent().find('.entity-selector-preview a').attr('href', '{$url}');
+
+
+				window.close();
+			}
+		}
+	};
+
+})(jQuery);
+//--><!]]>
+</script>
+EOT;
+		drupal_set_message($js . module_invoke('utils', 'html_debug'), 'element-invisible');
+	}
+}
+
+
+/**
+* Implements hook_html_head_alter()
+*/
+function addons_html_head_alter(&$head_elements) {
+	$head_elements['#attached']['css'][] = drupal_get_path('module', 'addons') . '/css/addons.css';
+}
+
+
+/**
+* Implements hook_library()
+*/
+function addons_library() {
+  $libraries = array();
+
+	$libraries['itk.jquery.mousewheel'] = array(
+		'title'		=> 'Mousewheel modified by ITK',
+		'website'	=> 'http://plugins.jquery.com/project/mousewheel',
+		'version'	=> 3.02,
+		'js'		=> array(
+			drupal_get_path('module', 'addons').'/lib/mousewheel/jquery.mousewheel.min.js' => array('group' => JS_LIBRARY),
+		),
+	);
+
+  /* //deprecate by maskedinput
+  $libraries['inputmask-multi'] = array(
+    'title' => 'Inputmask Multi',
+    'website' => 'https://github.com/andr-04/inputmask-multi',
+    'version' => '1.0.2',
+    'js' => array(
+      drupal_get_path('module', 'addons') . '/lib/inputmask_multi/jquery.inputmask.js' => array(),
+      drupal_get_path('module', 'addons') . '/lib/inputmask_multi/jquery.inputmask-multi.js' => array(),
+      drupal_get_path('module', 'addons') . '/lib/inputmask_multi/jquery.bind-first-0.1.min.js' => array(),
+    ),
+  );
+
+  $libraries['maskedinput'] = array(
+    'title' => 'maskedinput',
+    'website' => 'http://digitalbush.com/projects/masked-input-plugin/',
+    'version' => '1.4.1',
+    'js' => array(
+      drupal_get_path('module', 'addons') . '/lib/maskedinput/jquery.maskedinput.min.js' => array(),
+    ),
+  ); */
+
+	return $libraries;
+}
+
+
+/**
+ * Implements hook_field_formatter_info().
+ */
+function addons_field_formatter_info() {
+  return array(
+    'taxonomy_term_reference_breadcrumbed_link' => array(
+      'label'       => t('Breadcrumbed link'),
+      'field types' => array('taxonomy_term_reference'),
+    ),
+  );
+}
+
+
+/**
+ * Implements hook_field_formatter_view().
+ */
+function addons_field_formatter_view($entity_type, $entity, $field, $instance, $langcode, $items, $display) {
+	$element = array();
+	if ($display['type'] === 'taxonomy_term_reference_breadcrumbed_link') {
+		foreach ($items as $delta => $item) {
+			if (empty($item['tree'])) {
+				$display['type'] = 'taxonomy_term_reference_link';
+				// Call origin
+				$element = taxonomy_field_formatter_view($entity_type, $entity, $field, $instance, $langcode, $items, $display);
+			}
+			else {
+				// build breadcrumbs
+				$links = array();
+				foreach ($item['tree'] as $idx => $term) {
+					$uri = entity_uri('taxonomy_term', $term);
+					$links['term-link-' . $idx] = array(
+						'title' => entity_label('taxonomy_term', $term),
+						'href' => $uri['path'],
+						'entity' => $term,
+					);
+					$links['term-link-' . $idx . '-separator'] = array(
+						'title' => '/',
+					//	'href' => $uri['path'],
+					//	'entity' => $term,
+					);
+					//$links[] = theme('entity_link', array('entity_type' => 'taxonomy_term', 'entity' => $term,));//l($term->name, $uri['path'], $uri['options']);
+				}
+				unset($links['term-link-' . $idx . '-separator']);
+				//$element[$delta] = array('#markup' => implode('/', $links));
+				$element[$delta] = array(
+					'#theme' => 'links',
+					'#attributes' => array(
+						'class' => array('taxonomy-breadcrumb-links', 'inline',),
+					),
+					'#links' => $links,
+				);
+			}
+		}
+	}
+	return $element;
+}
+
+
+/**
+ * Implements hook_field_formatter_prepare_view().
+ */
+function addons_field_formatter_prepare_view($entity_type, $entities, $field, $instances, $langcode, &$items, $displays) {
+	foreach ($displays as $display) {
+		if ($display['type'] == 'taxonomy_term_reference_breadcrumbed_link') {
+			taxonomy_field_formatter_prepare_view($entity_type, $entities, $field, $instances, $langcode, $items, $displays);
+			foreach ($items as &$item) {
+				foreach ($item as &$value) {
+					if (count($parents = taxonomy_get_parents_all($value['tid'])) > 1) {
+						$value['tree'] = array_reverse($parents); // @see addons_field_formatter_view()
+					}
+				}
+			}
+		}
+	}
+}
+
+
+
+//////////// EXTRA FIELDS FEATURES ////////////////
+/**
+* API for implements your extra fields with settings
+*/
+/* Examples:::
+
+// Example hook. Returns settings sub form (if this hook defined, you will see gear in admin/structure/types/manage/~~~/display page)
+function hook_extra_field_formatter_settings_form($entity_type, $bundle, $mode, $field_name, $settings) {
+	$form = array();
+	if ($mode === 'display') {
+		if ($field_name == 'my_extra_field') {
+			$form = array(
+				'font_size' => array(
+					'#type' => 'textfield',
+					'#title' => t('Font size in my_extra_field field'),
+					'#default_value' => isset($settings['font_size']) ? $settings['font_size'] : NULL,
+				),
+			);
+		}
+	}
+	return $form;
+}
+// Example hook. Returns summary information about current settings of extra field in admin/structure/types/manage/~~~/display form
+function hook_extra_field_formatter_settings_summary($entity_type, $bundle, $mode, $field_name, $settings) {
+	if ($mode === 'display') {
+		if ($field_name == 'my_extra_field') {
+			$output = t('Font size in my_extra_field field') . ': ' . (isset($settings['font-size']) ? $settings['font-size'] : t('Default'));
+			return $output;
+		}
+	}
+}
+
+
+function hook_extra_field_formatter_settings_form_alter(&$settings_form, $entity_type, $bundle) {
+	m($settings_form['#mode']); // 'display' or 'form'
+	m($settings_form['#view_mode']); // 'teaser', 'default', 'full', etc
+	m($settings_form['#extra_name']); // name of extra field
+	m($settings_form['#extra_settings']); // actual settings of extra field
+}
+
+// NOTE: Your module must implement hook_field_extra_fields() !
+
+// Example for getting display settings of your extra field:
+	$my_extra_field_settings = addons_extra_field_get_settings('node', $node->type, 'display', 'teaser', 'my_extra_field_name');
+
+	$my_extra_field_one_setting = addons_extra_field_get_settings('node', $node->type, 'display', 'teaser', 'my_extra_field_name', 'setting_name');
+
+
+	//
+*/
+
+
+
+/**
+* Get settings of extra field
+* $mode - 'display' or 'form'
+* $view_mode - view mode. If $mode = 'display', specify 'teaser', 'full', 'default', etc. If $mode = 'form', this parameter will ignored - you can use NULL
+*/
+function addons_extra_field_get_settings($entity_type, $bundle, $mode, $view_mode, $field_name) {
+	$addons_extra_fields_settings = variable_get('addons_extra_fields_settings', array());
+	$args = func_get_args();
+	if (
+		$mode == 'display' &&
+		$view_mode !== 'default' &&
+		!isset($addons_extra_fields_settings[$entity_type][$bundle][$mode][$view_mode][$field_name]) &&
+		isset($addons_extra_fields_settings[$entity_type][$bundle][$mode]['default'][$field_name])
+		) {
+		$args[3] = $view_mode = 'default';
+	}
+	return drupal_array_get_nested_value($addons_extra_fields_settings, $args);
+
+}
+
+
+/**
+* Callback for [entity bundle edit path]/extra/%
+*/
+function _addons_extra_field_widget_settings_form($form, &$form_state, $entity_type, $bundle, $field_name) {
+	$bundle = field_extract_bundle($entity_type, $bundle);
+	$form['settings'] = array();
+	if ($field_info_extra_fields = field_info_extra_fields($entity_type, $bundle, 'form')) {
+		if (!empty($field_info_extra_fields[$field_name])) {
+			drupal_set_title(t('%name settings', array('%name' => check_plain($field_info_extra_fields[$field_name]['label']))), PASS_THROUGH);
+			$settings = addons_extra_field_get_settings($entity_type, $bundle, 'form', NULL, $field_name);
+			foreach (module_implements('extra_field_widget_settings_form') as $module) {
+				$fn = $module . '_extra_field_widget_settings_form';
+				if ($subform = $fn($entity_type, $bundle, $field_name, $settings)) {
+					$form['settings'] += $subform;
+				}
+			}
+		}
+	}
+	if ($form['settings']) {
+		$form['settings']['#tree'] = TRUE;
+		$form['#entity_type'] = $entity_type;
+		$form['#bundle'] = $bundle;
+		$form['#field_name'] = $field_name;
+		$form['actions'] = array(
+			'#weight' => 100,
+			'submit' => array(
+				'#type' => 'submit',
+				'#value' => t('Save'),
+			),
+		);
+	}
+	return $form;
+}
+
+
+/**
+* Submit callback for _addons_extra_field_widget_settings_form
+*/
+function _addons_extra_field_widget_settings_form_submit($form, &$form_state) {
+	if ($field_info_extra_fields = field_info_extra_fields($form['#entity_type'], $form['#bundle'], 'form')) {
+		if (!empty($field_info_extra_fields[$form['#field_name']])) {
+			$addons_extra_fields_settings = variable_get('addons_extra_fields_settings', array());
+			$addons_extra_fields_settings[$form['#entity_type']][$form['#bundle']]['form'][NULL][$form['#field_name']] = $form_state['values']['settings'];
+			variable_set('addons_extra_fields_settings', $addons_extra_fields_settings);
+			drupal_set_message(t('%name field settings has been updated.', array('%name' => $field_info_extra_fields[$form['#field_name']]['label'])));
+		}
+	}
+	$_GET['destination'] = preg_replace('/\/extra\/' . preg_quote($form['#field_name'], '/') . '/', '/fields', $_GET['q']) . '#' . str_replace('_', '-', $form['#field_name']);
+}
+
+
+/**
+ * Implements hook_form_FORM_ID_alter().
+ */
+function addons_form_field_ui_field_overview_form_alter(&$form, &$form_state, $form_id) {
+	if (!empty($form['fields'])) {
+		$table = &$form['fields'];
+		foreach ($table as $name => $row) {
+			if (is_array($row) && !empty($row['#row_type'])) {
+				if ($row['#row_type'] === 'extra_field' || $row['#row_type'] === 'field') {
+
+					// Provide titles editing in overview table (place textfield in label column)
+					// @see addons_form_field_ui_field_overview_form_submit
+					// @see addons_field_extra_fields_alter()
+					// @see addons_field_attach_form()
+					// @see _addons_form_process_extra_fields_titles()
+					if (is_array($table[$name]['label']) && count($table[$name]['label']) == 1 && isset($table[$name]['label']['#markup'])) {
+						$table[$name]['label'] = array(
+							'value' => array(
+								'#type' => 'textfield',
+								'#title' => t('Label'),
+								'#default_value' => $table[$name]['label']['#markup'],
+								'#title_display' => 'invisible',
+								'#required' => TRUE,
+								'#suffix' => module_invoke('utils', 'html_debug'),
+							),
+						);
+					}
+				}
+				if ($row['#row_type'] === 'extra_field' && empty($table[$name]['edit']['#markup'])) {
+
+					$settings = addons_extra_field_get_settings($form['#entity_type'], $form['#bundle'], 'form', NULL, $name);
+					foreach (module_implements('extra_field_widget_settings_form') as $module) {
+						$fn = $module . '_extra_field_widget_settings_form';
+						if ($fn($form['#entity_type'], $form['#bundle'], $name, $settings)) {
+							$table[$name]['edit']['#markup'] = l(t('edit'), preg_replace('/\/fields$/', '/extra/' . $name, $_GET['q']), array('attributes' => array('class' => array('ajax-popup',)),));
+							break;
+						}
+					}
+					$summary = array();
+					foreach (module_implements('extra_field_widget_settings_summary') as $module) {
+						$fn = $module . '_extra_field_widget_settings_summary';
+						if ($s = $fn($form['#entity_type'], $form['#bundle'], $name, $settings)) {
+							$summary[] = $s;
+						}
+					}
+					if ($summary) {
+						$new_row = array();
+						foreach ($table[$name] as $idx => $r) {
+							$new_row[$idx] = $r;
+							if ($idx === 'type') {
+								$new_row['widget_type'] = array('#markup' => implode('<br />', $summary));
+								$table[$name] = $new_row + $table[$name];
+								unset($table[$name]['type']['#cell_attributes']);
+								break;
+							}
+						}
+					}
+				}
+			}
+		}
+		$form['#submit'][] = 'addons_form_field_ui_field_overview_form_submit';
+	}
+}
+
+
+/**
+* Process in-place changed fields(& extra fields) titles @see addons_form_field_ui_field_overview_form_alter()
+*/
+function addons_form_field_ui_field_overview_form_submit(&$form, &$form_state) {
+
+  $do_not_alter = &drupal_static('addons_field_extra_fields_do-not-alter');
+  $do_not_alter = TRUE;
+	$field_info_extra_fields = field_info_extra_fields($form['#entity_type'], $form['#bundle'], 'form');
+  $do_not_alter = FALSE;
+
+	$addons_extra_field_titles = variable_get('addons_extra_field_titles', array());
+
+	$need_titles_update = FALSE;
+
+  foreach ($form_state['values']['fields'] as $field_name => $data) {
+		if (isset($data['label']['value'])) {
+			if (isset($field_info_extra_fields[$field_name])) {
+				if ($field_info_extra_fields[$field_name]['label'] === $data['label']['value']) {
+					unset($addons_extra_field_titles[$form['#entity_type']][$form['#bundle']][$field_name]);
+					$need_titles_update = TRUE;
+				}
+				else {
+					if (!isset($addons_extra_field_titles[$form['#entity_type']][$form['#bundle']][$field_name]) || $addons_extra_field_titles[$form['#entity_type']][$form['#bundle']][$field_name] !== $data['label']['value']) {
+						$addons_extra_field_titles[$form['#entity_type']][$form['#bundle']][$field_name] = $data['label']['value'];
+						$need_titles_update = TRUE;
+					}
+				}
+			}
+			else {
+				if (($inst = field_read_instance($form['#entity_type'], $field_name, $form['#bundle']))) {
+					if ($inst['label'] !== $data['label']['value']) {
+						$inst['label'] = $data['label']['value'];
+						field_update_instance($inst);
+					}
+				}
+			}
+		}
+	}
+
+	if ($need_titles_update) {
+		variable_set('addons_extra_field_titles', $addons_extra_field_titles);
+	}
+
+}
+
+
+/**
+* Implements hook_field_extra_fields_alter()
+* Load extra field labels from registry if exists (@see addons_form_field_ui_field_overview_form_submit())
+*/
+function addons_field_extra_fields_alter(&$info) {
+  if (!(drupal_static('addons_field_extra_fields_do-not-alter', FALSE)) && ($addons_extra_field_titles = variable_get('addons_extra_field_titles', array()))) {
+    foreach ($info as $entity_type => $bundles) {
+      if (!empty($addons_extra_field_titles[$entity_type])) {
+        foreach($bundles as $bundle => $data) {
+          if (!empty($data['form']) && !empty($addons_extra_field_titles[$entity_type][$bundle])) {
+            foreach ($data['form'] as $field_name => $item) {
+              if (isset($addons_extra_field_titles[$entity_type][$bundle][$field_name])) {
+                $info[$entity_type][$bundle]['form'][$field_name]['label'] = $addons_extra_field_titles[$entity_type][$bundle][$field_name];
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
+
+
+/**
+* Implements hook_field_attach_form();
+*/
+function addons_field_attach_form($entity_type, $entity, &$form, &$form_state, $langcode) {
+	// Change titles of extra fields according to registry settings (@see addons_form_field_ui_field_overview_form_alter() and addons_form_field_ui_field_overview_form_submit())
+	$form['#process'][] = '_addons_form_process_extra_fields_titles'; // do not use #after_build!
+
+	//  Convert date of creation field to 'datetime' type
+	if ($entity_type === 'node') {
+		if (!empty($form['author']['date']['#type']) && $form['author']['date']['#type'] === 'textfield') {
+			$form['author']['date']['#type'] = 'datetime';
+			$form['author']['date']['#return_format'] = 'Y-m-d H:i:s';
+			$form['author']['date']['#time'] = TRUE;
+			$form['author']['date']['#attributes']['class'][] = 'form-item-date'; // @see node.js
+		}
+	}
+}
+
+
+/**
+* Change titles of extra fields according to registry settings (@see addons_field_attach_form())
+*/
+function _addons_form_process_extra_fields_titles($form, &$form_state, $complete_form) {
+	if ($addons_extra_field_titles = variable_get('addons_extra_field_titles', array())) {
+		if (!empty($addons_extra_field_titles[$form['#entity_type']])) {
+			if (isset($addons_extra_field_titles[$form['#entity_type']][$form['#bundle']])) {
+				foreach ($addons_extra_field_titles[$form['#entity_type']][$form['#bundle']] as $field_name => $title) {
+					if (isset($form[$field_name])) {
+						// Extra field have title in root of own array
+						if (isset($form[$field_name]['#title'])) {
+							$form[$field_name]['#title'] = $title;
+						}
+						else {
+							// Extra field not have #title property, but perhaps it have children element with title
+							// We apply title only where element have one visible children with title to avoid any stupid bugs in complex elements
+							if ($childrens = element_get_visible_children($form[$field_name])) {
+								foreach ($childrens as $idx => $key) {
+									if (!isset($form[$field_name][$key]['#title'])) {
+										unset($childrens[$idx]);
+									}
+								}
+								if (count($childrens) == 1) {
+									$form[$field_name][reset($childrens)]['#title'] = $title;
+								}
+							}
+						}
+					}
+
+				}
+			}
+		}
+	}
+	return $form;
+}
+
+
+/**
+ * Implements hook_form_FORM_ID_alter().
+ */
+function addons_form_field_ui_display_overview_form_alter(&$form, &$form_state, $form_id) {
+	if (!empty($form['fields'])) {
+		$table = &$form['fields'];
+    $field_info_extra_fields = field_info_extra_fields($form['#entity_type'], $form['#bundle'], 'form');
+    $addons_fields_settings = variable_get('addons_fields_settings', array());
+		foreach ($table as $name => $row) {
+			if (!is_array($row) || empty($row['#row_type'])) {
+				continue;
+			}
+
+			if ($row['#row_type'] === 'field') {
+				$field_info_instance = field_info_instance($form['#entity_type'], $name, $form['#bundle']);
+				$table[$name]['label']['#options']['hidden'] = t('Without label');
+        $table[$name]['human_name'] = array(
+          '#type' => 'textfield',
+          '#title' => $field_info_instance['label'],
+          '#maxlength' => 128,
+          '#description' => check_plain($field_info_instance['description']),
+          '#default_value' => !empty($addons_fields_settings[$form['#entity_type']][$form['#bundle']]['display'][$name][$form['#view_mode']]['label']) ? $addons_fields_settings[$form['#entity_type']][$form['#bundle']]['display'][$name][$form['#view_mode']]['label'] : $field_info_instance['label'],
+          '#attributes' => array(
+            'placeholder' => $field_info_instance['label'],
+            'title' => t('Custom field name'),
+          ),
+        );
+			}
+			elseif ($row['#row_type'] === 'extra_field') {
+				$settings_form = array();
+				$settings = array();
+				if (isset($form_state['formatter_settings'][$name])) {
+					$settings = $form_state['formatter_settings'][$name];
+				} else {
+					$settings = addons_extra_field_get_settings($form['#entity_type'], $form['#bundle'], 'display', $form['#view_mode'], $name);
+				}
+
+				$settings_form = array();
+				foreach (module_implements('extra_field_formatter_settings_form') as $module) {
+					$fn = $module . '_extra_field_formatter_settings_form';
+					if ($subform = $fn($form['#entity_type'], $form['#bundle'], 'display', $name, $settings)) {
+						$settings_form += $subform;
+					}
+				}
+				if ($settings_form) {
+					$settings_form += array('#mode' => 'display', '#view_mode' => $form['#view_mode'], '#extra_name' => $name, '#extra_settings' => $settings);
+					drupal_alter('extra_field_formatter_settings_form', $settings_form, $form['#entity_type'], $form['#bundle']);
+				}
+				if ($settings_form
+					/*&&
+
+					(empty($form_state['values']['fields'][$name]['type']) || $form_state['values']['fields'][$name]['type'] !== 'hidden')
+					&&
+					(!empty($form_state['values']['fields'][$name]['type']) || $table[$name]['format']['type']['#default_value'] !== 'hidden')
+					*/) {
+					$base_button = array(
+						'#prefix' => module_invoke('utils', 'html_debug'),
+						'#submit' => array('field_ui_display_overview_multistep_submit'),
+						'#ajax' => array(
+							'callback' => 'field_ui_display_overview_multistep_js',
+							'wrapper' => 'field-display-overview-wrapper',
+							'effect' => 'fade',
+						),
+						'#field_name' => $name,
+					);
+					if ($form_state['formatter_settings_edit'] == $name) {
+						$table[$name]['format']['#cell_attributes'] = array('colspan' =>  3);
+						$table[$name]['format']['settings_edit_form'] = array(
+							'#prefix' => module_invoke('utils', 'html_debug'),
+							'#type' => 'container',
+							'#attributes' => array(
+								'class' => array('form-item field-formatter-settings-edit-form'),
+							),
+							'#parents' => array('fields', $name, 'settings_edit_form'),
+							'label' => array(
+								'#markup' => '<strong>' . t('Settings') . '</strong>',//t('Format settings:') . ' <span class="formatter-name">' . drupal_strtolower(check_plain($label)) . '</span>',
+							),
+							'settings' => $settings_form,
+							'actions' => array(
+								'#type' => 'actions',
+								'save_settings' => $base_button + array(
+									'#type' => 'submit',
+									'#name' => $name . '_formatter_settings_update',
+									'#value' => t('Update'),
+									'#op' => 'update',
+								),
+								'cancel_settings' => $base_button + array(
+									'#type' => 'submit',
+									'#name' => $name . '_formatter_settings_cancel',
+									'#value' => t('Cancel'),
+									'#op' => 'cancel',
+									// Do not check errors for the 'Cancel' button, but make sure we
+									// get the value of the 'formatter type' select.
+									'#limit_validation_errors' => array(array('fields', $name, 'type')),
+								),
+							),
+						);
+						$table[$name]['#attributes']['class'][] = 'field-formatter-settings-editing';
+
+						unset ($table[$name]['settings_summary'], $table[$name]['settings_edit']);
+
+					}
+          else {
+						// Display a summary of the current formatter settings.
+						//$summary = module_invoke($extra_field_module, 'extra_field_formatter_settings_summary', $form['#entity_type'], $bundle, 'display', $name, $settings);//module_invoke($formatter['module'], 'field_formatter_settings_summary', $field, $instance, $view_mode);
+
+
+						$summary = array();
+						foreach (module_implements('extra_field_formatter_settings_summary') as $module) {
+							if ($data = module_invoke($module, 'extra_field_formatter_settings_summary', $form['#entity_type'], $form['#bundle'], 'display', $name, $settings)) {
+								$summary[] = $data;
+							}
+						}
+						if ($summary) {
+							$table[$name]['settings_summary'] = array(
+								'#markup' => module_invoke('utils', 'html_debug') . '<div class="field-formatter-summary">' . implode('<br />', $summary) . '</div>',
+								'#cell_attributes' => array('class' => array('field-formatter-summary-cell')),
+							);
+						}
+
+						$table[$name]['settings_edit'] = $base_button + array(
+							'#type' => 'image_button',
+							'#name' => $name . '_formatter_settings_edit',
+							'#src' => 'misc/configure.png',
+							'#attributes' => array('class' => array('field-formatter-settings-edit'), 'alt' => t('Edit')),
+							'#op' => 'edit',
+							// Do not check errors for the 'Edit' button, but make sure we get
+							// the value of the 'formatter type' select.
+							'#limit_validation_errors' => array(array('fields', $name, 'type')),
+							'#prefix' => module_invoke('utils', 'html_debug') . '<div class="field-formatter-settings-edit-wrapper">',
+							'#suffix' => '</div>',
+						);
+					}
+				}
+			}
+		}
+
+		//settings for extrafield label manipulations
+		//@see addons_entity_view_alter()
+		// use: (label_display => 'hidden' or 'above' or 'inline') in hook_field_extra_fields for your extrafield
+
+			$field_label_options = array(
+				'above'  => t('Above'),
+				'inline' => t('Inline'),
+				'hidden' => t('Without label'),
+			);
+
+			$field_bundle_settings = field_bundle_settings($form['#entity_type'], $form['#bundle']);
+			foreach (field_info_extra_fields($form['#entity_type'], $form['#bundle'], 'display') as $field_name => $field) {
+				if (isset($form['fields'][$field_name])) {
+					if (!empty($field['label_display'])) {
+            $form['fields'][$field_name]['human_name'] = array(
+              '#type' => 'textfield',
+              '#title' => $field['label'],
+              '#maxlength' => 128,
+              '#default_value' => !empty($field_bundle_settings['extra_fields']['display'][$field_name][$form['#view_mode']]['label']) ? $field_bundle_settings['extra_fields']['display'][$field_name][$form['#view_mode']]['label'] : $field['label'],
+             // '#description' => !empty($field['description']) ? filter_xss_admin($field['description']) : '',
+              '#attributes' => array(
+                'placeholder' => $field['label'],
+                'title' => t('Custom field name'),
+              ),
+            );
+						if (!empty($form['fields'][$field_name])) {
+							unset($form['fields'][$field_name]['empty_cell']['#markup']);
+							$form['fields'][$field_name]['empty_cell']['label_display'] = array(
+								'#type' => 'select',
+								'#options' => $field_label_options,
+								'#default_value' => isset($field_bundle_settings['extra_fields']['display'][$field_name][$form['#view_mode']]['label_display'])
+									? $field_bundle_settings['extra_fields']['display'][$field_name][$form['#view_mode']]['label_display']
+									: $field['label_display'],
+							);
+							utils_html_debug_element($form['fields'][$field_name]['empty_cell']);
+						}
+					}
+				}
+
+			}
+
+		$form['#submit'][] = 'addons_field_ui_display_overview_form_submit';
+	}
+}
+
+
+function addons_field_ui_display_overview_form_submit($form, &$form_state) {
+	$entity_type = $form['#entity_type'];
+	$bundle = $form['#bundle'];
+	$view_mode = $form['#view_mode'];
+	$addons_extra_fields_settings = variable_get('addons_extra_fields_settings', array());
+  $addons_fields_settings = variable_get('addons_fields_settings', array());
+  $field_bundle_settings = field_bundle_settings($entity_type, $bundle);
+  $field_info_extra_fields = field_info_extra_fields($entity_type, $bundle, 'display');
+	foreach ($form['fields'] as $field_name => $row) {
+    if (!empty($row['#row_type'])) {
+      if ($row['#row_type'] === 'extra_field') {
+        $settings = array();
+        if (isset($form_state['values']['fields'][$field_name]['settings_edit_form']['settings'])) {
+          $settings = $form_state['values']['fields'][$field_name]['settings_edit_form']['settings'];
+        }
+        elseif (isset($form_state['formatter_settings'][$field_name])) {
+          $settings = $form_state['formatter_settings'][$field_name];
+        }
+        elseif (isset($instance['display'][$view_mode]['settings'])) {
+          $settings = $instance['display'][$view_mode]['settings'];
+        }
+        if ($settings) {
+          $exist = addons_extra_field_get_settings($entity_type, $bundle, 'display', $view_mode, $field_name);
+          $settings += $exist ? $exist : array();
+          $addons_extra_fields_settings[$entity_type][$bundle]['display'][$view_mode][$field_name] = $settings;
+        }
+        if (!empty($form_state['values']['fields'][$field_name]['human_name'])) {
+          $label_original = !empty($field_bundle_settings['extra_fields']['display'][$field_name][$view_mode]['label'])
+          ? trim($field_bundle_settings['extra_fields']['display'][$field_name][$view_mode]['label'])
+          : (!empty($field_bundle_settings['extra_fields']['display'][$field_name]['default']['label'])
+          ? $field_bundle_settings['extra_fields']['display'][$field_name]['default']['label']
+          : $field_info_extra_fields[$field_name]['label']);
+
+          $label_override = trim($form_state['values']['fields'][$field_name]['human_name']);
+          $label_override = preg_replace('/\s+/', ' ', $label_override);
+
+          if ($label_override && $label_original !== $label_override) {
+            $field_bundle_settings['extra_fields']['display'][$field_name][$view_mode]['label'] = $label_override;
+          }
+
+        }
+        if (!empty($form_state['values']['fields'][$field_name]['empty_cell']['label_display'])) {
+          $field_bundle_settings['extra_fields']['display'][$field_name][$view_mode]['label_display'] = $form_state['values']['fields'][$field_name]['empty_cell']['label_display'];
+        }
+        else {
+          unset($field_bundle_settings['extra_fields']['display'][$field_name][$view_mode]['label_display']);
+        }
+      }
+      elseif ($row['#row_type'] === 'field') {
+        if ($inst = field_read_instance($form['#entity_type'], $field_name, $form['#bundle'])) {
+          $title_in_form = $inst['label'];
+          $title_in_display = trim($form_state['values']['fields'][$field_name]['human_name']);
+          if ($inst['label'] === $title_in_display) {
+            unset($addons_fields_settings[$entity_type][$bundle]['display'][$field_name][$view_mode]['label']);
+          }
+          else {
+            $addons_fields_settings[$entity_type][$bundle]['display'][$field_name][$view_mode]['label'] = $title_in_display;
+          }
+        }
+      }
+    }
+
+	}
+	variable_set('addons_extra_fields_settings', $addons_extra_fields_settings);
+	variable_set('addons_fields_settings', $addons_fields_settings);
+  field_bundle_settings($entity_type, $bundle, $field_bundle_settings);
+}
+
+
+/**
+* Implements hook_field_attach_rename_bundle()
+*/
+function addons_field_attach_rename_bundle($entity_type, $bundle_old, $bundle_new) {
+	// Update the extra weights variable with new information.
+	if ($bundle_old !== $bundle_new) {
+		if ($addons_extra_fields_settings = variable_get('addons_extra_fields_settings', array())) {
+			if (isset($addons_extra_fields_settings[$entity_type][$bundle_old])) {
+				if (empty($addons_extra_fields_settings[$entity_type][$bundle_new])) {
+					$addons_extra_fields_settings[$entity_type][$bundle_new] = $addons_extra_fields_settings[$entity_type][$bundle_old];
+				}
+				unset($addons_extra_fields_settings[$entity_type][$bundle_old]);
+				variable_set('addons_extra_fields_settings', $addons_extra_fields_settings);
+			}
+		}
+    if ($addons_fields_settings = variable_get('addons_fields_settings', array())) {
+      if (isset($addons_fields_settings[$entity_type][$bundle_old])) {
+        if (empty($addons_fields_settings[$entity_type][$bundle_new])) {
+          $addons_fields_settings[$entity_type][$bundle_new] = $addons_fields_settings[$entity_type][$bundle_old];
+        }
+        unset($addons_fields_settings[$entity_type][$bundle_old]);
+        variable_set('addons_fields_settings', $addons_fields_settings);
+      }
+    }
+	}
+}
+
+
+/**
+* Implements hook_field_attach_delete_bundle()
+*/
+function addons_field_attach_delete_bundle($entity_type, $bundle, $instances) {
+	if ($addons_extra_fields_settings = variable_get('addons_extra_fields_settings', array())) {
+		if (isset($addons_extra_fields_settings[$entity_type][$bundle])) {
+			unset($addons_extra_fields_settings[$entity_type][$bundle]);
+			variable_set('addons_extra_fields_settings', $addons_extra_fields_settings);
+		}
+	}
+	if ($addons_fields_settings = variable_get('addons_fields_settings', array())) {
+		if (isset($addons_fields_settings[$entity_type][$bundle])) {
+			unset($addons_fields_settings[$entity_type][$bundle]);
+			variable_set('addons_fields_settings', $addons_fields_settings);
+		}
+	}
+}
+
+
+/**
+* Implements hook_field_delete_instance()
+*/
+function addons_field_delete_instance($instance) {
+  if ($addons_fields_settings = variable_get('addons_fields_settings', array())) {
+    if (isset($addons_fields_settings[$instance['entity_type']][$instance['bundle']][$instance['field_name']])) {
+      unset($addons_fields_settings[$instance['entity_type']][$instance['bundle']][$instance['field_name']]);
+      variable_set('addons_fields_settings', $addons_fields_settings);
+    }
+  }
+}
+
+
+/**
+ * Implements hook_entity_view_alter()
+ */
+function addons_entity_view_alter(&$build, $type) {
+	//extrafields label display processing
+	if (!empty($build['#entity_type']) && !empty($build['#bundle']) && !empty($build['#view_mode'])) {
+    $addons_fields_settings = variable_get('addons_fields_settings', array());
+    if (!empty($addons_fields_settings[$build['#entity_type']][$build['#bundle']]['display'])) {
+      foreach ($addons_fields_settings[$build['#entity_type']][$build['#bundle']]['display'] as $field_name => $data) {
+        if ($settings = !empty($data[$build['#view_mode']]) ? $data[$build['#view_mode']] : (!empty($data['default']) ? $data['default'] : NULL)) {
+          if (!empty($settings['label']) && isset($build[$field_name]['#title'])) {
+            $build[$field_name]['#title'] = check_plain($settings['label']);
+          }
+        }
+      }
+    }
+
+    $field_extra_fields_get_display = field_extra_fields_get_display($build['#entity_type'], $build['#bundle'], $build['#view_mode']);
+    $field_bundle_settings = field_bundle_settings($build['#entity_type'], $build['#bundle']);
+    foreach (field_info_extra_fields($build['#entity_type'], $build['#bundle'], 'display') as $field_name => $field) {
+      if (isset($build[$field_name]['#attributes']['class']) && !is_array($build[$field_name]['#attributes']['class'])) {
+        $build[$field_name]['#attributes']['class'] = array($build[$field_name]['#attributes']['class']);
+      }
+      $build[$field_name]['#attributes']['class'][] = drupal_html_class('extra-field-' . $field_name);
+      if (!empty($field['label_display']) && !empty($field['label'])) {
+        $build[$field_name]['#title'] = $field['label'];
+      }
+      if (!empty($field_bundle_settings['extra_fields']['display'][$field_name][$build['#view_mode']]['label'])) {
+        $build[$field_name]['#title'] = $field_bundle_settings['extra_fields']['display'][$field_name][$build['#view_mode']]['label'];
+      }
+      elseif (!empty($field_bundle_settings['extra_fields']['display'][$field_name]['default']['label'])) {
+        $build[$field_name]['#title'] = $field_bundle_settings['extra_fields']['display'][$field_name]['default']['label'];
+      }
+      elseif (!empty($field_extra_fields_get_display[$field_name]['label'])) {
+        $build[$field_name]['#title'] = $field_extra_fields_get_display[$field_name]['label'];
+      }
+      if (!empty($build[$field_name]) && !empty($field['label_display']) && empty($build[$field_name]['#title_display'])/* && isset($field_bundle_settings['extra_fields']['display'][$field_name])*/) {
+
+        $label_display = isset($field_extra_fields_get_display[$field_name]['label_display']) ? $field_extra_fields_get_display[$field_name]['label_display'] : $field['label_display'];
+
+        $label_display = in_array($label_display, array('above', 'inline', 'hidden',), TRUE) ? $label_display : 'above';
+        if ($label_display === 'inline') {
+          unset($build[$field_name]['#title_display']);
+          $build[$field_name]['#inline'] = TRUE;
+        }
+        else {
+          $build[$field_name]['#title_display'] = $label_display === 'above' ? 'before' : 'invisible';
+        }
+      }
+    }
+	}
+
+}
+
+//////////// END OF EXTRA FIELDS FEATURES ////////////////
+
+
+
+/**
+* Autocomplete callback for /addons/keyboard_fix/js
+*/
+function addons_keyboard_fix_js_delivery_callback() {
+	drupal_add_http_header('Content-Type', 'application/json; charset=utf-8');
+}
+
+/**
+* Autocomplete callback for /addons/keyboard_fix/js
+*/
+function addons_keyboard_fix_js_page_callback() {
+	$string = implode('/', func_get_args());
+	if ($fixed = utils_fix_keyboard_layout($string)) {
+		drupal_json_output(array($fixed => t('maybe you meant <br />%string', array('%string' => $fixed)) . module_invoke('utils', 'html_debug')));
+		return;
+	}
+	drupal_json_output(array());
+	drupal_exit();
+}
+
+
+/**
+* Process text fields. Detects wrong keyboard layout in user inputs and offers alternative.
+*/
+function _addons_process_textfield($element, &$form_state) {
+	if ($element['#type'] === 'textfield' && empty($element['#autocomplete_path']) && empty($element['#suppress_kb_fix'])) {
+		if (!preg_match('/mail|url/', $element['#name'])) {
+			$element['#attributes']['class'][] = 'kb-fix';
+			$element['#autocomplete_path'] = 'addons/keyboard_fix/js';
+			utils_html_debug_element($element);
+		}
+	}
+	if (!empty($element['#attributes']['placeholder']) && empty($element['#attributes']['title'])) {
+		$element['#attributes']['title'] = $element['#attributes']['placeholder'];
+		$element['#attributes']['onchange'] = 'this.title = this.value.length ? "" : "' . str_replace('"', '\"', $element['#attributes']['title']) . '";';
+	}
+  if (in_array($element['#type'], array('url', 'email', 'phone', 'icq', 'skype'), TRUE)) {
+    // apply classes for 'url', 'email', 'phone', 'icq', 'skype' types, @see addons_element_info()
+    $element['#attributes']['class'][] = 'form-' . drupal_html_class($element['#type']);
+  }
+	return $element;
+}
+
+/**
+* Preprocess for theme_entity_link()
+*/
+function addons_preprocess_entity_link(&$variables) {
+
+	if (is_scalar($variables['entity'])) {
+		// This is an temporary crutch. TODO: FIX IT! hook_entity_delete() in entity reference module works not on 100%!
+		if ($entities = entity_load($variables['entity_type'], array($variables['entity']))) {
+			$variables['entity'] = reset($entities);
+		}
+		else {
+
+			// This is an temporary crutch. TODO: FIX IT! hook_entity_delete() in entity reference module works not on 100%!
+			$variables['text'] = '<' . drupal_strtolower(t('Deleted')) . ' (' . $variables['entity_type'] . ' ' . $variables['entity'] . ')>';
+			$variables['entity'] = NULL;
+			if (!empty($variables['html'])) {
+				$variables['text'] = check_plain($variables['text']);
+			}
+		}
+	}
+	if (empty($variables['entity'])) {
+		return;
+	}
+	if (empty($variables['href'])) {
+		$uri = entity_uri($variables['entity_type'], $variables['entity']);
+		$variables['href'] = $uri['path'];
+		$variables['options'] = $uri['options'];
+
+	}
+	list($id, , $bundle) = entity_extract_ids($variables['entity_type'], $variables['entity']);
+
+	$variables['attributes'] += array('class' => array());
+
+	if (is_scalar($variables['attributes']['class'])) {
+		$variables['attributes']['class'] = preg_split('/\s+/', $variables['attributes']['class']);
+	}
+
+	$variables['attributes']['class'][] = 'entity-link';
+	$variables['attributes']['class'][] = 'entity-type-' . drupal_html_class($variables['entity_type']);
+
+	$variables['attributes']['class'][] = 'entity-bundle-' . drupal_html_class($bundle);
+	$variables['attributes']['class'][] = 'entity-id-' . $id;
+
+	if (isset($variables['entity']->status)) {
+		$variables['attributes']['class'][] = $variables['entity']->status ? 'published' : 'unpublished';
+	}
+
+	$entity_info = entity_get_info($variables['entity_type']);
+  if (!empty($entity_info['bundles'][$bundle]['label'])) {
+    $variables['attributes'] += array('title' => $entity_info['bundles'][$bundle]['label']);
+  }
+
+
+	$variables['text'] = !empty($variables['text']) ? $variables['text'] : entity_label($variables['entity_type'], $variables['entity']);
+	$variables['text'] = $variables['text'] ? $variables['text'] : '?';
+
+	if (!empty($variables['context_entity_type']) && is_scalar($variables['context_entity'])) {
+		$entities = entity_load($variables['context_entity_type'], array($variables['context_entity']));
+		$variables['context_entity'] = reset($entities);
+	}
+	if (!empty($variables['context_entity_type']) && !empty($variables['context_entity'])) {
+		if ($variables['context_entity_type'] === $variables['entity_type']) {
+			list($context_id, ,) = entity_extract_ids($variables['context_entity_type'], $variables['context_entity']);
+			if ($id == $context_id) {
+				$variables['context_entity_type'] = $variables['context_entity'] = NULL;
+			}
+		}
+
+	}
+	if (!empty($variables['context_entity_type']) && $variables['context_entity']) {
+		$variables['attributes']['class'][] = 'has-context-entity';
+		$variables['attributes']['class'][] = 'context-entity-type-' . drupal_html_class($variables['context_entity_type']);
+		list($context_id, , $context_bundle) = entity_extract_ids($variables['context_entity_type'], $variables['context_entity']);
+		$variables['attributes']['class'][] = 'context-id-' . $context_id;
+		$variables['attributes']['class'][] = 'context-bundle-' . drupal_html_class($context_bundle);
+		$context_uri = entity_uri($variables['context_entity_type'], $variables['context_entity']);
+		$variables['attributes']['data-context-entity-id'] = $context_id;
+		$variables['attributes']['data-context-entity-uri'] = url($context_uri['path']);
+		$variables['attributes']['data-context-entity-label'] = entity_label($variables['context_entity_type'], $variables['context_entity']);
+	}
+	$variables['attributes']['class'] = drupal_map_assoc(array_filter($variables['attributes']['class'], 'trim'));
+  if (!($menu_item = menu_get_item($variables['href'])) || !$menu_item['access']) {
+		$variables['href'] = NULL;
+	}
+}
+
+
+/**
+* Generate link to specified entity.
+* varaibles:
+*				entity_type - required
+				entity  - required
+				attributes - optional array of standard drupal attributes
+				href - override for entity uri
+				text - override entity label
+				extra - add additional html after default link text
+				query - url params for link
+				html - if FALSE, text will filtered with check_plain()
+
+*/
+function theme_entity_link($variables) {
+
+	if ($variables['entity_type'] === 'user') {
+		addons_preprocess_entity_link($variables);
+		$username = theme('username', array('account' => $variables['entity'],));
+		$is_a = preg_match('/<a\s/u', $username);
+		$username = preg_replace('/(' . ($is_a ? '<a' : '^\s*<[a-z]+') .'\s.*?\s)(class="username")/u', '$1class="username ' . implode(' ', $variables['attributes']['class']) . '"', $username);
+		return $username;
+	}
+
+	if ($variables['href']) {
+		$params = array(
+			'text' => $variables['text'],
+			'path' => $variables['href'],
+			'options' => array(
+				'html' => $variables['html'],
+				'query' => isset($variables['query']) ? $variables['query'] : array(),
+				'attributes' => $variables['attributes'],
+			) + (!empty($variables['options']) ? $variables['options'] : array()),
+		);
+		return theme('link', $params) . $variables['extra'];
+	}
+	else {
+		return '<span' . drupal_attributes($variables['attributes']) . '>' . ($variables['html'] ? $variables['text'] : check_plain($variables['text'])) . '</span>' . $variables['extra'];
+	}
+}
+
+
+

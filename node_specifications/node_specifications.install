@@ -1,0 +1,646 @@
+<?php
+
+/**
+ * Implements hook_uninstall()
+ */
+function node_specifications_uninstall() {
+	variable_del('specifications_filter_block_display_options');
+	variable_del('specifications_view_settings');
+}
+
+/**
+ * Implements hook_schema()
+ */
+function node_specifications_schema() {
+	$schema['node_specifications'] = array(
+		'description' => 'Stores information about node_specifications types',
+		'fields' => array(
+			'nsid' => array(
+				'description' => 'The primary identifier.',
+				'type' => 'serial',
+				'unsigned' => TRUE,
+				'not null' => TRUE,
+			),
+			'type' => array(
+				'description' => 'The machine-readable name of this type.',
+				'type' => 'varchar',
+				'length' => '32',
+				'not null' => TRUE,
+				'default' => '',
+			),
+			'name' => array(
+				'description' => 'The human-readable name of this type.',
+				'type' => 'varchar',
+				'length' => '255',
+				'not null' => TRUE,
+				'default' => '',
+			),
+			'description' => array(
+				'description' => 'A brief description of this type.',
+				'type' => 'text',
+				'size' => 'medium',
+				'not null' => FALSE,
+			),
+			'node_type' => array(
+				'type' => 'varchar',
+				'length' => '50',
+				'not null' => FALSE,
+			),
+      'go_deep' => array(
+        'type' => 'int',
+        'size' => 'tiny',
+        'not null' => FALSE,
+      ),
+			'vid' => array(
+				'type' => 'int',
+				'unsigned' => TRUE,
+				'not null' => FALSE,
+			),
+			'as_extrafields' => array(
+				'description' => 'Provide specification fields as separete extrafields',
+				'type' => 'int',
+				'unsigned' => TRUE,
+				'size' => 'tiny',
+				'not null' => FALSE,
+				'default' => 0,
+			),
+      'weight' => array(
+				'description' => 'For ordered in list',
+				'type' => 'int',
+        'size' => 'tiny',
+				'not null' => TRUE,
+        'default' => 0,
+			),
+		),
+		'primary key' => array('nsid'),
+	);
+
+	$schema['node_specifications_fields'] = array(
+		'fields' => array(
+			'nsid' => array(
+				'type' => 'int',
+				'unsigned' => TRUE,
+				'not null' => TRUE,
+			),
+			'delta' => array(
+				'type' => 'int',
+				'unsigned' => TRUE,
+				'not null' => TRUE,
+			),
+			'weight' => array(
+				'type' => 'int',
+				'not null' => TRUE,
+			),
+			'title' => array(
+				'type' => 'varchar',
+				'length' => '64',
+				'not null' => TRUE,
+			),
+			'field_type' => array(
+				'type' => 'varchar',
+				'length' => '64',
+				'not null' => TRUE,
+			),
+			'important' => array(
+				'type' => 'int',
+				'unsigned' => TRUE,
+				'size' => 'tiny',
+				'not null' => FALSE,
+			),
+			'in_title' => array(
+				'type' => 'int',
+				'unsigned' => TRUE,
+				'size' => 'tiny',
+				'not null' => FALSE,
+			),
+			'multiple' => array(
+				'type' => 'int',
+				'unsigned' => TRUE,
+				'size' => 'tiny',
+				'not null' => FALSE,
+			),
+			'enabled' => array(
+				'type' => 'int',
+				'unsigned' => TRUE,
+				'size' => 'tiny',
+				'not null' => FALSE,
+				'default' => 1,
+			),
+			'unit_id' => array(
+				'type' => 'varchar',
+				'length' => '16',
+				'not null' => FALSE,
+			),
+			'hint' => array(
+				'description' => 'HTML markup of field hint',
+				'type' => 'text',
+				'size' => 'big',
+				'not null' => FALSE,
+			),
+		),
+		'indexes' => array(
+			'nsid_delta' => array('nsid', 'delta'),
+			'weight' => array('weight'),
+		),
+	);
+
+	$schema['node_specifications_fields_data'] = array(
+		'fields' => array(
+			'nid' => array(
+				'type' => 'int',
+				'unsigned' => TRUE,
+				'not null' => TRUE,
+			),
+			'nsid' => array(
+				'type' => 'int',
+				'unsigned' => TRUE,
+				'not null' => TRUE,
+			),
+			'delta' => array(
+				'type' => 'int',
+				'unsigned' => TRUE,
+				'not null' => TRUE,
+			),
+			'var_id' => array(
+				'type' => 'float',
+				'size' => 'normal',
+			),
+			'text' => array(
+				'type' => 'varchar',
+				'length' => '256',
+				'not null' => FALSE,
+			),
+		),
+		'indexes' => array(
+			'pr' => array('nid', 'nsid', 'delta', 'var_id'),
+			'nid' => array('nid'),
+		),
+	);
+	$schema['node_specifications_fields_variants'] = array(
+		'fields' => array(
+			'nsid' => array(
+				'type' => 'int',
+				'unsigned' => TRUE,
+				'not null' => TRUE,
+			),
+			'delta' => array(
+				'type' => 'int',
+				'unsigned' => TRUE,
+				'not null' => TRUE,
+			),
+			'var_id' => array(
+				'type' => 'int',
+				'unsigned' => TRUE,
+				'not null' => TRUE,
+			),
+			'var_weight' => array(
+				'type' => 'int',
+				'not null' => TRUE,
+			),
+			'var_value' => array(
+				'type' => 'varchar',
+				'length' => '128',
+				'not null' => FALSE,
+			),
+			'var_data' => array(
+				'type' => 'varchar',
+				'length' => '256',
+				'not null' => FALSE,
+			),
+		),
+		'indexes' => array(
+			'pr' => array('nsid', 'delta', 'var_id'),
+			'weight' => array('var_weight'),
+		),
+	);
+
+	$schema['node_specifications_index'] = array(
+		'fields' => array(
+			'nsid' => array(
+				'type' => 'int',
+				'unsigned' => TRUE,
+				'not null' => TRUE,
+			),
+			'tid' => array(
+				'type' => 'int',
+				'unsigned' => TRUE,
+				'not null' => FALSE,
+			),
+		),
+		'indexes' => array(
+			'nsid' => array('nsid'),
+			'tid' => array('tid'),
+		),
+	);
+
+	$schema['node_specifications_filter_presets'] = array(
+		'fields' => array(
+			'id' => array(
+				'type' => 'serial',
+				'unsigned' => TRUE,
+				'not null' => TRUE,
+			),
+			'title' => array(
+				'type' => 'varchar',
+				'length' => '255',
+				'not null' => FALSE,
+			),
+			'base_uri' => array(
+				'type' => 'text',
+				'not null' => FALSE,
+			),
+			'query_params' => array(
+				'type' => 'text',
+				'not null' => FALSE,
+			),
+			'weight' => array(
+				'type' => 'int',
+				'not null' => TRUE,
+				'default' => 0,
+			),
+		),
+		'primary key' => array('id'),
+		'indexes' => array(
+			'base_uri' => array(array('base_uri', 100)),
+			'weight' => array('weight'),
+		),
+	);
+
+	return $schema;
+}
+
+/**
+ * Implements hook_install()
+ */
+function node_specifications_install() {
+
+	/*MOVED TO profiles/itinity/support/modules/node_specifications/node_specifications.itinity.install
+
+	$rid = user_role_load_by_name('admin')->rid;
+	if (!empty($rid)) {
+		user_role_grant_permissions($rid, array('administer specifications'));
+	}*/
+
+	$t = get_t();
+	$new_spec = (object) array(
+		'nsid' => '',
+		'type' => 'dimensions',
+		'name' => t('Dimensions'),
+		'description' => t('Length') . ', ' . $t('Width') . ', ' . $t('Height') . ', ' . $t('Weight'),
+	);
+
+	$new_spec->indexes = array();
+	foreach (taxonomy_vocabulary_get_names() as $vocabulary) {
+		if ($vocabulary->machine_name == 'catalog_products') {
+			$new_spec->indexes['vid'][$vocabulary->vid] = $vocabulary->vid;
+		}
+	}
+
+	foreach (array($t('Length'), $t('Width'), $t('Height'), $t('Weight')) as $param) {
+		$field = array(
+			'title' => $param,
+			'field_type' => 'number_integer',
+			'unit_id' => $param != $t('Weight') ? 'MTR' : 'KGM',
+			'important' => 0,
+			'in_title' => 0,
+			'multiple' => 0,
+		);
+		$new_spec->fields[] = $field;
+	}
+
+	node_specifications_save($new_spec);
+
+	$block_default_settings = array(
+		'view_layout' => 'vertical',
+		'price' => array('show' => 1, 'expanded' => 0,),
+		'1/1' => array('show' => 1, 'expanded' => 0,),
+		'1/2' => array('show' => 1, 'expanded' => 0,),
+		'1/3' => array('show' => 1, 'expanded' => 0,),
+		'1/4' => array('show' => 1, 'expanded' => 0,),
+	);
+
+	variable_set('specifications_filter_block_display_options', $block_default_settings);
+}
+
+/**
+ * Grant admin role with "administer specifications" permission
+ */
+function node_specifications_update_7001() {
+	$rid = user_role_load_by_name('admin')->rid;
+	if (!empty($rid)) {
+		user_role_grant_permissions($rid, array('administer specifications'));
+	}
+}
+
+/**
+ * Enable shop_units module.
+ */
+function node_specifications_update_7002() {
+	if (!module_exists('shop_units')) {
+		module_enable(array('shop_units'));
+	}
+}
+
+/**
+ * Move extrafield settings into addons module
+ */
+function node_specifications_update_7003() {
+	$old_settings = variable_get('specifications_view_settings', array());
+	$addons_extra_fields_settings = variable_get('addons_extra_fields_settings', array());
+
+	foreach ($old_settings as $node_type => $settings) {
+		foreach ($settings as $view_mode => $value) {
+			$addons_extra_fields_settings['node'][$node_type]['display'][$view_mode]['specifications']['expand_fields'] = $value;
+		}
+	}
+
+	variable_set('addons_extra_fields_settings', $addons_extra_fields_settings);
+	variable_del('specifications_view_settings');
+}
+
+/**
+ * Reindex tables
+ */
+function node_specifications_update_7004() {
+	//node_specifications_fields
+	if (db_index_exists('node_specifications_fields', 'title')) {
+		db_drop_index('node_specifications_fields', 'title');
+	}
+	db_add_index('node_specifications_fields', 'nsid_delta', array('nsid', 'delta'));
+	db_add_index('node_specifications_fields', 'weight', array('weight'));
+
+	//node_specifications_fields_data
+	foreach (array('fid', 'text', 'var_id') as $index) {
+		if (db_index_exists('node_specifications_fields_data', $index)) {
+			db_drop_index('node_specifications_fields_data', $index);
+		}
+	}
+	db_add_index('node_specifications_fields_data', 'pr', array('nid', 'nsid', 'delta', 'var_id'));
+	db_add_index('node_specifications_fields_data', 'nid', array('nid'));
+
+	//node_specifications_fields_variants
+	foreach (array('var_data', 'var_value') as $index) {
+		if (db_index_exists('node_specifications_fields_variants', $index)) {
+			db_drop_index('node_specifications_fields_variants', $index);
+		}
+	}
+	db_add_index('node_specifications_fields_variants', 'pr', array('nsid', 'delta', 'var_id'));
+	db_add_index('node_specifications_fields_variants', 'weight', array('var_weight'));
+}
+
+/**
+ * -New field for node_specifications_index table
+ * -Reindex node_specifications_index table
+ */
+function node_specifications_update_7005() {
+	if (!db_field_exists('node_specifications_index', 'go_deep')) {
+		db_add_field('node_specifications_index', 'go_deep', array(
+			'type' => 'int',
+			'size' => 'tiny',
+			'not null' => FALSE,
+		));
+	}
+
+	$old_indexes = array('nsid_node_type', 'nsid_tid', 'nsid_vid');
+	foreach ($old_indexes as $old_index) {
+		if (db_index_exists('node_specifications_index', $old_index)) {
+			db_drop_index('node_specifications_index', $old_index);
+		}
+	}
+
+	$new_indexes = array('Index 1' => array('nsid'), 'Index 2' => array('node_type'), 'Index 3' => array('tid'),);
+	foreach ($new_indexes as $index_name => $new_index) {
+		if (!db_index_exists('node_specifications_index', $index_name)) {
+			db_add_index('node_specifications_index', $index_name, $new_index);
+		}
+	}
+}
+
+/**
+ * Update extrafield settings
+ */
+function node_specifications_update_7006() {
+	foreach (node_type_get_names() as $name => $label) {
+		$bundle_settings = field_bundle_settings('node', $name);
+		if (!empty($bundle_settings['extra_fields']['display']['specification_sets'])) {
+			$bundle_settings['extra_fields']['display']['specifications'] = $bundle_settings['extra_fields']['display']['specification_sets'];
+			unset($bundle_settings['extra_fields']['display']['specification_sets']);
+		}
+		field_bundle_settings('node', $name, $bundle_settings);
+	}
+}
+
+/**
+ * Create {node_specifications_filter_presets} table
+ */
+function node_specifications_update_7007() {
+	if (!db_table_exists('node_specifications_filter_presets')) {
+		$schema = node_specifications_schema();
+
+		db_create_table('node_specifications_filter_presets', $schema['node_specifications_filter_presets']);
+	}
+}
+
+/**
+ * Hide filter preset block
+ */
+function node_specifications_update_7008() {
+	db_query("UPDATE {block} SET region = -1 WHERE module = 'node_specifications' AND delta = 'filter_presets'");
+}
+
+/**
+ * Add 'as_extrafields' to {node_specifications}
+ */
+function node_specifications_update_7009() {
+	if (!db_field_exists('node_specifications', 'as_extrafields')) {
+		db_add_field('node_specifications', 'as_extrafields', array(
+			'description' => 'Provide specification fields as separete extrafields',
+			'type' => 'int',
+			'unsigned' => TRUE,
+			'size' => 'tiny',
+			'not null' => FALSE,
+			'default' => 0,
+		));
+	}
+}
+
+/**
+ * Change {node_specifications_fields_data}.var_id field type to float
+ */
+function node_specifications_update_7010() {
+	if (db_field_exists('node_specifications_fields_data', 'var_id')) {
+		db_change_field('node_specifications_fields_data', 'var_id', 'var_id', array(
+				'type' => 'float',
+				'size' => 'normal',
+			)
+		);
+	}
+}
+
+/**
+ * Add {node_specifications_fields}.hint field
+ */
+function node_specifications_update_7011() {
+	if (!db_field_exists('node_specifications_fields', 'hint')) {
+		db_add_field('node_specifications_fields', 'hint', array(
+			'description' => 'HTML markup of field hint',
+			'type' => 'text',
+			'size' => 'big',
+			'not null' => FALSE,
+		));
+	}
+}
+
+/**
+ * Add {node_specifications}.weight field , filled by data // Ruban 21/10/2015
+ */
+function node_specifications_update_7014() {
+	if (!db_field_exists('node_specifications', 'weight')) {
+		db_add_field('node_specifications', 'weight', array(
+				'description' => 'For ordered in list',
+				'type' => 'int',
+        'size' => 'tiny',
+				'not null' => TRUE,
+        'default' => 0,
+		));
+	}
+  db_query('UPDATE {node_specifications} SET weight = nsid');
+}
+
+
+
+
+/**
+* Update db structure part 1
+*/
+function node_specifications_update_7015() {
+  db_add_field('node_specifications', 'node_type', array(
+    'type' => 'varchar',
+    'length' => '50',
+    'not null' => FALSE,
+  ));
+  db_add_field('node_specifications', 'vid', array(
+    'type' => 'int',
+    'unsigned' => TRUE,
+    'not null' => FALSE,
+  ));
+  db_add_field('node_specifications', 'go_deep', array(
+		'type' => 'int',
+		'size' => 'tiny',
+		'not null' => FALSE,
+  ));  
+}
+
+
+/**
+* Update db structure part 2
+*/
+function node_specifications_update_7016() {
+  if ($r = db_query('SELECT * FROM {node_specifications_index} WHERE ((NOT tid IS NULL) OR (NOT tid)) AND (((NOT node_type IS NULL) AND node_type) OR ((NOT vid IS NULL) AND vid))')->fetch()) {
+    throw new Exception('{node_specifications_index} contains unexcepted pairs of tid + (node_type OR vid)!');
+  }
+  $data = array();
+  foreach (db_query('SELECT nsi.*, td.vid AS t_vid FROM {node_specifications_index} nsi LEFT JOIN {taxonomy_term_data} td ON td.tid = nsi.tid') as $r) {
+    if ($r->node_type) {
+      $data[$r->nsid]['node_type'] = $r->node_type;
+    }
+    if ($r->vid && !isset($data[$r->nsid]['vid'])) {
+      $data[$r->nsid]['vid'] = $r->vid;
+    }
+    if ($r->go_deep) {
+      $data[$r->nsid]['go_deep'] = TRUE;
+      if (!isset($data[$r->nsid]['vid'])) {
+        $data[$r->nsid]['vid'] = $r->go_deep;
+      }
+    }
+    if ($r->tid && $r->t_vid) {
+      $data[$r->nsid]['tids'][$r->tid] = $r->tid;
+      $data[$r->nsid]['vid'] = $r->t_vid;
+    }
+  }
+  db_query('DELETE FROM {node_specifications_index}');
+  foreach ($data as $nsid => $item) {
+    if (!empty($item['tids'])) {
+      $q = db_insert('node_specifications_index')->fields(array('nsid', 'tid',));
+      foreach ($item['tids'] as $t) {
+        $q->values(array('nsid' => $nsid, 'tid' => $t,));
+      }
+      $q->execute();
+    }
+    db_query('UPDATE {node_specifications} SET node_type = :node_type, vid = :vid, go_deep = :go_deep WHERE nsid = :nsid', array(
+      ':node_type' => !empty($item['node_type']) ? $item['node_type'] : NULL,
+      ':vid' =>  !empty($item['vid']) ? $item['vid'] : NULL,
+      ':go_deep' => !empty($item['go_deep']) ? 1 : NULL,
+      ':nsid' => $nsid,
+    ));
+  }
+}
+
+/**
+* Update db structure part 3
+*/
+function node_specifications_update_7017() {
+  db_drop_field('node_specifications_index', 'node_type');
+  db_drop_field('node_specifications_index', 'vid');
+  db_drop_field('node_specifications_index', 'go_deep');  
+}
+
+/**
+* Update db structure part 4
+*/
+function node_specifications_update_7018() {
+  db_drop_index('node_specifications_index', 'Index 1');
+  db_drop_index('node_specifications_index', 'Index 2');
+  db_drop_index('node_specifications_index', 'Index 3');
+  db_add_index('node_specifications_index', 'nsid', array('nsid'));
+  db_add_index('node_specifications_index', 'tid', array('tid'));
+  
+  db_drop_index('node_specifications_filter_presets', 'Index 2');
+  db_drop_index('node_specifications_filter_presets', 'Index 3');
+  db_add_index('node_specifications_filter_presets', 'base_uri', array(array('base_uri', 100)));
+  db_add_index('node_specifications_filter_presets', 'weight', array('weight'));
+}
+
+
+/**
+* Enable taxonomy_entity_index module
+*/
+function node_specifications_update_7019() {
+  module_enable(array('taxonomy_entity_index'));
+}
+
+
+/**
+* Fix previous incorrect update ({node_specifications}.node_type = NULL)
+*/
+function node_specifications_update_7020() {
+  foreach (db_query('SELECT ns.nsid, n.type FROM {node_specifications} ns INNER JOIN {node_specifications_fields_data} nsfd ON nsfd.nsid = ns.nsid INNER JOIN {node} n ON n.nid = nsfd.nid WHERE NOT ns.node_type OR ns.node_type IS NULL GROUP BY ns.nsid') as $r) {
+    db_query('UPDATE {node_specifications} SET node_type = :t WHERE nsid = :nsid', array(
+      ':t' => $r->type,
+      ':nsid' => $r->nsid,
+    ));
+  }
+}
+
+
+
+/**
+* Fix mismatch database and schema (issue was found on nitek.rf)
+*/
+function node_specifications_update_7021() {
+    if (!db_field_exists('node_specifications_fields', 'enabled')) {
+      db_add_field('node_specifications_fields', 'enabled', array(
+        'type' => 'int',
+        'unsigned' => TRUE,
+        'size' => 'tiny',
+        'not null' => FALSE,
+        'default' => 1,
+      ));
+  }
+
+}
+
+
+
+
+

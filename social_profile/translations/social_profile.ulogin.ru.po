@@ -1,0 +1,78 @@
+# $Id$
+#
+# Russian translation
+# Copyright YEAR NAME <EMAIL@ADDRESS>
+# Generated from files:
+#  social_profile.module: n/a
+#  social_profile.info: n/a
+#
+#, fuzzy
+msgid ""
+msgstr ""
+"Project-Id-Version: PROJECT VERSION\n"
+"POT-Creation-Date: 2012-11-23 13:42+0300\n"
+"PO-Revision-Date: 2012-11-23 13:42+0300\n"
+"Last-Translator: NAME <EMAIL@ADDRESS>\n"
+"Language-Team: Russian <EMAIL@ADDRESS>\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=utf-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=3; plural=((((n%10)==1)&&((n%100)!=11))?(0):(((((n%10)>=2)&&((n%10)<=4))&&(((n%100)<10)||((n%100)>=20)))?(1):2));\n"
+
+
+msgid "You are trying to login with email address of another user."
+msgstr "Вы пытаетесь войти используя e-mail адрес другого пользователя."
+
+msgid "If you are completely sure that %email is your email address, please confirm password used on current site %site."
+msgstr "Если вы уверены, что %email это ваш адрес, то пожалуйста подтвердите пароль, используемый на этом сайте (%site)"
+
+msgid "Attach information provided by %network network to my profile"
+msgstr "Использовать информацию предоставленную сетью %network в моем профайле"
+
+msgid "Authentication provider"
+msgstr "Провайдер авторизации"
+
+msgid "uLogin identities"
+msgstr "Идентификация"
+
+msgid "Are you sure you want to detach the uLogin identity !identity from %user?"
+msgstr "Вы уверены, что хотите отвязать идентификатор !identity от учетной записи %user?"
+
+msgid "This identity was used to create your account. Please choose another identity to replace it."
+msgstr "Этот идентификатор использовался для создания Вашего аккаунта. Пожалуйста укажите другой идентификатор для замены"
+
+msgid "This identity was used to create your account. To delete it you should first add another identity to your account."
+msgstr "Этот идентификатор использовался для создания Вашего аккаунта. Для его удаления вы должны сначала добавить другой идентификатор в свой аккаунт."
+
+msgid "Delete uLogin identity"
+msgstr "Удаление"
+
+msgid "Add more identities"
+msgstr "Идентифицироваться ещё"
+
+msgid "Identity deleted."
+msgstr "Идентификация удалена."
+
+msgid "New identity added."
+msgstr "Новая идентификация добавлена"
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

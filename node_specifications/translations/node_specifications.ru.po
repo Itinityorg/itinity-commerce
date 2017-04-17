@@ -1,0 +1,533 @@
+# $Id$
+#
+# Russian translation
+# Copyright YEAR NAME <EMAIL@ADDRESS>
+# Generated from files:
+#  node_specifications.module: n/a
+#  inc/node_specifications.test.inc: n/a
+#  inc/node_specifications.blocks.inc: n/a
+#  js/node_specifications_compare.js: n/a
+#  node_specifications.info: n/a
+#  inc/node_specifications.forms.inc: n/a
+#  node_specifications.install: n/a
+#  inc/node_specification.theme.inc: n/a
+#  inc/node_specifications.doc_import.inc: n/a
+#
+#, fuzzy
+msgid ""
+msgstr ""
+"Project-Id-Version: PROJECT VERSION\n"
+"POT-Creation-Date: 2013-12-02 10:37+0300\n"
+"PO-Revision-Date: 2013-12-02 10:37+0300\n"
+"Last-Translator: NAME <EMAIL@ADDRESS>\n"
+"Language-Team: Russian <EMAIL@ADDRESS>\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=utf-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=3; plural=((((n%10)==1)&&((n%100)!=11))?(0):(((((n%10)>=2)&&((n%10)<=4))&&(((n%100)<10)||((n%100)>=20)))?(1):2));\n"
+
+#: node_specifications.module:9
+msgid "Node specification"
+msgstr "Характеристика материала"
+
+#: node_specifications.module:250
+msgid "Administer node specifications sets"
+msgstr ""
+"Администрирование наборов "
+"характеристик материалов"
+
+#: node_specifications.module:251
+msgid "Perform administration tasks for node specifications sets"
+msgstr ""
+"Осуществлять административные задачи "
+"для наборов характеристик материала"
+
+#: node_specifications.module:315;321 inc/node_specifications.test.inc:17
+msgid "Specifications"
+msgstr "Характеристики"
+
+#: node_specifications.module:316;322;328
+msgid "Node specifications module element"
+msgstr "Элемент модуля характеристики"
+
+#: node_specifications.module:327
+msgid "Compare link"
+msgstr "Ссылка сравнения"
+
+#: node_specifications.module:346
+msgid "Expand fields"
+msgstr "Разбить поля"
+
+#: node_specifications.module:361
+msgid "Specification fields expanded"
+msgstr ""
+"Поля характеристик разбиты по полям "
+"материала"
+
+#: node_specifications.module:362
+msgid "Specification fields grouped"
+msgstr ""
+"Поля характеристик собраны в одно "
+"поле материала"
+
+#: node_specifications.module:502 inc/node_specifications.blocks.inc:487
+msgid "Compare"
+msgstr "Сравнить"
+
+#: node_specifications.module:619
+msgid "Specification sets"
+msgstr "Наборы характеристик"
+
+#: node_specifications.module:693;1429 inc/node_specifications.blocks.inc:221
+msgid "Yes"
+msgstr "Да"
+
+#: node_specifications.module:693;1429 inc/node_specifications.blocks.inc:222
+msgid "No"
+msgstr "Нет"
+
+#: node_specifications.module:695
+msgid "Select"
+msgstr "Выбрать"
+
+#: node_specifications.module:705
+msgid "Edit this set"
+msgstr "Редактировать этот набор"
+
+#: node_specifications.module:755
+msgid "Nodes compare block"
+msgstr "Блок сравнения материалов"
+
+#: node_specifications.module:762
+msgid "Node filters"
+msgstr "Фильтры материалов"
+
+#: node_specifications.module:769;852 inc/node_specifications.blocks.inc:606
+msgid "Filter presets"
+msgstr "Предустановленные фильтры"
+
+#: node_specifications.module:810
+msgid "Filters"
+msgstr "Фильтры"
+
+#: node_specifications.module:823
+msgid "Comparing"
+msgstr "Сравнение"
+
+#: node_specifications.module:81 inc/node_specifications.blocks.inc:330 js/node_specifications_compare.js:0
+msgid "All specifications"
+msgstr "Все характеристики"
+
+#: node_specifications.module:92
+msgid "Create new specification filter preset"
+msgstr "Создать новый предустановленный фильтр по характеристикам"
+
+#: node_specifications.module:133 node_specifications.info:0 inc/node_specifications.forms.inc:465
+msgid "Node specifications"
+msgstr "Характеристики"
+
+#: node_specifications.module:140
+msgid "Add specification set"
+msgstr "Добавить набор характеристик"
+
+#: node_specifications.module:157
+msgid "Field list"
+msgstr "Список полей"
+
+#: node_specifications.module:180
+msgid "Compare nodes via specifications"
+msgstr "Сравнить материалы через характеристики"
+
+#: node_specifications.module:187
+msgid "Clean compare list"
+msgstr "Очистить лист сравнения"
+
+#: node_specifications.module:193
+msgid "Add compare item"
+msgstr "Добавить к сравнению"
+
+#: node_specifications.module:199 inc/node_specifications.blocks.inc:456 inc/node_specifications.forms.inc:647
+msgid "Remove from comparing"
+msgstr "Удалить из сравнения"
+
+#: node_specifications.module:207
+msgid "Filter test"
+msgstr "Тест фильтров"
+
+#: node_specifications.module:215
+msgid "Generate specifications"
+msgstr "Сгенерировать характеристики"
+
+#: node_specifications.install:268
+msgid "Dimensions"
+msgstr "Размеры"
+
+#: (duplicate) node_specifications.install:269;279 
+msgid "Length"
+msgstr "Длина"
+
+#: (duplicate) node_specifications.install:269 ;279 
+msgid "Width"
+msgstr "Ширина"
+
+#: (duplicate) node_specifications.install:269 ;279 
+msgid "Height"
+msgstr "Высота"
+
+#: (duplicate) node_specifications.install:269 ;279 ;283  inc/node_specification.theme.inc:89 inc/node_specifications.blocks.inc:634 inc/node_specifications.forms.inc:416;441
+msgid "Weight"
+msgstr "Вес"
+
+#: node_specifications.info:0
+msgid "Specifications sets for nodes."
+msgstr "Наборы характеристик для материалов."
+
+#: node_specifications.info:0
+msgid "ITK/Content"
+msgstr ""
+
+#: inc/node_specification.theme.inc:33
+msgid "Element name"
+msgstr "Имя элемента"
+
+#: inc/node_specification.theme.inc:33
+msgid "Show"
+msgstr "Показать"
+
+#: inc/node_specification.theme.inc:33
+msgid "Expand"
+msgstr "Развернуть"
+
+#: inc/node_specification.theme.inc:65
+msgid "specification fields is empty"
+msgstr "характеристика не имеет полей"
+
+#: inc/node_specification.theme.inc:89 inc/node_specifications.forms.inc:739
+msgid "Title"
+msgstr "Заголовок"
+
+#: inc/node_specification.theme.inc:89
+msgid "Actions"
+msgstr "Действия"
+
+#: inc/node_specifications.blocks.inc:64;551 inc/node_specifications.forms.inc:609
+msgid "Price"
+msgstr "Цена"
+
+#: inc/node_specifications.blocks.inc:69;208
+msgid "from"
+msgstr "от"
+
+#: inc/node_specifications.blocks.inc:70;209
+msgid "to"
+msgstr "до"
+
+#: inc/node_specifications.blocks.inc:96;553
+msgid "In stock"
+msgstr "В наличии"
+
+#: inc/node_specifications.blocks.inc:220
+msgid "Not important"
+msgstr "Неважно"
+
+#: inc/node_specifications.blocks.inc:305
+msgid "Pick up"
+msgstr "Подобрать"
+
+#: inc/node_specifications.blocks.inc:310
+msgid "Reset"
+msgstr "Сбросить"
+
+#: inc/node_specifications.blocks.inc:494 inc/node_specifications.forms.inc:632
+msgid "Clear"
+msgstr "Очистить"
+
+#: inc/node_specifications.blocks.inc:532
+msgid "Specification settings"
+msgstr "Настойки характеристик"
+
+#: inc/node_specifications.blocks.inc:541
+msgid "Specify display layout"
+msgstr "Выберите шаблон отображения"
+
+#: inc/node_specifications.blocks.inc:544
+msgid "Vertical"
+msgstr "Вертикальный"
+
+#: inc/node_specifications.blocks.inc:545
+msgid "Horizontal"
+msgstr "Горизонтальный"
+
+#: inc/node_specifications.blocks.inc:565 inc/node_specifications.forms.inc:100
+msgid "Vocabularies"
+msgstr "Словари"
+
+#: inc/node_specifications.doc_import.inc:14
+msgid "Data distribution for specifications fields"
+msgstr ""
+"Распределение данных по полям "
+"характеристик"
+
+#: inc/node_specifications.forms.inc:18
+msgid "Create new specification set"
+msgstr "Создать новый набор характеристик"
+
+#: inc/node_specifications.forms.inc:19
+msgid "Edit specification set !name"
+msgstr "Редактировать набор характеристик !name"
+
+#: inc/node_specifications.forms.inc:29;197;441;466
+msgid "Name"
+msgstr "Название"
+
+#: inc/node_specifications.forms.inc:37
+msgid "Machine name"
+msgstr "Компьютерное название"
+
+#: inc/node_specifications.forms.inc:49;466
+msgid "Description"
+msgstr "Описание"
+
+#: inc/node_specifications.forms.inc:50
+msgid "Describe this set"
+msgstr "Опишите этот набор"
+
+#: inc/node_specifications.forms.inc:57
+msgid "Apply for"
+msgstr "Применять для"
+
+#: inc/node_specifications.forms.inc:63
+msgid "Node types"
+msgstr "Типы материала"
+
+#: inc/node_specifications.forms.inc:122
+msgid "None"
+msgstr "Нет"
+
+#: inc/node_specifications.forms.inc:122
+msgid "All terms"
+msgstr "Все термины"
+
+#: inc/node_specifications.forms.inc:133
+msgid "Apply on selected term sublevels"
+msgstr ""
+"Применять на подуровни выбранных "
+"терминов"
+
+#: inc/node_specifications.forms.inc:185
+msgid "Fields"
+msgstr "Поля"
+
+#: inc/node_specifications.forms.inc:188
+msgid "Add specification"
+msgstr "Добавить характеристику"
+
+#: inc/node_specifications.forms.inc:203;441
+msgid "Required"
+msgstr "Обязательно"
+
+#: inc/node_specifications.forms.inc:207;441
+msgid "Use in title"
+msgstr "Использовать в заголовоке"
+
+#: inc/node_specifications.forms.inc:214 inc/node_specifications.test.inc:6
+msgid "Type"
+msgstr "Тип"
+
+#: inc/node_specifications.forms.inc:222
+msgid "Units"
+msgstr "Единицы"
+
+#: inc/node_specifications.forms.inc:230
+msgid "Multiple choise"
+msgstr "Выбор из нескольких вариантов"
+
+#: inc/node_specifications.forms.inc:239
+msgid "Add variant"
+msgstr "Добавить вариант"
+
+#: inc/node_specifications.forms.inc:243
+msgid "Variants"
+msgstr "Варианты"
+
+#: inc/node_specifications.forms.inc:250
+msgid "Add color variant"
+msgstr "Добавить вариант цвета"
+
+#: inc/node_specifications.forms.inc:257
+msgid "Color"
+msgstr "Цвет"
+
+#: inc/node_specifications.forms.inc:261
+msgid "Color name"
+msgstr "Описание для цвета"
+
+#: inc/node_specifications.forms.inc:272
+msgid "Save set"
+msgstr "Сохранить набор"
+
+#: inc/node_specifications.forms.inc:279
+msgid "Delete set"
+msgstr "Удалить набор"
+
+#: inc/node_specifications.forms.inc:298
+msgid "The machine name must start from letter."
+msgstr ""
+"Машинное имя должно начинаться с "
+"буквы"
+
+#: inc/node_specifications.forms.inc:357
+msgid "Specification set %name saved."
+msgstr "Набор характеристик %name сохранен."
+
+#: inc/node_specifications.forms.inc:375
+msgid "Are you sure you want to delete the %name specification set?"
+msgstr ""
+"Вы уверены, что хотите удалить %name "
+"набор характеристик"
+
+#: inc/node_specifications.forms.inc:377
+msgid "This action cannot be undone."
+msgstr "Это действие нельзя отменить."
+
+#: inc/node_specifications.forms.inc:389
+msgid "The specification set %name has been deleted."
+msgstr "Набор характеристик %name был удален"
+
+#: inc/node_specifications.forms.inc:398
+msgid "Specification set"
+msgstr "Набор характеристик"
+
+#: inc/node_specifications.forms.inc:438;772
+msgid "Save"
+msgstr "Сохранить"
+
+#: inc/node_specifications.forms.inc:441
+msgid "Field type"
+msgstr "Тип поля"
+
+#: inc/node_specifications.forms.inc:460
+msgid "The changes have been saved."
+msgstr "Изменения сохранены."
+
+#: inc/node_specifications.forms.inc:478
+msgid "List"
+msgstr "Список"
+
+#: inc/node_specifications.forms.inc:497
+msgid "There are no specifications set. <a href=\"@link\">Add specification set</a>."
+msgstr ""
+"На данный момент наборы характеристик "
+"отсутствуют. <a href=\"@link\">Добавить набор "
+"характеристик</a>."
+
+#: inc/node_specifications.forms.inc:523
+msgid "Node compare"
+msgstr "Сравнение по характеристикам"
+
+#: inc/node_specifications.forms.inc:537
+msgid "Nodes must be same type"
+msgstr "Материалы должны быть одного типа"
+
+#: inc/node_specifications.forms.inc:634
+msgid "Clear comparing list and return"
+msgstr "Отчистить сисок сравнения и вернуться"
+
+#: inc/node_specifications.forms.inc:660
+msgid "Nothing to compare"
+msgstr "Нечего сравнивать"
+
+#: inc/node_specifications.forms.inc:666
+msgid "Compare list is empty"
+msgstr "Список сравнения пуст"
+
+#: inc/node_specifications.forms.inc:672
+msgid "Go back"
+msgstr "Назад"
+
+#: inc/node_specifications.forms.inc:689
+msgid "Text field"
+msgstr "Текстовое поле"
+
+#: inc/node_specifications.forms.inc:690
+msgid "Integer digit field"
+msgstr "Цифровое значение"
+
+#: inc/node_specifications.forms.inc:691
+msgid "Text select"
+msgstr "Значение из списка"
+
+#: inc/node_specifications.forms.inc:692
+msgid "Color select"
+msgstr "Цвет из списка"
+
+#: inc/node_specifications.forms.inc:693
+msgid "Logic field"
+msgstr "Логическое поле"
+
+#: inc/node_specifications.forms.inc:746
+msgid "Base uri"
+msgstr "Основная часть ссылки"
+
+#: inc/node_specifications.forms.inc:753
+msgid "Query params"
+msgstr "Дополнительная часть ссылки"
+
+#: inc/node_specifications.forms.inc:787
+msgid "Filter preset created"
+msgstr "Предустановленный фильтр создан"
+
+#: inc/node_specifications.forms.inc:806
+msgid "Filter preset deleted"
+msgstr "Предустановленный фильтр удален"
+
+#: js/node_specifications_compare.js:0
+msgid "Only differs"
+msgstr "Только различающиеся"
+
+msgid "Create filter preset"
+msgstr "Создать предустановленный фильтр"
+
+msgid "Fields to extrafields"
+msgstr "Поля в экстраполя"
+
+msgid "Provide specification fields as separete extrafields"
+msgstr "Разбить поля набора характеристик на отдельные экстраполя"
+
+msgid "Hints"
+msgstr "Подсказки"
+
+msgid "Specification fields visibility settings"
+msgstr "Настройки видимости полей характеристик"
+
+msgid "Required to fill"
+msgstr "Заполнять обязательно"
+
+msgid "Use @name for"
+msgstr "Использовать @name для"
+
+msgid "With sublevels"
+msgstr "С подуровнями"
+
+msgid "Type of material"
+msgstr "Тип материала"
+
+msgid "Not selected"
+msgstr "Не выбран"
+
+msgid "Term"
+msgstr "Термин"
+
+msgid "Include subterms"
+msgstr "Включая подкатегории"
+
+msgctxt "specification"
+msgid "Required"
+msgstr "Обязательная"
+
+msgctxt "specification"
+msgid "Multiple choise"
+msgstr "Множественный выбор"
+
+msgid "With labels"
+msgstr "С метками"

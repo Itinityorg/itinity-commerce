@@ -1,0 +1,11 @@
+; $Id: product.info, v 1.0 2011/02/21 10:34:24 Ivan Demenkov Exp $
+name = Product
+description = Add product node type.
+package = ITK/Shop
+version = "7.x-dev"
+core = 7.x
+
+dependencies[] = shop
+dependencies[] = addons
+dependencies[] = image
+

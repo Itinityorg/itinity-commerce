@@ -1,0 +1,2 @@
+not support JQuery 2.1 
+see /maskedinput

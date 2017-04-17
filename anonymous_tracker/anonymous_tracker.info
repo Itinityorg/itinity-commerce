@@ -1,0 +1,7 @@
+; $Id: anonymous_tracker.info, v 1.0 2016/05/05 16:45:42 itinity Exp $
+name = Anonymous tracker
+description = Assign registerd and anonymous users to global identifiers, store and read it in cookies regardless to user logged in or not.
+package = ITK/User
+version = "7.x"
+core = "7.x"
+dependencies[] = utils

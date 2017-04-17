@@ -1,0 +1,29 @@
+/*.qty-wrapper,*/ .price-wrapper>div,  .qty-wrapper>div {
+	white-space: nowrap;
+	/*vertical-align: bottom;*/
+	display: inline-block;
+	
+}
+/*
+.qty-wrapper-flex>.form-item.container-inline>div {
+	display: inline-block;
+	display: -webkit-inline-flex;
+	display: -ms-inline-flexbox;
+	display: inline-flex;
+	flex-flow: column wrap;
+}
+*/
+
+/*
+
+.qty-wrapper>div {
+	vertical-align: baseline;
+}
+
+.form-item-qty-type, .form-item-qty {
+	vertical-align: bottom;
+}
+
+#edit-note-not-in-stock, #edit-note-any-qty {
+	vertical-align: baseline;
+}*/

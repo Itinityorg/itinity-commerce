@@ -1,0 +1,15 @@
+; $Id: contacts.info, v 1.0 2011/03/10 09:42:26 Ivan Demenkov Exp $
+name = Contacts
+description = Add contacts setting pages
+package = ITK
+version = "7.x-dev"
+core = 7.x
+dependencies[] = multifield
+dependencies[] = addons
+dependencies[] = social_profile
+dependencies[] = field_email
+dependencies[] = field_phone
+dependencies[] = field_icq
+configure = admin/config/about
+
+

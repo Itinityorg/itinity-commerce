@@ -1,0 +1,139 @@
+<?php //$Id: field_phone.install, v 1.0 2011/03/30 12:02:00 Ivan Demenkov Exp $
+
+
+/**
+ * Implements hook_field_schema().
+ */
+function field_phone_field_schema($field) {
+	return array(
+		'columns'	=> array(
+			'country_code'	=> array(
+				'type'		=> 'varchar',
+				'length'	=> 3,
+				'not null'	=> FALSE,
+			),
+			'region_code'	=> array(
+				'type'		=> 'varchar',
+				'length'	=> 5,
+				'not null'	=> FALSE,
+			),
+			'phone'	=> array(
+				'type'		=> 'varchar',
+				'length'	=> 255,
+				'not null'	=> FALSE,
+			),
+		),
+	);
+}
+
+
+/**
+ * Change phone fields structure
+ */
+function field_phone_update_7100() {
+  $count = 0;
+  field_info_cache_clear();
+  foreach (field_info_fields() as $field) {
+    if ($field['type'] === 'phone') {
+      $tables = array(
+        _field_sql_storage_tablename($field),
+        _field_sql_storage_revision_tablename($field),
+      );
+      foreach ($tables as $table) {
+        // Add country_code and region_code columns
+        db_add_field($table, $field['field_name'] . '_country_code', array(
+          'type'		=> 'varchar',
+          'length'	=> 3,
+          'not null'	=> FALSE,
+        ));
+        db_add_field($table, $field['field_name'] . '_region_code', array(
+          'type'		=> 'varchar',
+          'length'	=> 5,
+          'not null'	=> FALSE,
+        ));
+      }
+      $count++;
+    }
+  }
+  field_info_cache_clear();
+  return t('@count phone fields tables were changed.', array('@count' => $count));
+}
+
+
+/**
+ * Convert existing phone numbers to a new format.
+ */
+function field_phone_update_7101() {
+  $count = 0;
+  drupal_set_time_limit(1800);
+  foreach (field_info_fields() as $field) {
+    if ($field['type'] === 'phone') {
+      $phone_column = $field['field_name'] . '_phone';
+      $tables = array(
+        _field_sql_storage_tablename($field),
+        _field_sql_storage_revision_tablename($field),
+      );
+      foreach ($tables as $table) {
+        // Convert existing field data
+        $phones = db_select($table, 't')
+          ->fields('t', array($phone_column))
+          ->condition('t.' . $phone_column, '', '<>')
+          ->isNotNull('t.' . $phone_column)
+          ->groupBy('t.' . $phone_column)
+          ->execute()
+          ->fetchCol();
+        foreach ($phones as $phone) {
+          $p = preg_replace('/^\s*9([\-\(\)]*)((\d[\-\(\)]*){9})(\s|$)/u', '89$1$2$4', $phone); // convert russian cellular 9123456789 to 89123456789
+          $parsed_phone = addons_parse_phone($p);
+          if ($parsed_phone['phone'] !== $p || !in_array($parsed_phone['country_code'], array('', NULL), TRUE) || !in_array($parsed_phone['region_code'], array('', NULL), TRUE)) {
+            $count++;
+            db_update($table)
+              ->condition($phone_column, $phone)
+              ->fields(array(
+                $field['field_name'] . '_country_code' => $parsed_phone['country_code'],
+                $field['field_name'] . '_region_code' => $parsed_phone['region_code'],
+                $phone_column => $parsed_phone['phone'],
+              ))
+              ->execute();              
+          }
+        }
+      }
+    }
+  }
+  return t('@count existing phones were converted to a new format.', array('@count' => $count));
+}
+
+
+/**
+ * Change default phone widget field size to 15 for all phone fields.
+ */
+function field_phone_update_7102() {
+  $query = db_select('field_config_instance', 'fci')->fields('fci', array('id', 'data'));
+  $query->innerJoin('field_config', 'fc', 'fc.field_name = fci.field_name');
+  $query->condition('fc.type', 'phone');
+  $existing_field_instance_configs = $query->execute()->fetchAllKeyed();
+  
+  foreach ($existing_field_instance_configs as $field_instance_id => $field_instance_config) {
+    $field_instance_config = @unserialize($field_instance_config);
+    if (FALSE === $field_instance_config) {
+      continue; // unserialize() failed
+    }
+    if (isset($field_instance_config['widget']['settings']['size'])) {
+      $field_instance_config['widget']['settings']['size'] = FIELD_PHONE_WIDGET_ELEMENT_SIZE;
+      db_update('field_config_instance')
+        ->fields(array(
+          'data' => serialize($field_instance_config),
+        ))
+        ->condition('id', $field_instance_id)
+        ->execute()
+      ;
+    }
+  }
+}
+
+
+
+
+
+
+

@@ -1,0 +1,111 @@
+.form-type-entity-selector {
+  position: relative;
+}
+
+.form-type-entity-selector .entity-selector-preview img {
+  display: none;
+}
+
+#autocomplete {
+  overflow-y: auto;
+}
+
+#autocomplete li img {
+  margin: 0 0.3em 0 0;
+}
+
+#autocomplete .entity-selector-autocomplete-item {
+  padding-left: 1em;
+}
+
+#autocomplete .entity-selector-autocomplete-item > * {
+  display: inline-block;
+  vertical-align: bottom;
+  padding: 0.5em 0em;
+}
+
+#autocomplete .entity-selector-autocomplete-item small {
+  opacity: 0.4;
+}
+
+#autocomplete .prev-next > a {
+  display: block;
+  text-align: center;
+  padding: 0.5em;
+  text-decoration: none;
+}
+
+a.entity-selector-add-link {
+  display: block;
+  text-align: center;
+  font-weight: 700;
+  padding: .6em !important;
+  background-image: none;
+  margin: 0;
+  width: 100%;
+  -webkit-box-sizing: border-box;
+  -moz-box-sizing: border-box;
+  box-sizing: border-box;
+  border-radius: 0 !important;
+  border-width: 0px;
+}
+
+.entity-selector-text-input-wrapper {
+  position: relative;
+  white-space: nowrap;
+  display: inline-block;
+}
+
+.entity-selector-text-input-wrapper.has-image {
+  padding-left: 32px;
+}
+
+.entity-selector-text-input-wrapper .form-text {
+  padding-right: 1.7em !important;
+}
+
+.entity-selector-preview {
+  text-align: center;
+  vertical-align: middle;
+  background-image: url(/profiles/itinity/modules/itk/social_profile/img/userpic.png);
+  /*background-image: url(/profiles/itinity/modules/itk/addons/img/preview.svg);*/
+  background-position: top center;
+  background-size: cover;
+  background-repeat: no-repeat;
+  position: absolute;
+  width: 32px;
+  overflow: hidden;
+  height: 100%;
+  top: 0;
+  left: 0;
+  display: block;
+  text-decoration: none !important;
+  border-width: 0px !important;
+  border-bottom-color: transparent;
+}
+
+.entity-selector-text-input-wrapper.has-image input.form-text {
+  border-top-left-radius: 0 !important;
+  border-bottom-left-radius: 0 !important;
+  -webkit-box-sizing: border-box;
+  -moz-box-sizing: border-box;
+  box-sizing: border-box;
+  width: 100%;
+}
+
+.entity-selector-text-input-wrapper .entity-selector-clear-link {
+  position: absolute;
+  top: 0.275em;
+  right: 0.55em;
+  text-decoration: none !important;
+}
+
+#autocomplete li {
+  background: none;
+}
+
+.entity-selector-entity-view {
+  border: 1px solid #cccccc;
+  padding: 5px;
+  margin: 10px 5px;
+}

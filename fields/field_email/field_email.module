@@ -1,0 +1,100 @@
+<?php //$Id: field_email.module, v 1.0 2011/03/30 11:57:02 Ivan Demenkov Exp $
+/**
+ * Copyright 2011-2017 Itinity Ltd. (itinity.ru). All rights reserved.
+ * Licensed under the GNU General Public License, version 2 or later.
+ */
+
+/**
+ * Implements hook_field_info().
+ */
+function field_email_field_info() {
+	return array(
+		'email' => array(
+			'label'				=> t('Email'),
+			'description'		=> t('This field stores and renderes email addresses.'),
+			'settings'			=> array('max_length' => 255),
+			'default_widget'	=> 'email',
+			'default_formatter'	=> 'email',
+		),
+	);
+}
+
+
+/**
+ * Implements hook_content_is_empty().
+ */
+function field_email_field_is_empty($item, $field) {
+	if (empty($item['email'])) {
+		return TRUE;
+	}
+	return FALSE;
+}
+
+/**
+ * Implements hook_field_settings_form(). Added for field permissions module.
+ */
+function field_email_field_settings_form($field, $instance, $has_data){
+	$form = array();
+	return $form;
+}
+
+/**
+ * Implements hook_field_formatter_info().
+ */
+function field_email_field_formatter_info() {
+	$formats = array(
+		'email' => array(
+			'label'			=> t('Email link'),
+			'description'	=> t('Display the email address as a mailto link.'),
+			'field types'	=> array('email'),
+		),
+	);
+	return $formats;
+}
+
+/**
+ * Implements hook_field_formatter_view().
+ */
+function field_email_field_formatter_view($object_type, $object, $field, $instance, $langcode, $items, $display) {
+	$element = array();
+	
+	$widget = $instance['widget'];
+	$settings = $widget['settings'];
+	
+	foreach ($items as $delta => $item) {
+		$element[$delta] = array(
+			'#markup'	=> theme('email', array('email' => $item['email'])),
+		);
+	}
+	
+	return $element;
+}
+
+/**
+ * Implements hook_field_widget_info().
+ */
+function field_email_field_widget_info() {
+	return array(
+		'email'	=> array(
+			'label'			=> t('Email'),
+			'field types'	=> array('email'),
+			'settings'		=> array('size' => 60),
+		),
+	);
+}
+
+/**
+ * Implements hook_field_widget_form().
+ */
+function field_email_field_widget_form(&$form, &$form_state, $field, $instance, $langcode, $items, $delta, $base) {
+	
+	$element = $base;
+	$element['email'] = $base + array(
+		'#type'				=> 'email',
+		'#default_value'	=> isset($items[$delta]['email']) ? $items[$delta]['email'] : NULL,
+		'#size'				=> $instance['widget']['settings']['size'],
+	);
+
+	return $element;
+}
+

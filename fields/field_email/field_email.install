@@ -1,0 +1,16 @@
+<?php //$Id: field_email.install, v 1.0 2011/03/30 11:57:02 Ivan Demenkov Exp $
+
+/**
+ * Implements hook_field_schema().
+ */
+function field_email_field_schema($field) {
+	return array(
+		'columns'	=> array(
+			'email'	=> array(
+				'type'		=> 'varchar',
+				'length'	=> 255,
+				'not null'	=> FALSE,
+			),
+		),
+	);
+}

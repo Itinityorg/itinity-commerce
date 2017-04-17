@@ -1,0 +1,31 @@
+<?php
+
+/**
+* Implements hook_install()
+*/
+function addons_install() {
+
+}
+
+/**
+* Implements hook_uninstall()
+*/
+function addons_uninstall() {
+	variable_del('addons_extra_fields_settings');
+	variable_del('addons_fields_settings');
+	variable_del('addons_extra_field_titles');
+  variable_del('addons_entity_custom_view_modes');
+}
+
+/**
+* Add new dependencies
+*/
+function addons_update_7001() {
+	module_enable(array('adv_elements'));
+}
+
+
+
+
+
+

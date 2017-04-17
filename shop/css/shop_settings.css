@@ -1,0 +1,32 @@
+/*padding sub-items in processes page*/
+.fieldset-legend .form-item {
+  padding:0;
+  margin:0;
+  display:inline;
+  margin-left: .5em;
+}
+
+#shop-settings-processes-form #edit-processes-delivery,
+#shop-settings-processes-form #edit-processes-payment {
+	margin-left: 2em;
+}
+
+/*inline price display options*/
+#shop-settings-price-form #edit-price-display div.form-item-price-display {
+	display: inline;
+}
+
+/*inline row with checkbox and settings fieldset */
+#shop-settings-table-with-checkbox-and-fieldsets .form-td-with-checkbox {
+	width:			1px;
+	vertical-align:	top;
+	padding-top:	2em;
+}
+
+/*inline row with price and tax */
+#shop-settings-table-with-price-and-tax td:first-child {
+	vertical-align:	top;
+	width:			15em;
+}
+
+

@@ -1,0 +1,54 @@
+
+html.js div.node-specification-field.hint>label {
+	border-bottom: 1px dotted;
+  position: relative;
+  display: inline;
+}
+
+html.js div.node-specification-field.hint>label:hover {
+	cursor: help;
+}
+
+html.js div.node-specification-field.hint>label:hover span.hint {
+	cursor: default;
+}
+
+div.node-specification-field.hint>label span.hint.hidden {
+	display: none;
+}
+
+div.node-specification-field.hint>label span.hint {
+	display: inline-block;
+  width: 300px;
+	vertical-align: top;
+	border: 1px solid #777;
+	background-color: #CCC;
+  box-shadow: 0 0 .8em rgba(0,0,0,0.5);
+	position: absolute;
+  z-index: 999;
+  padding: 0.5em;
+  font-size: 0.8em;
+}
+
+div.node-specification-field.hint>label span.hint:before {
+  content: '';
+  position: absolute;
+  bottom: -4px;
+  z-index: 1000;
+  left: 0.5em;
+  width: 5px;
+  height: 5px;
+  border-bottom: 1px solid #777;
+  border-right: 1px solid #777;
+	background-color: #CCC; 
+  -moz-transform: rotate(45deg);
+  -o-transform: rotate(45deg);
+  -webkit-transform: rotate(45deg);
+  -ms-transform: rotate(45deg);
+  transform: rotate(45deg);
+}
+
+img.node-specification-image-field {
+	width: 2em;
+	margin-right: 1em;
+}
