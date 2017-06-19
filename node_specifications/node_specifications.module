@@ -737,7 +737,7 @@ function node_specifications_form_node_form_alter(&$form, &$form_state, $form_id
                 '#type' => $field['multiple'] ? 'checkboxes' : 'select',
                 '#options' => $vars,
                 '#empty_value' => '',
-                '#default_value' => $field_values,
+                '#default_value' => is_scalar($field_values) && $field['multiple'] ? (array_search($field_values, $vars) !== FALSE ? array(array_search($field_values, $vars)) : NULL) : $field_values,
               );
               break;
 
@@ -1280,13 +1280,6 @@ function node_specifications_load($nsid) {
 }
 
 function node_specifications_load_multiple($nsids = array(), $conditions = array()) {
-
-  // Temporary check to avoid DB exceptions, remove it after global update on prod. server
-  if (system_list('module_enabled')['node_specifications']->schema_version < 7019) {
-    return array();
-  }
-
-
   return entity_load('node_specifications', $nsids ? $nsids : FALSE, $conditions);
 }
 
@@ -1296,16 +1289,6 @@ function node_specifications_machine_name_load($machine_name) {
 }
 
 function node_specifications_save($specification) {
-  
-
-  // Temporary check to avoid DB exceptions, remove it after global update on prod. server
-  if (system_list('module_enabled')['node_specifications']->schema_version < 7019) {
-    return array();
-  }
-  
-  
-  
-  
 	$is_new = empty($specification->nsid);
 	if ($result = drupal_write_record('node_specifications', $specification, !$is_new ? 'nsid' : array())) {
     $nsid = $specification->nsid;
@@ -1545,28 +1528,33 @@ function node_specifications_get_field_value($node, $nsid, $delta) {
 
 		switch ($field['field_type']) {
 			case 'color_select':
-				if ($field['multiple']) {
-					foreach ($field_data as $var_id) {
-						if (isset($field_vars[$var_id]['var_value']) && isset($field_vars[$var_id]['var_data'])) {
-							$result[$field_vars[$var_id]['var_value']] = $field_vars[$var_id]['var_data'];
-						}
-					}
-				}
-				elseif (isset($field_vars[$field_data]['var_value'])) {
-					$result = $field_vars[$field_data]['var_value'];
-				}
+        if (is_array($field_data)) {
+          if ($field['multiple']) {
+            foreach ($field_data as $var_id) {
+              if (isset($field_vars[$var_id]['var_value']) && isset($field_vars[$var_id]['var_data'])) {
+                $result[$field_vars[$var_id]['var_value']] = $field_vars[$var_id]['var_data'];
+              }
+            }
+          }
+          elseif (isset($field_vars[$field_data]['var_value'])) {
+            $result = $field_vars[$field_data]['var_value'];
+          }
+        }
+
 				break;
 			case 'list_text':
-				if ($field['multiple']) {
-					foreach ($field_data as $var_id) {
-						if (isset($field_vars[$var_id]['var_value'])) {
-							$result[$var_id] = $field_vars[$var_id]['var_value'];
-						}
-					}
-				}
-				elseif (isset($field_vars[$field_data]['var_value'])) {
-					$result = $field_vars[$field_data]['var_value'];
-				}
+        if (is_array($field_data)) {
+          if ($field['multiple']) {
+            foreach ($field_data as $var_id) {
+              if (isset($field_vars[$var_id]['var_value'])) {
+                $result[$var_id] = $field_vars[$var_id]['var_value'];
+              }
+            }
+          }
+          elseif (isset($field_vars[$field_data]['var_value'])) {
+            $result = $field_vars[$field_data]['var_value'];
+          }
+        }
 				break;
 			case 'logic':
 				$result = $field_data == 1 ? t('No') : t('Yes');

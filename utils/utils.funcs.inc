@@ -84,6 +84,7 @@ function _utils_crawlers_list() {
     'skypeuripreview' => 'Microsoft SkypeUriPreview',
     'telegrambot' => 'TelegramBot (like TwitterBot)',
     // Services:
+    'domaincrawler' => 'info@domaincrawler.com; http://www.domaincrawler.com',
     'web-monitoring' => 'Web-Monitoring (http://monoid.nic.ru)',
     'validator\.nu|w3c_validator' => 'W3C Validation Services',
     'pingdom' => 'Pingdom.com bot',

@@ -615,7 +615,8 @@ msgstr "Текст содержит"
 msgid "Field %name"
 msgstr "Поле %name"
 
-
+msgid "Content view mode"
+msgstr "Режим отображения содержимого"
 
 
 

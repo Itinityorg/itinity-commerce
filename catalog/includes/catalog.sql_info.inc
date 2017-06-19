@@ -87,6 +87,36 @@ function business_catalog_sql_info($catalog_object) {
 */
 function features_catalog_sql_info($catalog_object) {
   if ($catalog_object->entity_type == 'node') {
+    global $user;
+
+    if (!empty($catalog_object->filters['author']['settings']['current'])) {
+      $author = $user->uid;
+    }
+    else {
+      $author = !empty($catalog_object->filters['author']['settings']['it']) && is_numeric($catalog_object->filters['author']['settings']['it'])
+        ? $catalog_object->filters['author']['settings']['it'] : 0;
+    }
+
+    $form = array(
+      '#inline' => TRUE,
+      'it' => array(
+        '#type' => 'entity_selector',
+        '#selector_entity_type' => 'user',
+        '#selector_roles' => db_query('SELECT DISTINCT(ur.rid) FROM {users_roles} ur INNER JOIN {node} n ON n.uid = ur.uid WHERE n.type = :nt', array(':nt' => $catalog_object->bundle))->fetchCol(),
+        '#default_value' => $author,
+        '#states' => array(
+          'visible' => array(
+            'input[name="filters[author][settings][current]"]' => array('checked' => FALSE,),
+          ),
+        ),
+      ),
+      'current' => ($user->uid) ? array (
+        '#type' => 'checkbox',
+        '#title' => catalog_access('update', $catalog_object) ? t('Current user') : t('Set me'),
+        '#default_value' => !empty($catalog_object->filters['author']['settings']['current']),
+      ) : array(),
+    );
+
     return array(
       'orders' => array(
         'created' => array(
@@ -121,6 +151,20 @@ function features_catalog_sql_info($catalog_object) {
                 'u',
                 'u.uid = base.uid',
               ),
+            ),
+          ),
+        ),
+      ),
+      'filters' => array(
+        'author' => array(
+          'description' => t('Author'),
+          'by' => 'u.name',
+          'isnull' => FALSE,
+          'weight' => 100,
+          'settings form' => $form,
+          'commands' => array(
+            'where' => array(
+              array('base.uid = :uid', array(':uid' => $author),),
             ),
           ),
         ),
@@ -652,21 +696,29 @@ function field_catalog_sql_info($catalog_object) {
           '#default_value' => $form_value,
         ),
       );
-
       if ($form_value) {
+        $entity_info = entity_get_info($catalog_object->entity_type);
         $result['filters'][$field_name]['commands'] = array(
-          'leftJoin' => array(
-            array(
-              'taxonomy_index',
-              'taxonomy_index',
-              'taxonomy_index.nid = base.nid',
-            ),
-          ),
           'innerJoin' => array(
             array(
+              'taxonomy_entity_index',
+              'ti',
+              'ti.entity_id = base.' . $entity_info['entity keys']['id'] . ' AND ti.entity_type = :entity_type',
+              array(':entity_type' => $catalog_object->entity_type,),
+            ),
+            array(
               'taxonomy_term_data',
-              'taxonomy_term_data',
-              'taxonomy_term_data.tid = taxonomy_index.tid AND taxonomy_term_data.name LIKE :name',
+              'td',
+              'td.tid = ti.tid',
+            ),
+          ),
+          'where' => array(
+            array(
+              'ti.field_name = :field_name',
+              array(':field_name' => $field_name,),
+            ),
+            array(
+              'td.name LIKE :name',
               array(':name' => '%' . db_like($form_value) . '%'),
             ),
           ),
@@ -1030,6 +1082,9 @@ function poll_catalog_sql_info($catalog_object) {
 }
 
 
+/*
+ * @todo delete
+ * doesn't work anymore
 function new_price_catalog_sql_info($catalog_object) {
   if (shop_get_info('entity_types', $catalog_object->entity_type, $catalog_object->bundle)) {
     $entity_info = entity_get_info($catalog_object->entity_type);
@@ -1065,6 +1120,7 @@ function new_price_catalog_sql_info($catalog_object) {
     );
   }
 }
+*/
 
 
 function shop_variants_catalog_sql_info($catalog_object) {
@@ -1719,44 +1775,6 @@ function task_catalog_sql_info($catalog_object) {
     );
     //author field
     _task_load_include('responsible', $form_state);
-    if (!empty($catalog_object->filters['author']['settings']['current'])) {
-        $author = $user->uid;
-      } else {
-      $author = !empty($catalog_object->filters['author']['settings']['it']) && is_numeric($catalog_object->filters['author']['settings']['it'])
-        ? $catalog_object->filters['author']['settings']['it'] : 0;
-      }
-    $form = array(
-      '#inline' => TRUE,
-      'it' => array(
-        '#type' => 'entity_selector',
-        '#selector_entity_type' => 'user',
-        '#selector_roles' => db_query('SELECT DISTINCT(ur.rid) FROM {users_roles} ur INNER JOIN {node} n ON n.uid = ur.uid WHERE n.type = :nt', array(':nt' => $catalog_object->bundle))->fetchCol(),
-        '#default_value' => $author,
-        '#states' => array(
-          'visible' => array(
-            'input[name="filters[author][settings][current]"]' => array('checked' => FALSE,),
-          ),
-        ),
-      ),
-      'current' => ($user->uid) ? array (
-        //'#field_prefix' => '&nbsp;',
-        '#type' => 'checkbox',
-        '#title' => catalog_access('update', $catalog_object) ? t('Current user') : t('Set me'),
-        '#default_value' => !empty($catalog_object->filters['author']['settings']['current']),
-       ) : array(),
-    );
-
-    $result['filters']['author'] = array(
-      '#inline' => TRUE,
-      'description' => t('Author'),
-       'settings form' =>  $form,
-      'commands' => array(
-            'where' => array(
-               array('base.uid = :uid', array(':uid' => $author), ),
-              ),
-      ),
-    );
-
     //responsible field
     if (!empty($catalog_object->filters['responsible']['settings']['current'])) {
         $responsible = $user->uid;

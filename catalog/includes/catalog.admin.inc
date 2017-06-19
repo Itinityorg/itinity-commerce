@@ -282,34 +282,8 @@ function catalog_object_edit_form($form, &$form_state, $catalog_object = NULL, $
   $form['filters']['orders'] = _catalog_edit_filter_orders_table($form_state, $catalog_object, $is_block);
 
 
-  $field_display_admin_links = array();
-  if ($catalog_object->entity_type && $catalog_object->bundle) {
-    if ($catalog_object->entity_type == 'node') {
-      if ($nt = node_type_load($catalog_object->bundle)) {
-        $field_display_admin_links[] = l(drupal_strtolower($nt->name), 'admin/structure/types/manage/' . $catalog_object->bundle . '/display/' . ($catalog_object->is_block ? 'informer' : 'teaser'), array('attributes' => array('target' => '_blank',)));
-      }
-    } else {
-      $field_display_admin_links[] = l(t('User account'), 'admin/config/people/accounts/display/' . ($catalog_object->is_block ? 'informer' : 'teaser'), array('attributes' => array('target' => '_blank',)));
-    }
-  }
-
-
-  $order_flag = isset($form_state['input']['order_flag']) ? $form_state['input']['order_flag'] : (isset($catalog_object->order_flag) ? $catalog_object->order_flag : NULL);
   if ($is_block) { // Materials layout settings. If catalog object not is block see catalog_extra_field_formatter_settings_form()
-
-    $form['block_settings'] = _catalog_extra_settings_form(TRUE, isset($catalog_object->block_settings) ? $catalog_object->block_settings : NULL);
-      $form['block_settings'] += array(
-      'fields_settings' => array(
-        '#type' => 'item',
-        '#title' => t('Manage fields display'),
-        '#inline' => TRUE,
-        '#markup' => '<em> ' . implode('<br />' , $field_display_admin_links) . '</em>',
-        '#attributes' => array(
-          'class' => 'description',
-        ),
-        '#access' => $catalog_object->bundle && $catalog_object->entity_type && $field_display_admin_links && user_access($catalog_object->entity_type == 'node' ? 'administer content types' : 'administer users'),
-      ),
-    );
+    $form['block_settings'] = _catalog_block_extra_settings_form($form_state, $catalog_object);
   }
 
 

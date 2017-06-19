@@ -95,6 +95,15 @@ class Cart {
 
       //$query->addExpression('si.qty', 'store_qty');
       foreach ($query->execute() as $item) {
+        
+        
+        if (!isset($item->si_price)) {
+          $item->si_price = NULL;
+        }
+        if (!isset($item->si_currency)) {
+          $item->si_currency = NULL;
+        }
+        
         $key = self::key($item->entity_type, $item->entity_id, $item->snapshot_id);
         if (!$item->frozen && empty($order_node->frozen)) {
           if ($e = entity_load($item->entity_type, array($item->entity_id))) {
@@ -165,6 +174,8 @@ class Cart {
               'qty' => $item->qty,
               'price' => array_sum(shop_build_price('product', $entity, $acc)),
               'currency' => shop_get_info('currency', 'default'),
+              'si_price' => NULL,
+              'si_currency' => NULL,
 //              'qty_type' => $entity->qty_type,
               'qty_fraction' => $entity->qty_fraction,
               'title' => entity_label($item->entity_type, $entity),

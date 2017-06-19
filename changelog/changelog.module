@@ -437,7 +437,7 @@ function changelog_entity_view($entity, $entity_type, $view_mode, $langcode) {
 */
 function changelog_query_comment_filter_alter(QueryAlterableInterface $query) {
 	// Hide from untrusted users comments with changelog messages:
-	if (!user_access('view entity changelog') && node_changelog_entity_is_supported('node', $query->getMetaData('node')->type)) {
+	if (!user_access('view entity changelog') && changelog_entity_is_supported('node', $query->getMetaData('node')->type)) {
 		global $user;
 		$query->leftJoin('changelog', 'ch', 'ch.comment_cid = c.cid');
 		$db_or = db_or();
@@ -457,18 +457,24 @@ function changelog_entity_is_supported($entity_type, $bundle) {
 	if ($entity_type === 'comment') { // We do no track comments, but we use comments as container for changelog messages, @see changelog_entity_view()
 		return FALSE;
 	}
+  $result = FALSE;
 	foreach (module_implements('changelog_entity_is_supported') as $module) {
 		$fn = $module . '_changelog_entity_is_supported';
-		if ($fn($entity_type, $bundle)) {
-			return TRUE;
+    $supported = $fn($entity_type, $bundle);
+    if ($supported === FALSE) { // changelog denied by module - break and return FALSE
+      return FALSE;
+    }
+		elseif ($supported) {
+			$result = TRUE;
 		}
 	}
-	return FALSE;
+	return $result;
 }
 
 
 /**
 * Implements hook_changelog_entity_is_supported() defined in changelog.module
+* Retun NULL if ignore
 */
 function node_changelog_entity_is_supported($entity_type, $bundle) {
 	if ($entity_type === 'node') {
@@ -480,6 +486,7 @@ function node_changelog_entity_is_supported($entity_type, $bundle) {
 
 /**
 * Implements hook_changelog_entity_is_supported() defined in changelog.module
+* Retun NULL to ignore
 */
 // @TODO: move to order.module
 function order_changelog_entity_is_supported($entity_type, $bundle) {
@@ -487,44 +494,46 @@ function order_changelog_entity_is_supported($entity_type, $bundle) {
 }
 
 
+/**
+* Implements hook_changelog_entity_is_supported() defined in changelog.module
+* Retun NULL to ignore
+*/
 function user_changelog_entity_is_supported($entity_type, $bundle) {
 	return $entity_type === 'user' && $bundle === 'user' ? TRUE : NULL;
 }
 
 
 /**
-* Implements hook_field_extra_field_alter()
+* Implements hook_field_extra_fields()
 */
-function changelog_field_extra_fields_alter(&$info) {
-	foreach ($info as $entity_type => $data) {
-		// Define changelog extra field for suppoted entity types
-		foreach ($data as $bundle => $item) {
-			if (changelog_entity_is_supported($entity_type, $bundle)) {
-				$default_visible = TRUE;
-				if ($entity_type === 'node' && module_exists('comment')) {
-					// Display own extra field only where node comments is invisible
-					$default_visible = (variable_get('comment_' . $bundle, COMMENT_NODE_OPEN) == COMMENT_NODE_HIDDEN);
-				}
-				$info[$entity_type][$bundle]['display']['changelog'] = array(
-					'label' => t('Changelog'),
-					'description' => t('Log of entity changes'),
-					'weight' => 99999999999,
-					'default_display' => array(
-						'default' => array(
-							'visible' => FALSE,
-						),
+function changelog_field_extra_fields() {
+  $extra = array();
+  foreach (entity_get_info() as $entity_type => $info) {
+    foreach ($info['bundles'] as $bundle => $data) {
+      if (changelog_entity_is_supported($entity_type, $bundle)) {
+        $default_visible = TRUE;
+        if ($entity_type === 'node' && module_exists('comment')) {
+          // Display own extra field only where node comments is invisible
+          $default_visible = (variable_get('comment_' . $bundle, COMMENT_NODE_OPEN) == COMMENT_NODE_HIDDEN);
+        }
+        $extra[$entity_type][$bundle]['display']['changelog'] = array(
+          'label' => t('Changelog'),
+          'description' => t('Log of entity changes'),
+          'weight' => 99999999999,
+          'default_display' => array(
+            'default' => array(
+              'visible' => FALSE,
+            ),
 						'full' => array(
 							'visible' => $default_visible,
 						),
-					),
-				);
-			}
-		}
-	}
+          ),
+        );
+      }
+    }
+  }
+  return $extra;
 }
-
-
-
 
 
 

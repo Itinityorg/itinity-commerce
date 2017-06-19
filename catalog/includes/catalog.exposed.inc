@@ -428,7 +428,7 @@ function catalog_filter_exposed_form_submit($form, &$form_state) {
       }
     }
     else {
-     // $form_state['redirect'] = array('catalog/' . $catalog_object->cid);
+      $form_state['redirect'] = array('catalog/' . $catalog_object->cid);
     }
   }
 

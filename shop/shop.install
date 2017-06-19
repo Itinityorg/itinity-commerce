@@ -1133,7 +1133,7 @@ function shop_update_7120() {
 * Admin menu bugfix
 */
 function shop_update_7121() {
-  db_query('DELETE FROM {menu_links} WHERE link_path LIKE \'admin/shop\/%\' AND module = \'system\' AND customized = 0');
+  db_query('DELETE FROM {menu_links} WHERE link_path LIKE \'admin/shop/%\' AND module = \'system\' AND customized = 0');
   variable_set('menu_rebuild_needed', TRUE);
 }
 
@@ -1191,6 +1191,15 @@ function shop_update_7124() {
       db_query('UPDATE `shop_cart` SET `created` = `changed` WHERE 1')->execute();
     }
   }
+}
+
+
+/**
+* Admin menu bugfix, attempt #2
+*/
+function shop_update_7125() {
+  db_query('DELETE FROM {menu_links} WHERE link_path LIKE \'admin/shop/%\' AND module = \'system\' AND customized = 0');
+  variable_set('menu_rebuild_needed', TRUE);
 }
 
 

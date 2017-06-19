@@ -121,7 +121,7 @@ function theme_shop_cart($variables) {
               'class' => array('col-price'),
             ),
             'discount' => array(
-              'data' => round($item->price * 100 / $original_price - 100) . '%',
+              'data' => round(!$original_price ? '0' : $item->price * 100 / $original_price - 100) . '%',
               'class' => array('col-price'),
             ),
             'sum' => array(
@@ -224,7 +224,7 @@ function theme_shop_cart($variables) {
 
       foreach ($items as $item) {
         $price_string = ($item->qty * 1) . ' x ' . theme('price', array('price' => $item->si_price,)) .
-          (($item->si_price != $item->price) ? ' -' . abs(round($item->price * 100 / $item->si_price - 100)).'%' : '') .
+          (($item->si_price && $item->si_price != $item->price) ? ' -' . abs(round($item->price * 100 / $item->si_price - 100)) . '%' : '') .
           ' = ' . theme('price', array('price' => $item->price * $item->qty, 'currency' => $item->currency,));
 
         $dots_count = max(3, _shop_cart_mail_dots(check_plain($item->title), $price_string) - 4);

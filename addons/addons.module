@@ -175,6 +175,12 @@ function addons_entity_view_modes($entity_type, $bundle = NULL, $only_created = 
   $entity_info = entity_get_info($entity_type);
   if ($bundle) {
     $field_view_mode_settings = field_view_mode_settings($entity_type, $bundle);
+    
+    // Crutches for forms_entity_info_alter()
+    if ($entity_type === 'node' && $bundle !== 'form' && module_exists('forms')) { 
+      unset($field_view_mode_settings['block']);
+    }
+    
   }
   if (!empty($entity_info['fieldable']) && !empty($entity_info['view modes'])) {
     foreach ($entity_info['view modes'] as $mode => $data) {

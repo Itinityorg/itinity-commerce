@@ -73,21 +73,19 @@ function shop_menu() {
     'file' => 'shop.settings.inc',
   );
 
-  if (module_exists('order')) {
-    $items['admin/shop'] = array(
-      'title' => 'Shop',
-      'page callback' => 'shop_admin_panel_page',
-      'access arguments' => array('administer site configuration'),
-      'weight' => 10,
-      'file' => 'shop.admin.panel.inc'
-    );
-    $items['admin/shop/panel'] = array(
-      'title' => 'Panel',
-      'weight' => -10,
-      'type' => MENU_DEFAULT_LOCAL_TASK,
-    );    
-  }
-
+  $items['admin/shop'] = array(
+    'title' => 'Shop',
+    'page callback' => 'shop_admin_panel_page',
+    'access arguments' => array('administer site configuration'),
+    'weight' => 10,
+    'file' => 'shop.admin.panel.inc'
+  );
+  
+  $items['admin/shop/panel'] = array(
+    'title' => 'Panel',
+    'weight' => -10,
+    'type' => MENU_DEFAULT_LOCAL_TASK,
+  ); 
   $items['admin/shop/carts'] = array(
     'title' => 'Carts',
     'page callback' => 'drupal_get_form',

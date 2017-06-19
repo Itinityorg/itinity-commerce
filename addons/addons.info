@@ -5,5 +5,4 @@ dependencies[] = adv_elements
 package = ITK/System
 version = "7.x-dev"
 core = 7.x
-project = addons
 

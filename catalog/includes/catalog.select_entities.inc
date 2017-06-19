@@ -69,7 +69,6 @@ function _catalog_select_entities($catalog_object, $rss_mode = FALSE, $return_al
   $query->fields('base', array($entity_id_key));
   _catalog_sql_query_add_commands($query, array('where' => array(array('base.' . $entity_id_key . ' > 0',)))); // do not select anonymous users and prevent further selects zero ids form other tables
   if ($predefined_entity_ids) {
-    $predefined_entity_ids = (array)$predefined_entity_ids;
     $query->condition('base.' . $entity_id_key, $predefined_entity_ids);
   }
 

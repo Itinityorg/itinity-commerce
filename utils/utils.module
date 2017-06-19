@@ -29,36 +29,36 @@ function utils_init() {
 */
 function utils_boot() {
 	if (!empty($GLOBALS['is_local_site'])) {
-		// Enable/disable modules by $_GET param in local mode. Used in dumper.php
+		// Enable/disable modules by $_GET param in local mode
     $modules_enable = !empty($_GET['modules_enable']) ? array_filter(explode(',', preg_replace('/[^a-z0-9_,]/', '', strtolower($_GET['modules_enable'])))) : array();
     $modules_disable = !empty($_GET['modules_disable']) ? array_filter(explode(',', preg_replace('/[^a-z0-9_,]/', '', strtolower($_GET['modules_disable'])))) : array();
     if ($modules_enable || $modules_disable) {
-			// crutches:
+			
+      // crutches:
 			defined('MAINTENANCE_MODE') || define('MAINTENANCE_MODE', 'update');
 			drupal_bootstrap(DRUPAL_BOOTSTRAP_FULL);
-
       // Prevent "Notice: Use of undefined constant LOCALE_LANGUAGE_NEGOTIATION_URL - assumed 'LOCALE_LANGUAGE_NEGOTIATION_URL'"
       require_once DRUPAL_ROOT . '/includes/locale.inc';
-
+      
       foreach ($modules_enable as $m) {
         if (module_exists($m)) {
           drupal_set_message('Module ' . $m . ' already enabled.', 'warning');
         }
-        elseif (!drupal_get_path('module', $m)) {
+        elseif (@!drupal_get_path('module', $m)) {
           drupal_set_message('Module ' . $m . ' not found.', 'error');
         }
+        elseif (module_enable(array($m)) && module_exists($m)) {
+          drupal_set_message('Module ' . $m . ' was enabled.');
+        }
         else {
-          module_enable(array($m));
-          if (module_exists($m)) {
-            drupal_set_message('Module ' . $m . ' was enabled.');
-          }
-          else {
-            drupal_set_message('Can not enable ' . $m . ' module.', 'error');
-          }
+          drupal_set_message('Can not enable ' . $m . ' module.', 'error');
         }
       }
       foreach ($modules_disable as $m) {
-        if (module_exists($m)) {
+        if (in_array($m, array('field', 'field_sql_storage', 'text', 'filter', 'node', 'system', 'user', ), TRUE)) {
+           drupal_set_message('Can not disable core modules', 'error');
+        }
+        elseif (module_exists($m)) {
           module_disable(array($m));
           if (!module_exists($m)) {
             drupal_set_message('Module ' . $m . ' was disabled.');
@@ -67,7 +67,7 @@ function utils_boot() {
             drupal_set_message('Can not disable ' . $m . ' module.', 'error');
           }
         }
-        elseif (!drupal_get_path('module', $m)) {
+        elseif (@!drupal_get_path('module', $m)) {
           drupal_set_message('Module ' . $m . ' not found.', 'error');
         }
         else {
@@ -81,12 +81,13 @@ function utils_boot() {
 
 		}
 	}
+  
+  
 	// Store server http host information for using in other modules if possible
-
 
 	// Remove redundant information from host url (http protocol and port 80, https protocol and port 443)
 	$http_host =  preg_replace('/\:80$/', '', $GLOBALS['base_url']);
-	$http_host =  preg_replace('/^https\:\/\/(.*?)\:443$/i', 'https://$1', $GLOBALS['base_url']);
+	$http_host =  preg_replace('/^https?\:\/\/(.*?)\:443$/i', 'https://$1', $GLOBALS['base_url']);
 	$http_host = trim($http_host, '.;');
 	// write requested host information once per 24hrs
 	$active_http_hosts = variable_get('active_http_hosts', array());

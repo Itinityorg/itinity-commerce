@@ -131,8 +131,8 @@ function node_specifications_form($form, &$form_state, $specification = NULL) {
         $term_lists[$vocabulary->vid][$term->tid] = str_repeat('-', $term->depth) . ($term->depth ? ' ' : '') . $term->name;
       }
       // + вычислим схождение массивов терминов чтоб узнать подключеный словарь (исключая ситуацию ajax vid=0)
-      if (!$default_vid && isset($specification->tids) && !isset($form_state['values']['filters']['vocabulary']['vid'])) {
-        $default_vid = count(array_intersect_key($term_lists[$vocabulary->vid], $specification->tids)) ? $vocabulary->vid : 0 ;
+      if (!empty($term_lists[$vocabulary->vid]) && !$default_vid && !empty($specification->tids) && empty($form_state['values']['filters']['vocabulary']['vid'])) {
+        $default_vid = count(array_intersect_key($term_lists[$vocabulary->vid], $specification->tids)) ? $vocabulary->vid : 0; 
       }
       $vocabularies_names[$vocabulary->vid] = $vocabulary->name;      
     }
@@ -372,7 +372,7 @@ function node_specifications_form_submit($form, &$form_state) {
     $specification->node_type = NULL;
   }
   
-  if ($form_state['values']['filters']['vocabulary']['vid']) {
+  if (!empty($form_state['values']['filters']['vocabulary']['vid'])) {
     $specification->vid = $form_state['values']['filters']['vocabulary']['vid'];
     if (!empty($form_state['values']['filters']['vocabulary']['terms']['tids'])) {
       if ($terms = taxonomy_term_load_multiple(FALSE, array('vid' => $specification->vid, 'tid' => $form_state['values']['filters']['vocabulary']['terms']['tids']))) {

@@ -1199,6 +1199,10 @@ function social_profile_form_user_profile_form_alter(&$form, &$form_state, $form
 		$form['picture']['picture_clone'] = array(
 		  '#type' => 'managed_file',
 		  '#default_value' => !empty($form['picture']['picture']['#value']) ? $form['picture']['picture']['#value']->fid : NULL,
+			'#upload_validators' => array(
+				'file_validate_extensions' => array('png jpg jpeg gif'),
+        'file_validate_is_image' => array(),
+			),
 		);
 		foreach (array('picture_current', 'picture_delete', 'picture_upload') as $key) {
 		  $form['picture'][$key]['#access'] = FALSE;

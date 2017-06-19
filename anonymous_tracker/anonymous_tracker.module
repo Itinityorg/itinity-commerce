@@ -149,6 +149,7 @@ function _anonymous_tracker_id_from_cookie() {
         '@sum' => !empty($_COOKIE['tracking_checksum']) ? $_COOKIE['tracking_checksum'] : 'NULL',
         '@id' => $_COOKIE['tracking_id'],
       ));
+      unset($_COOKIE['tracking_id']);
     }
   }
 }
@@ -159,11 +160,11 @@ function _anonymous_tracker_id_from_cookie() {
 */
 function _anonymous_tracker_id_to_cookie($tracking_id) {
   if ($tracking_id) {
-    module_invoke_all('anonymous_tracking_cookie_save', $tracking_id, isset($_COOKIE['tracking_id']) ? $_COOKIE['tracking_id'] : NULL);
+    module_invoke_all('anonymous_tracking_cookie_save', $tracking_id, !empty($_COOKIE['tracking_id']) ? $_COOKIE['tracking_id'] : NULL);
     $_COOKIE['tracking_id'] = $tracking_id;
     $_COOKIE['tracking_checksum'] = _anonymous_tracker_cookie_checksum($tracking_id);
-    setrawcookie('tracking_id', $_COOKIE['tracking_id'], REQUEST_TIME + ANONYMOUS_TRACKING_LIFETIME, '/');
-    setrawcookie('tracking_checksum', $_COOKIE['tracking_checksum'], REQUEST_TIME + ANONYMOUS_TRACKING_LIFETIME, '/');
+    setrawcookie('tracking_id', $_COOKIE['tracking_id'], REQUEST_TIME + ANONYMOUS_TRACKING_LIFETIME, base_path());
+    setrawcookie('tracking_checksum', $_COOKIE['tracking_checksum'], REQUEST_TIME + ANONYMOUS_TRACKING_LIFETIME, base_path());
   }
 }
 

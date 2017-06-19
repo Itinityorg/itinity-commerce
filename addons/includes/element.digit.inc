@@ -136,6 +136,7 @@ function addons_validate_digit(&$element, &$form_state) {
 				if (!$has_errors) {
 					$v = preg_replace('/^\./u', '0.', $v);
 					$v = trim($v, '.');
+          $element['#value'] = $v;
 					form_set_value($element, $v, $form_state);
 				}
 			}
