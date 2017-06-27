@@ -97,6 +97,7 @@ function _utils_crawlers_list() {
     'cpython\/' => 'CPython',
     'dycurl\/' => 'PycURL (http://pycurl.io/)',
     'drupal\s+\(\+https?\:\/\/drupal.org\/\)' => 'Drupal engine',
+    'python-requests\/' => 'python requests',
   );
 }
 
