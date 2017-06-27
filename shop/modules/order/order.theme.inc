@@ -6,18 +6,15 @@
 function theme_shop_cart_form($variables) {
 	$rows = array();
 	$items = !empty($variables['shop_cart_form']['items']) ? $variables['shop_cart_form']['items'] : array();
-	$items_qty = 0;
-	$has_images = FALSE;
-  $has_discounts = FALSE;
+	$items_qty = $has_images = $has_discounts = 0;
 	$total_sum = $variables['shop_cart_form']['total_sum']['#value'];
 
 	foreach (element_children($items) as $key) {
     $items_qty += ($qty = isset($items[$key]['qty']['#value']) ? $items[$key]['qty']['#value'] : 0);
-		$rows[$key]['class'] = array('cart-item');
 		$row = array();
 
-    $has_images = $has_images || !empty($items[$key]['image']['#markup']);
-    $has_discounts = $has_discounts || ($items[$key]['original_price']['#value'] != $items[$key]['price']['#value']);
+    $has_images = $has_images || !empty($items[$key]['image']['#markup']) ? 1 : 0;
+    $has_discounts = $has_discounts || ($items[$key]['original_price']['#value'] != $items[$key]['price']['#value']) ? 1 : 0;
 
 		$row['_image'] = array(
 			'data' => $items[$key]['image'],
@@ -36,7 +33,7 @@ function theme_shop_cart_form($variables) {
 			'class' => array('col-price'),
 		);
     $row['_discount'] = array(
-      'data' => round($items[$key]['price']['#value'] * 100 / $items[$key]['original_price']['#value'] - 100) . '%',
+      'data' => $items[$key]['original_price']['#value'] > 0 ? round(($items[$key]['price']['#value'] * 100 / $items[$key]['original_price']['#value']) - 100) . '%' : '-',
       'class' => array('col-price'),
     );
 		$price = ($items[$key]['qty']['#type'] === 'hidden' ? 0 : $items[$key]['price']['#value']) * $items[$key]['qty']['#value'];
@@ -57,7 +54,8 @@ function theme_shop_cart_form($variables) {
 					),
 				'class' => array('col-control'),
 			);
-		}else{
+		}
+    else {
 			$row['_control'] =  array(
 				'data' => array(),
 				'class' => array('col-control'),
@@ -68,10 +66,11 @@ function theme_shop_cart_form($variables) {
 				$row[$idx]['class'][] = $items[$key]['entity_type']['#value'] . '-unpublished';
 			}
 		}
-
-		$rows[$key]['data'] = $row;
+    $rows[$key] = array(
+      'class' => array('cart-item'),
+      'data' => $row,
+    );
 	}
-
 	$shop_cart_form = NULL;
 	if (!empty($variables['shop_cart_form']['add'])) {
 		$shop_cart_form = &$variables['shop_cart_form']['add'];
@@ -79,7 +78,7 @@ function theme_shop_cart_form($variables) {
 			'class' => array('cart-add'),
 			'data' => array(
 				array(
-					'colspan' => $has_images ? 2 : 1,
+					'colspan' => 1 + $has_images + $has_discounts,
 					'data' => '<div class="container-inline">' . drupal_render($shop_cart_form) . drupal_render($variables['shop_cart_form']['add_button']) . '</div>',
 				),
 				array(
@@ -91,12 +90,11 @@ function theme_shop_cart_form($variables) {
 	}
 
 
-  
 	$rows['_summary'] = array(
 		'class' => array('cart-summary',),
 		'data' => array(
 			'_spacer' => array(
-				'colspan' => $has_images ? 3 : 2,
+				'colspan' => 2 + $has_images + $has_discounts,
 				'data' => '&nbsp;',
 			),
 			'_summ' => array(
@@ -136,7 +134,7 @@ function theme_shop_cart_form($variables) {
 			'class' => array('col-control'),
 		),
 	);
-
+  
   foreach (array('_image' => $has_images, '_discount' => $has_discounts) as $key => $flag) {
     if (!$flag) {
       unset($header[$key]);

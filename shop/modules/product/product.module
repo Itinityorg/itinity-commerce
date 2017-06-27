@@ -512,6 +512,20 @@ function product_entity_price_view($entity_type, $entity, $bundle, $view_mode, $
   return $build;
 }
 
+
+/**
+* Implements hook_preprocess_node()
+*/
+function product_preprocess_node(&$variables) {
+  $node = !empty($variables['node']) ? $variables['node'] : NULL;
+  if ($node && shop_get_info('entity_types', 'node', $node->type) && (empty($variables['classes_array']) || !in_array('on-sale', $variables['classes_array']))) {
+    if (($price_summary = shop_build_price('product', $node)) && !empty($price_summary['price']) && $price_summary['price'] > array_sum($price_summary)) {
+      $variables['classes_array'][] = 'on-sale';     
+    }
+  }
+}
+
+
 /**
  * Access callback for /admin/shop/requests
  */
