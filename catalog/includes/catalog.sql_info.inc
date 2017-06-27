@@ -1179,14 +1179,6 @@ function shop_variants_catalog_sql_info($catalog_object) {
   }
 }
 
-function shop_variants_catalog_sql_info_alter(&$sql_info, $catalog_object) {
-  if (shop_get_info('entity_types', $catalog_object->entity_type, $catalog_object->bundle)) {
-    if (!empty($sql_info['filters']['in_stock'])) {
-      $sql_info['filters']['in_stock']['where'] .= ' OR si.variant = si.entity_id';
-    }
-  }
-}
-
 
 function entity_counters_catalog_sql_info($catalog_object) {
   if ($catalog_object->entity_type == 'node') {
