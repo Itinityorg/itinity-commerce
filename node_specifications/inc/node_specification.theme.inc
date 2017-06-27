@@ -187,7 +187,7 @@ function theme_node_specifications_field($variables) {
           break;
 
         default:
-          $var_value = check_plain($field_data) . $unit;
+          $var_value = check_plain($field_data) . ($field['field_type'] === 'number_integer' ? $unit : '');
           $field_values[] = $var_value;
           $field_markup[] = $var_value;
           break;
