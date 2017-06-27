@@ -207,7 +207,7 @@ function money_transaction_save($money_transaction, &$messages = NULL) {
     // Allow modules to alter the money_transaction before saving.
     module_invoke_all('money_transaction_presave', $money_transaction);
     module_invoke_all('entity_presave', $money_transaction, 'money_transaction');
-    if (!$money_transaction->operation || !$money_transaction->operation_key || !$money_transaction->sum) {
+    if (!$money_transaction->operation || !$money_transaction->operation_key || !isset($money_transaction->sum)) {
       $messages[] = t('Not enough options');
     }
     elseif (!money_execute_access($money_transaction->operation, $money_transaction->operation_key, $money_transaction->sum, money_sources_info($money_transaction->source, $money_transaction->source_key), TRUE, $m)) {
