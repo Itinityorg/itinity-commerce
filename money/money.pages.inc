@@ -18,8 +18,6 @@ function money_source_transactions_overview_form($form, &$form_state, $source_in
   if ($source_info) {
     drupal_set_title(t('Money transactions of !source', array('!source' => '<em>' . $source_info['title'] . '</em>')), PASS_THROUGH);
     $form['balance'] = empty($source_info['external']) ? money_balance_widget($source_info) : NULL;
-    $form['refuel'] = money_payment_widget('refuel', !empty($source_info['key']) ? $source_info['key'] : $source_info['source']);
-    $form['refuel']['#title'] = t('Refuel personal balance');
   }
 
   $form['q'] = array(
@@ -109,7 +107,7 @@ function money_transactions_filter_form($form, &$form_state, $source_info) {
       );
     }
     else {
-      $query->condition(db_or()->condition('mt.source', $source_info['source'])->condition('mt.recipient', $source_info['source']));      
+      $query->condition(db_or()->condition('mt.source', $source_info['source'])->condition('mt.recipient', $source_info['source']));
     }
   }
   $query->groupBy('mt.source');
@@ -127,10 +125,10 @@ function money_transactions_filter_form($form, &$form_state, $source_info) {
       $query->condition(db_or()
         ->condition(db_and()->condition('mt.source', $source_info['source'])->condition('mt.source_key', $source_info['key']))
         ->condition(db_and()->condition('mt.recipient', $source_info['source'])->condition('mt.recipient_key', $source_info['key']))
-      );      
+      );
     }
     else {
-      $query->condition(db_or()->condition('mt.source', $source_info['source'])->condition('mt.recipient', $source_info['source']));       
+      $query->condition(db_or()->condition('mt.source', $source_info['source'])->condition('mt.recipient', $source_info['source']));
     }
 
   }
@@ -267,29 +265,40 @@ function money_transactions_filter_form_reset($form, &$form_state) {
 }
 
 
-function money_transactions_list($source_info) {
+function money_transactions_list($source_info = NULL) {
   $params = drupal_get_query_parameters();
 
   $build = array();
 
   $header = array(
-    'id' => array('data' => t('#, date, time'), 'field' => 'mt.id', 'sort' => 'desc',),
-    'uid' => array('data' => t('User'), 'field' => 'username'),
+    'datetime' => array('data' => t('date/time'), 'field' => 'mt.id', 'sort' => 'desc',),
+    'id' => array('data' => t('#'), 'field' => 'mt.timestamp', 'sort' => 'desc',),
     'operation' => array('data' => t('Operation'), 'field' => 'mt.operation_info_snapshot'),
     'source' => array('data' => t('Source'), 'field' => 'mt.source',),
     'arrow' => '&rarr;',
     'recipient' => array('data' => t('Recipient'), 'field' => 'mt.recipient',),
     'sum' => array('data' => t('Sum'), 'field' => 'mt.sum'),
-    'uri' => array('data' => t('Page')),
-    'balance' => array('data' => t('Balance'), 'field' => 'balance',),
   );
+
+  if (module_exists('multicurrency')) {
+    unset($header['sum']);
+    $header['sum_s'] = array('data' => t('Sum<br/><small>source&nbsp;currency</small>'), 'field' => 'mt.sum');
+    $header['sum_r'] = array('data' => t('Sum<br/><small>recipient&nbsp;currency</small>'), 'field' => 'mt.sum');
+  }
+
+  $header += array(
+    'balance' => array('data' => t('Balance', array(), array('context' => 'accounting')), 'field' => 'balance',),
+    'uid' => array('data' => t('Proceeded by'), 'field' => 'username'),
+  );
+
   if (!$source_info || $source_info['external']) {
     unset($header['balance']);
   }
+
   if (!user_access('administer moneys')) {
-    unset($header['uri']);
     unset($header['uid']);
   }
+
   $limit = 30;
   $pager_element = PagerDefault::$maxElement;
   $query = db_select('money_transactions', 'mt')
@@ -311,10 +320,10 @@ function money_transactions_list($source_info) {
     if ($source_info['key']) {
       $db_or = db_or()
         ->condition(db_and()->condition('mt.source', $source_info['source'])->condition('mt.source_key', $source_info['key']))
-        ->condition(db_and()->condition('mt.recipient', $source_info['source'])->condition('mt.recipient_key', $source_info['key']));      
+        ->condition(db_and()->condition('mt.recipient', $source_info['source'])->condition('mt.recipient_key', $source_info['key']));
     }
     else {
-       $db_or = db_or()->condition('mt.source', $source_info['source'])->condition('mt.recipient', $source_info['source']);
+      $db_or = db_or()->condition('mt.source', $source_info['source'])->condition('mt.recipient', $source_info['source']);
     }
 
     $query->condition($db_or);
@@ -323,7 +332,7 @@ function money_transactions_list($source_info) {
     $query->condition('mt.timestamp', $params['timestamp']['min'], '>=');
   }
   if (!empty($params['timestamp']['max'])) {
-    $query->condition('mt.timestamp', $params['timestamp']['max'] + (3600 * 24), '<=');
+    $query->condition('mt.timestamp', $params['timestamp']['max'] + (3600 * 24), '<');
   }
   if (!empty($params['source']['from'])) {
     $query->condition('mt.source', $params['source']['from']);
@@ -344,80 +353,77 @@ function money_transactions_list($source_info) {
   }
 
   $rows = array();
+  $money_transactions = array();
+  $period_profit = array();
+
+  $query->addTag('money_transactions_list');
 
   foreach ($query->execute() as $r) {
     $money_transaction = money_transaction_load($r->id);
-    $link = '-';
+    $money_transactions[$r->id] = $money_transaction;
 
-    if ($money_transaction->uri && ($m = menu_get_item($money_transaction->uri))) {
-      $link = url($m['href']) . '<br /><small><em>' . l('"' . trim($m['title'], '"') . '"', $m['href']) . '</em></small>';
-    }
-    else {
-      $link = url($money_transaction->uri);
-    }
-
-    $op_title = $money_transaction->operation ? money_operations_info($money_transaction->operation, $money_transaction->operation_key, 'title') : NULL;
-    $op_title = $op_title ? $op_title : $money_transaction->operation_info_snapshot;
-
-    $source_title = $money_transaction->source ? money_sources_info($money_transaction->source, $money_transaction->source_key, 'title') : NULL;
-    $source_title = $source_title ? $source_title : $money_transaction->source . ($money_transaction->source_key ? ':' . $money_transaction->source_key : '');
-
-    $recipient_title = $money_transaction->recipient ? money_sources_info($money_transaction->recipient, $money_transaction->recipient_key, 'title') : '-';
-
-    if (arg(0) . '/' . arg(1) . '/' . arg(2) . '/' . arg(3) === 'admin/config/money/transactions') {
-      if ($money_transaction->source && !$money_transaction->source_key) {
-        $source_title = l($source_title, 'admin/config/money/transactions/' . $money_transaction->source, array('html' => TRUE));
+    if ($source_info) {
+      if ($source_info['source'] == $money_transaction->recipient) {
+        $period_profit[$money_transaction->currency] = ($period_profit[$money_transaction->currency] ?? 0) + $r->sum;
       }
-      if ($money_transaction->recipient && !$money_transaction->recipient_key) {
-        $recipient_title = l($recipient_title, 'admin/config/money/transactions/' . $money_transaction->recipient, array('html' => TRUE));
+      else {
+        $period_profit[$money_transaction->currency] = ($period_profit[$money_transaction->currency] ?? 0) - $r->sum;
       }
     }
+
+    $op_title = _money_transactions_list_operation_title_helper($money_transaction);
+    $source_title = _money_transactions_list_source_title_helper($money_transaction, 'source');
+    $recipient_title = _money_transactions_list_source_title_helper($money_transaction, 'recipient');
 
     $is_negative = $source_info ? $money_transaction->source === $source_info['source'] && $money_transaction->source_key == $source_info['key'] : NULL;
 
-    $sum = $money_transaction->sum * 1;
-
-    $rows[$money_transaction->id] = array(
-      'data' => array(
-        'id' => array(
-          'data' => l($money_transaction->id, entity_uri('money_transaction', $money_transaction)['path'], array('attributes' => array('class' => array('ajax-popup',)))) . ', ' . format_date($money_transaction->timestamp),
-        ),
-        'uid' => array(
-          'data' => '',
-        ),
-        'operation' => array(
-          'data' => $op_title,
-        ),
-        'source' => array(
-          'data' => $source_title,
-        ),
-        'arrow' => array(
-          'data' => $header['arrow'],
-        ),
-        'recipient' => array(
-          'data' => $recipient_title ? $recipient_title : $money_transaction->recipient,
-        ),
-        'sum' => array(
-          'data' => ($source_info && !$source_info['external']) ? theme('price', array('price' => $sum)) : format_price($sum),
-          'class' => !$sum ? array('neutral') : ($is_negative ? array('negative') : array('positive')),
-        ),
-      ),
+    $rows[$money_transaction->id]['data']['datetime'] = array(
+      'data' => format_date($money_transaction->timestamp),
+    );
+    $rows[$money_transaction->id]['data']['id'] = array(
+      'data' => l($money_transaction->id, entity_uri('money_transaction', $money_transaction)['path'], array('attributes' => array('class' => array('ajax-popup',)))),
+      'class' => array('rteright'),
     );
 
-    if (user_access('administer moneys')) {
-      $rows[$money_transaction->id]['data']['uri'] = array(
-        'data' => $link,
+    $rows[$money_transaction->id]['data']['operation'] = array(
+      'data' => $op_title,
+    );
+    $rows[$money_transaction->id]['data']['source'] = array(
+      'data' => $source_title,
+    );
+
+    $rows[$money_transaction->id]['data']['arrow'] = array(
+      'data' => $header['arrow'],
+      'class' => array('rtecenter'),
+    );
+    $rows[$money_transaction->id]['data']['recipient'] = array(
+      'data' => $recipient_title ? $recipient_title : $money_transaction->recipient,
+    );
+
+
+    $sum = $money_transaction->sum * 1;
+    if (module_exists('multicurrency')) {
+      $class = array('rteright', (!$sum || !$source_info ? 'neutral' : ($is_negative ? 'negative' : 'positive')));
+
+      $sum_s = _multicurrency_convert_with_rates($sum, 1, $money_transaction->source_currency_rate);
+      $rows[$money_transaction->id]['data']['sum_s'] = array(
+        'data' => theme('price', array('price' => $sum_s, 'currency' => $money_transaction->source_currency)),
+        'class' => $class,
       );
-      if ($r->user_exists) {
-        $rows[$money_transaction->id]['data']['uid']['data'] = theme('entity_link', array('entity_type' => 'user', 'entity' => $r->uid, 'attributes' => array('class' => array('popup',))));
-      }
-      else {
-        $rows[$money_transaction->id]['data']['uid']['data'] = $r->mail ? theme('email', array('email' => $r->mail)) . ' (' . ($r->uid ? 'uid:' . $r->uid : t('Guest')) . ')' : ($r->uid ? 'uid:' . $r->uid : t('Guest'));
-      }
+
+      $sum_r = _multicurrency_convert_with_rates($sum, 1, $money_transaction->recipient_currency_rate);
+      $rows[$money_transaction->id]['data']['sum_r'] = array(
+        'data' => theme('price', array('price' => $sum_r, 'currency' => $money_transaction->recipient_currency)),
+        'class' => $class,
+      );
     }
     else {
-      unset($rows[$money_transaction->id]['data']['uid']);
+      $rows[$money_transaction->id]['data']['sum'] = array(
+        'data' => theme('price', array('price' => $sum, 'currency' => $money_transaction->currency)),
+        'class' => array('rteright', (!$sum || !$source_info ? 'neutral' : ($is_negative ? 'negative' : 'positive'))),
+      );
     }
+
 
     if ($source_info && !$source_info['external']) {
       if (
@@ -426,17 +432,56 @@ function money_transactions_list($source_info) {
         ($money_transaction->recipient === $source_info['source'] && $money_transaction->recipient_key == $source_info['key'])
       ) {
 
-        $class = array('balance');
-        $class[] = !$sum ? 'neutral' : ($is_negative ? 'negative' : 'positive');
+        $class = array('balance', 'rteright');
         $rows[$money_transaction->id]['data']['balance']['class'] = $class;
-        $rows[$money_transaction->id]['data']['balance']['data'] = format_price($r->balance);
+        $rows[$money_transaction->id]['data']['balance']['data'] = theme('price', array('price' => $r->balance, 'currency' => $money_transaction->currency));
       }
       else {
         $rows[$money_transaction->id]['data']['balance']['data'] = '&nbsp;';
       }
+    }
 
+    if (user_access('administer moneys')) {
+      if ($r->user_exists) {
+        $rows[$money_transaction->id]['data']['uid']['data'] = theme('entity_link', array('entity_type' => 'user', 'entity' => $r->uid, 'attributes' => array('class' => array('popup',))));
+      }
+      else {
+        $rows[$money_transaction->id]['data']['uid']['data'] = $r->mail ? theme('email', array('email' => $r->mail)) . ' (' . ($r->uid ? 'uid:' . $r->uid : t('Guest')) . ')' : ($r->uid ? 'uid:' . $r->uid : t('Automatically'));
+      }
+    }
+    else {
+      unset($rows[$money_transaction->id]['data']['uid']);
+    }
+
+  }
+
+  drupal_alter('money_transactions_list', $rows, $source_info, $money_transactions);
+
+  $build['period_profit'] = array(
+    '#type' => 'item',
+    '#title' => t('Period profit'),
+    '#access' => !empty($source_info),
+  );
+
+  if (count($period_profit) == 1) {
+    $currency = key($period_profit);
+    $sum = $period_profit[$currency];
+    $build['period_profit'] += array(
+      '#inline' => TRUE,
+      '#markup' => theme('price', array('price' => $sum, 'currency' => $currency)),
+    );
+  }
+  else {
+    foreach ($period_profit as $currency => $sum) {
+      $build['period_profit'][$currency] = array(
+        '#type' => 'item',
+        '#inline' => TRUE,
+        '#title' => money_currency_info($currency, 'full'),
+        '#markup' => theme('price', array('price' => $sum, 'currency' => $currency)),
+      );
     }
   }
+
   $build['list'] = array(
     '#theme' => 'table',
     '#attributes' => array(
@@ -459,4 +504,29 @@ function money_transactions_list($source_info) {
     unset($GLOBALS['pager_page_array'][$pager_element], $GLOBALS['pager_total'][$pager_element], $GLOBALS['pager_total_items'][$pager_element], $GLOBALS['pager_limits'][$pager_element]);
   }
   return $build;
+}
+
+
+function _money_transactions_list_operation_title_helper($money_transaction) {
+  $money_transaction = is_array($money_transaction) ? (object) $money_transaction : $money_transaction;
+  $op_info = money_operations_info($money_transaction->operation, $money_transaction->operation_key);
+  return $op_info['overview']['title'] ?? $op_info['title'] ?? $money_transaction->operation_info_snapshot ?? t('unknown');
+}
+
+
+/**
+ * @param $money_transaction
+ * @param $key = 'source' || 'recipient'
+ */
+function _money_transactions_list_source_title_helper($money_transaction, $key) {
+  $money_transaction = is_array($money_transaction) ? (object) $money_transaction : $money_transaction;
+  $source = $money_transaction->{$key};
+  $source_key = $key == 'source' ? $money_transaction->source_key : $money_transaction->recipient_key;
+
+  $source_info = money_sources_info($source, $source_key);
+
+  $title = $source_info['overview']['title'] ?? $source_info['title'] ?? ($source . (!$source_key ?: ":{$source_key}"));
+  $description = money_payment_systems_settings($source, 'title') ?? $source_info['overview']['description'] ?? $source_info['description'] ?? NULL;
+
+  return $title . ($description ? "<br/><small>{$description}</small>" : '');
 }

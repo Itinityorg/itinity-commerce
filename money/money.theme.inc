@@ -44,7 +44,7 @@ function theme_price($variables) {
 		$variables['price'] = format_price($price, $variables['currency']);
 	}
 
-  $currency = variable_get('money_default_currency', 'RUB');
+  $currency = $variables['currency'] ?? variable_get('money_default_currency', 'RUB');
 //	if (!empty($variables['currency'])) {
 //		$currency = $variables['currency'];
     $variables['currency'] = format_currency($currency, $variables['format']);
@@ -56,10 +56,11 @@ function theme_price($variables) {
 		if ($key !== 'theme_hook_original') {
 			if (isset($data)) {
 				if ($key === 'price') {
-					$out[$key] = '<span class="shop-item-' . $key . '" ' . ($currency ? 'data-currency="' . $currency . '"' : '') . ' data-price="' . (isset($price) ? $price  : '') . '" style="white-space:nowrap;">' . ($price ? preg_replace('/\s+/', $spacer, trim(check_plain($data))) : '-') . '</span>';
+          $out[$key] = '<span class="shop-item-' . $key . '" ' . ($currency ? 'data-currency="' . $currency . '"' : '') . ' data-price="' . (isset($price) ? $price : '') . '" style="white-space:nowrap;">' . preg_replace('/\s+/', $spacer, trim(check_plain($data))) . '</span>';
+//					$out[$key] = '<span class="shop-item-' . $key . '" ' . ($currency ? 'data-currency="' . $currency . '"' : '') . ' data-price="' . (isset($price) ? $price  : '') . '" style="white-space:nowrap;">' . ($price ? preg_replace('/\s+/', $spacer, trim(check_plain($data))) : '-') . '</span>';
 				}
 				elseif ($key !== 'attributes' && $key !== 'format') {
-					$out[$key] = '<span class="shop-item-' . $key . '">' . ($key == 'currency' ? ' ' : '') . check_plain($data)  . '</span>';
+					$out[$key] = '<span class="shop-item-' . $key . '">' . ($key == 'currency' ? '&nbsp;' : '') . check_plain($data)  . '</span>';
 				}
 			}
 		}

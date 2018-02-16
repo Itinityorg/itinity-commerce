@@ -47,7 +47,7 @@ function shop_orders_form($form, &$form_state, $account = NULL) {
   if ($account) {
     unset($values['uid']);
   }
-  
+
 	// filters row
 	$form['orders']['filters'] = array_combine(array_keys($header), array_pad(array(), count($header), array())); // create array with keys form $header
 	$form['orders']['filters']['created'] = array(
@@ -87,7 +87,7 @@ function shop_orders_form($form, &$form_state, $account = NULL) {
       '#selector_entity_type' => 'user',
       '#size' => 10,
       '#default_value' => !empty($values['uid']) ? $values['uid'] : NULL,
-    );    
+    );
   }
 
 
@@ -232,7 +232,7 @@ function shop_orders_form($form, &$form_state, $account = NULL) {
 
     $sum = array_sum(shop_build_price('order', $order_node, $order_node->uid));
 		$row['total_sum'] = $sum ? theme('price', array('price' => $sum)) : '&nbsp;';
-		$row['delivery_method'] = $order_node->delivery_method ? check_plain(shop_delivery_info($order_node->delivery_method, 'title')) : '&nbsp;';
+		$row['delivery_method'] = $order_node->delivery_method ? check_plain(shop_delivery_info($order_node, $order_node->delivery_method, 'title')) : '&nbsp;';
     $row['is_paid'] = array();
 		if (!$order_node->is_paid) {
       $title = $order_node->payment_method ? money_sources_info($order_node->payment_method, NULL, 'title') : NULL;
@@ -243,8 +243,10 @@ function shop_orders_form($form, &$form_state, $account = NULL) {
 //					$source = $order_node->payment_method ? money_sources_info($order_node->payment_method, $order_node->uid) : NULL;
 					$source = money_sources_info($order_node->payment_method, $order_node->uid);
 					if ($money_payment_widget = money_payment_widget('order', $order_node->nid, array_sum($sum), $source)) {
-						$money_payment_widget['#title'] = t('Make payment');
-						$money_payment_widget['#attributes']['target'] = '_blank';
+            if (user_access('administer moneys')) {
+              $money_payment_widget['#title'] = t('Make payment');
+              $money_payment_widget['#attributes']['target'] = '_blank';
+            }
 						$row['is_paid'][] = drupal_render($money_payment_widget);
 					}
         }
@@ -254,11 +256,11 @@ function shop_orders_form($form, &$form_state, $account = NULL) {
       // Order is paid
       $row['is_paid'][] = t('Paid');
       foreach (money_transaction_load_multiple(FALSE, array('operation' => 'order', 'operation_key' => $order_node->nid)) as $t) {
-        $row['is_paid'][] = '(' . 
+        $row['is_paid'][] = '(' .
         theme('entity_link', array(
-          'entity_type' => 'money_transaction', 
-          'entity' => $t, 
-          'text' => format_date($t->timestamp, 'custom', 'd.m.y'), 
+          'entity_type' => 'money_transaction',
+          'entity' => $t,
+          'text' => format_date($t->timestamp, 'custom', 'd.m.y'),
           'attributes' => array('class' => array('ajax-popup',)),
           )) . ', ' .
         theme('username', array('account' => user_load($t->uid))) . ')';
@@ -294,7 +296,7 @@ function shop_orders_form($form, &$form_state, $account = NULL) {
 			),
 			'query' => drupal_get_destination()
 		)) : '';
-		
+
 		/*delete order*/
 		$row['actions'][] = node_access('delete', $order_node) ? l(theme('pictogram', array('icon' => 'trash')), 'node/' . $order_node->nid . '/delete', array(
 			'html' => TRUE,
@@ -304,9 +306,9 @@ function shop_orders_form($form, &$form_state, $account = NULL) {
 			),
 			'query' => drupal_get_destination()
 		)) : '';
-		
+
 		$row['actions'] = implode(' ', $row['actions']);
-		
+
 		if (module_invoke('status', 'get_settings', 'node', 'order')) {
 			$status_field = status_view_status_field($order_node, array('title_display' => 'invisible', 'status_change_links' => STATUS_CHANGE_LINKS_NEXT,));
 			$row['status_field'] = render($status_field['status_field']);

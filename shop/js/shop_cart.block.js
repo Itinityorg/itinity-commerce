@@ -1,193 +1,182 @@
-(function ($) {
+(function($) {
   'use strict';
+  /**
+  * Process shop cart block
+  * @see shop_carts_block_form()
+  */
+  Drupal.behaviors.shopCartsBlock = {
+    attach: function(context, settings) {
 
-  Drupal.behaviors.cart_block = {
-    attach: function (context, settings) {
-
-      function shopCartKey(entity_type, entity_id, qty) {
-        return entity_type + ':' + entity_id + ':' + qty;
-      }
-
-      function _shop_cart_ajax(url, async, $form, extra_data, success) {
-        var data = $form.serialize() + (extra_data ? '&' + extra_data : '');
+      /**
+      * Helper func for valid html ids generation on backend @see drupal_html_id()
+      */
+      function getAllHtmlIds() {
         var ids = [];
         $('[id]').each(function () {
           ids.push(this.id);
         });
-        data += '&ajax_html_ids[]=' + encodeURIComponent(ids.join(','));
+        return '&ajax_html_ids[]=' + encodeURIComponent(ids.join(','));
+      }
+
+      /**
+      * Handle shop cart changes, submit it to server and reload html parts such as shop cart block and product-buy-buttons forms on current page
+      */
+      function shopCartBlockFormAjax($shopCartForm, $clickedButton) {
+        var data = $shopCartForm.serialize();
+        data += getAllHtmlIds(); // Post HTML ids to server @see drupal_html_id()
+        
+        if ($clickedButton) {
+          data += '&' + encodeURIComponent($clickedButton.attr('name')) + '=' + encodeURIComponent($clickedButton.val());
+        }
+
+        var buyButtonFormClicked = $('form.buy-button-form.purchase-action-stay.clicked-form').removeClass('clicked-form').length;
+
         $.ajax({
-          async: async,
+          async: false,
           cache: false,
-          url: url,
+          url: $shopCartForm.data('reload_block_url'),
           data: data,
           dataType: 'json',
           type: 'POST',
-          success: success,
-          error: function (jqXHR, textStatus) {
-          }
+          success: function(response) {
+            var $newBlock = $(response.block);
+            var $messages = response.messages.length ? $(response.messages) : null;
+            if (!buyButtonFormClicked && $messages) {
+              $messages.css('width', $shopCartForm.closest('.content').css('width')).prependTo($('.content', $newBlock));
+              setTimeout(function() {
+
+                  $messages.slideUp(function() {
+                    $messages.remove();
+                  });
+              }, 2000);
+            }
+            $shopCartForm.closest('.block').replaceWith($newBlock);
+            Drupal.attachBehaviors($newBlock.parent(), response[0].settings);
+            // overwrite variable because replaceWith() returns OLD DOM object, NOT new:
+            $shopCartForm = $('form.shop-cart-wrapper', $newBlock);
+            $.each(response.touched, function (idx, item) {
+              // Highlight added/modified items
+              $('tr#cart-item-' + item[0] + '-' + item[1], $shopCartForm).addClass('js-recent');
+              $('form.buy-button-form[data-product-entity-type="' + item[0] + '"][data-product-entity-id="' + item[1] +'"]').each(function() {
+                var $buyForm = $(this);
+                var data = 'entity_type=' + $buyForm.data('product-entity-type')
+                    + '&entity_id=' + $buyForm.data('product-entity-id')
+                    + '&bundle=' + $buyForm.data('product-bundle')
+                    + '&view_mode=' + $buyForm.data('product-view-mode')
+                    + '&is_secondary=' + $buyForm.data('product-is-secondary')
+                    + getAllHtmlIds();
+                $.ajax({
+                  async: true,
+                  cache: false,
+                  url: $shopCartForm.data('buy_button_form_url'),
+                  data: data,
+                  dataType: 'json',
+                  type: 'POST',
+                  success: function(response) {
+                    var $newForm = $(response.form);
+                    if (buyButtonFormClicked && $messages) {
+                      $messages.prependTo($newForm);
+                      setTimeout(function() {
+                          $messages.slideUp(function() {
+                            $messages.remove();
+                          });
+                      }, 2000);
+                    }
+                    $buyForm.replaceWith($newForm);
+                    Drupal.attachBehaviors($newForm.parent(), response[0].settings);
+                  },
+                  error: function (jqXHR, textStatus, errorThrown) {}
+                });
+              });
+            });
+          },
+          error: function (jqXHR, textStatus, errorThrown) {}
         });
       }
 
-      $('.block.block-shop form.shop-cart-wrapper', context).once('shop-cart-block', function () {
-        var $shop_cart_form = $(this);
-        var $block = $shop_cart_form.closest('.block-shop');
-        var $button = $('.form-actions input[name="op"].form-submit.default-submit', $shop_cart_form);
-        if ($button.length) {
-          $button.addClass('ajax-processed').click(function (e) {
-            e.preventDefault();
-            _shop_cart_ajax(settings.shop_cart.block_uri, false, $shop_cart_form, encodeURIComponent($button.attr('name')) + '=' + encodeURIComponent($button.val()), function (response) {
-              var $new_block = $(response.block);
-
-              $.each(response.touched, function (idx, item) {
-                // Highlight added/modified items
-                $('tr#cart-item-' + item[0] + '-' + item[1], $new_block).addClass('js-recent');
-              });
-
-              // response.touched contains list of goods that was added/modified or deleted at last action @see _shop_cart_ajax()
-              if (response.touched) {
-                $('form.buy-button-form').each(function () {
-                  var $form = $(this);
-                  var entity_type = $form.attr('data-product-entity-type');
-                  var entity_id = $form.attr('data-product-entity-id');
-                  var key = shopCartKey(entity_type, entity_id, '');
-                  var touched_idx = null;
-
-                  $.each(response.touched, function (idx, item) {
-                    if (idx.indexOf(key) >= 0) {
-                      touched_idx = idx;
-                      return false;
-                    }
-                  });
-
-                  if (response.touched[touched_idx]) {
-                    var extra_data = 'entity_id=' + entity_id
-                      + '&entity_type=' + entity_type
-                        //+ '&snapshot_id=' + snapshot_id
-                      + '&bundle=' + $form.attr('data-product-bundle')
-                      + '&view_mode=' + $form.attr('data-product-view-mode')
-                      + '&is_secondary=' + $form.attr('data-product-is-secondary');
-                    _shop_cart_ajax(settings.shop_cart.payment_button_form_uri, true, $form, extra_data, function (response2) {
-                      var $new_form = $(response2.form);
-                      if (response.messages && $form.hasClass('messages-target')) {
-                        $(response.messages).prependTo($new_form);
-                        response.messages = '';
-                      }
-                      $form.replaceWith($new_form);
-                      Drupal.attachBehaviors(null, response2[0].settings);
-                    });
-                  }
-                });
-              }
-              if ($(response.messages).length && !$('form.messages-target').length) {
-                $(response.messages).addClass('shop-cart-container').prependTo($new_block.find('form.shop-cart-wrapper>div'));
-              }
-
-              $block.replaceWith($new_block);
-              Drupal.attachBehaviors(null, response[0].settings);
-            });
-          });
-
-          $('.col-delete input.form-submit', $shop_cart_form).click(function (e) {
-            e.preventDefault();
-            $button.val($(this).val()).attr('name', $(this).attr('name')).click();
-          });
-          $('.col-qty input.form-text', $shop_cart_form).change(function (e) {
-            if (!$('.col-delete input:focus', $(this).closest('tr')).length) {
-              $button.click();
-            }
-          }).keypress(function (e) {
-            if (e.which == 13) { // Avoid delete button click on enter key pressed
-              e.preventDefault();
-              $button.click();
-            }
-          });
-
-          $('.col-qty input.form-text', $shop_cart_form).focus(function (e) {
-            $(this).select();
-          });
-
-        }
+      $('.block.block-shop-cart', context).once('shop-cart-block', function() {
+        var $shopCartForm = $('form.shop-cart-wrapper', this);
+        var $submitButton = $('.form-actions input[name="op"].default-submit:last', $shopCartForm);
+        $('td.col-qty input.form-digit', $shopCartForm).change(function(e) {
+          $submitButton.click();
+        });
+        $('.col-delete input.form-submit', $shopCartForm).click(function(e) {
+          e.preventDefault();
+          shopCartBlockFormAjax($shopCartForm, $(this));
+        }); 
+        $submitButton.click(function(e) {
+          e.preventDefault();
+          shopCartBlockFormAjax($shopCartForm, $(this));
+        });
       });
 
-      $('form.buy-button-form.purchase-action-stay input[type="submit"].form-submit.default-submit', context).once('shop-cart-block', function () {
-        $(this).click(function (e) {
-          var $shop_cart_form = $('.block.block-shop form.shop-cart-wrapper', context);
-          var $block = $shop_cart_form.closest('.block-shop');
-          if ($shop_cart_form.length) {
-            e.preventDefault();
-            var $form = $(this).closest('form').removeClass('messages-target');
-            var $qty = $('input[name="qty"]', $form);
-            var qty = $qty.length ? $qty.val() : 1;
-            if (qty) {
-              $(this).attr('disabled', true);
-              var entity_type = $('input[name="entity_type"]', $form).val();
-              var entity_id = $('input[name="entity_id"]', $form).val();
-              //var snapshot_id = $('input[name="snapshot_id"]', $form).val();
-              // fill hidden textfield
-              //$('input[name="add"]', $shop_cart_form).val(entity_type + ':' + entity_id + ':' + snapshot_id + ':' + qty);
-              $('input[name="add"]', $shop_cart_form).val(shopCartKey(entity_type, entity_id, qty));
 
-              // Move good into cart animated effects
-              // find main wrapper for current good
-              var $product_wrapper = $form.closest('.content');
-              if ($product_wrapper.parent().hasClass('block')) { // case of ".block>div.content" (legacy support ?)
-                $product_wrapper = $form.parent();
+      $('form.buy-button-form.purchase-action-stay', context).once('shop-cart-buy-button-form', function() {
+        var $buyForm = $(this);
+        $('input.form-submit.default-submit:not(.ajax-processed)', $buyForm).click(function(e) {
+          e.preventDefault();
+          $buyForm.addClass('clicked-form');
+          var $shopCartForm = $('.block.block-shop-cart form.shop-cart-wrapper');
+          if ($shopCartForm.length) {
+            // Fill hidden textfield for submission to server @see shop_carts_block_form_submit()
+            var entity_type = $buyForm.data('product-entity-type');
+            var entity_id = $buyForm.data('product-entity-id');
+            $('input[name="add"]', $shopCartForm).val([entity_type, entity_id, $('input[name="qty"]', $buyForm).val() || 1].join(':'));
+            
+            // Animated flying good into basket
+            var $movableObject = {};
+            var $receiver = {};
+            // Find preferred movable element
+            $.each(['.field-type-image .field-item img', '.image-block-gallery img', '.node-title', '.form-item-qty', '.product-price', 'form.buy-button-form'], function (idx, selector) {
+              if (($movableObject = $(selector + ':visible:first', $buyForm.closest('.content'))).length) {
+                return false; // break each()
               }
-              var movable_source = {};
-              // Find preferred movable element
-              $.each(['.field-type-image .field-item img', '.image-block-gallery img', '.node-title', '.form-item-qty', '.product-price', 'form.buy-button-form'], function (idx, selector) {
-                if ((movable_source = $(selector + ':visible:first', $product_wrapper)).length) {
-                  return false;
-                }
-              });
-              if (movable_source.length) {
-                // find receiver element
-                var $receiver = $('table.shop-cart-items-list:visible tr#cart-item-' + entity_type + '-' + entity_id, $shop_cart_form);
+            });
+            if ($movableObject.length) {
+               // find preferred receiver element
+              $receiver = $('table.shop-cart-items-list:visible tr#cart-item-' + entity_type + '-' + entity_id + ' td:first:visible', $shopCartForm);
+              if (!$receiver.length) {
+                $receiver = $('.shop-cart-block-caption:visible', $shopCartForm).first();
                 if (!$receiver.length) {
-                  $receiver = $('.shop-cart-block-caption:visible', $shop_cart_form).first();
-                  if (!$receiver.length) {
-                    $receiver = $shop_cart_form.is(':visible') ? $shop_cart_form : $block;
-                  }
+                  $receiver = $shopCartForm.is(':visible') ? $shopCartForm : $shopCartForm.closest('.block');
                 }
-
-                movable_source // clone item and place before original
-                  .clone()
-                  .addClass('shop-item-movable') // see shop.css
-                  .appendTo('body')
-                  .css({
-                    width: Math.min(movable_source.width(), $receiver.width()),
-                    height: Math.min(movable_source.height(), $receiver.height()),
-                    left: movable_source.offset().left + 'px',
-                    top: movable_source.offset().top + 'px',
-                    'font-size': movable_source.css('font-size')
-                  })
-                  .animate({ // move item into cart block
-                    opacity: 0.3,
-                    left: $receiver.offset().left,
-                    top: $receiver.offset().top
-                  }, 500, function () { // moving completed.
-                    $(this).remove();
-                    // Call main ajax routines in block form:
-                    $form.addClass('messages-target');
-                    $('input[name="op"].form-submit.ajax-processed', $shop_cart_form).click();
-
-                  });
               }
-              else {
-                $('input[name="op"].form-submit.ajax-processed', $shop_cart_form).click();
-              }
-
             }
+            if ($movableObject.length && $receiver.length) {
+              // clone item and place it to <body>
+              $movableObject
+                .clone()
+                .addClass('shop-item-movable') // see shop.css
+                .appendTo('body')
+                .css({
+                  left: $movableObject.offset().left + 'px',
+                  top: $movableObject.offset().top + 'px',
+                  width:  $movableObject.width(),
+                  height:  $movableObject.height(),
+                  'font-size': $movableObject.css('font-size') // copy font size from original because element placed into <body>
+                })
+                .animate({ // move item into cart block
+                  opacity: 0.7,
+                  left: $receiver.offset().left,
+                  top: $receiver.offset().top,
+                  width: $receiver.width(),
+                  height: $receiver.height()
+                }, 500, function () { // animation complete
+                  $(this).remove();
+                  // Call main ajax routines in block form:
+                  $('.form-actions input[name="op"].default-submit:last', $shopCartForm).click(); 
+                });        
+            }
+            else {
+              $('.form-actions input[name="op"].default-submit:last', $shopCartForm).click(); 
+            }
+
           }
         });
       });
     }
   };
 })(jQuery);
-
-
-
-
 
 
 

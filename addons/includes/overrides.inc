@@ -454,7 +454,13 @@ function _addons_theme_username_override($variables) {
 			}
 			if (!empty($filepath)) {
 				$alt = t("@user's picture", array('@user' => format_username($account)));
-				$img = theme('image', array(
+        $style = !empty($variables['picture_style']) ? $variables['picture_style'] : NULL;
+        
+        $style = $style ? $style : (module_exists('features') ? '56x42' : 'thumbnail');
+        
+        $img = theme('user_picture', array('account' => $account, 'style' => $style, 'height' => $style ? NULL : 32));
+        $img = preg_replace('/\sclass="(.*?)"/u', ' class="$1 username-image"', $img);
+				/*$img = theme('image', array(
 					'path'   => $filepath,
 					'alt'    => $alt,
 					'title'  => $alt,
@@ -462,7 +468,7 @@ function _addons_theme_username_override($variables) {
 					'attributes' => array(
 						'class' => array('username-image'),
 					),
-				));
+				));*/
 				if ($variables['profile_access']) {
 					$opts = array('html' => TRUE) + $variables['link_options'];
 					unset($opts['attributes']['class']);

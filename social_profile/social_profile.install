@@ -35,6 +35,7 @@ function social_profile_uninstall() {
   db_drop_field('users', 'phone');
   variable_del('social_profile_terms_of_service');
   variable_del('social_profile_phone_unique');
+  variable_del('social_profile_empty_user_picture_gamma');
   foreach (db_query('SELECT uid, data FROM {users} WHERE uid') as $r) {
     if (!empty($r->data)) {
       if ($r->data = @unserialize($r->data)) {

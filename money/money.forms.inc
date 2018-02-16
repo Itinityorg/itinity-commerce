@@ -1,13 +1,17 @@
 <?php
 
 /**
-* Callback for /money/payment/%/%
-*/
+ * Callback for /money/payment/%/%
+ */
 function money_payment_form($form, &$form_state, $operation, $operation_key, $sum = NULL, $source = NULL, $source_key = NULL) {
-  
   $source_info = $source ? money_sources_info($source, $source_key) : NULL;
   $sum *= 1;
   $msgs = array();
+
+  $recipient = money_operation_get_recipient($operation, $operation_key);
+  $currency = $recipient['currency'] ?? variable_get('money_default_currency', 'RUB');
+  $currency_info = money_currency_info($currency);
+
   if (!$source_info) {
     $available_sources = _money_available_sources($operation, $operation_key, $sum, TRUE);
 
@@ -18,7 +22,7 @@ function money_payment_form($form, &$form_state, $operation, $operation_key, $su
 
   $form['#money_source_info'] = $source_info;
 
-  drupal_set_title(filter_xss(money_operations_info($operation, $operation_key, 'title'), array('em', 'a', )), PASS_THROUGH);
+  drupal_set_title(filter_xss(money_operations_info($operation, $operation_key, 'title'), array('em', 'a',)), PASS_THROUGH);
   $form['operation_descr'] = array(
     '#type' => 'item',
     '#title' => t('Operation'),
@@ -49,44 +53,58 @@ function money_payment_form($form, &$form_state, $operation, $operation_key, $su
     '#type' => 'digit',
     '#inline' => TRUE,
     '#title' => t('Sum to paid'),
-    '#min' => $sum && ($operation != 'refuel') ? $sum : 0.01,
-    '#max' => $sum && ($operation != 'refuel') ? $sum : 99999999.99,
-    '#step' => 1,
-    '#default_value' => $sum ? $sum : NULL,
+    '#min' => $sum && ($operation != 'refuel') ? $sum : pow(10, -1 * $currency_info['decimals']),
+    '#max' => $sum && ($operation != 'refuel') ? $sum : 99999999,
+    '#step' => pow(10, -1 * $currency_info['decimals']),
+    '#validate_step' => TRUE,
+    '#default_value' => $sum ?? NULL,
     '#required' => TRUE,
-    '#size' => $sum ? strlen(format_price($sum)) : 6,
+    '#size' => $sum ? drupal_strlen(format_price($sum)) : 10,
   );
+
+  $form['currency'] = array(
+    '#type' => 'value',
+    '#value' => $currency,
+  );
+
   if ($form['sum']['#min'] == $form['sum']['#max']) {
     $form['sum']['#attributes']['class'][] = 'element-invisible';
-    $form['sum']['#field_suffix'] = theme('price', array('price' => $sum, 'currency' => variable_get('money_default_currency', 'RUB')));
+    $form['sum']['#field_suffix'] = theme('price', array('price' => $sum, 'currency' => $currency));
   }
   else {
-    $form['sum']['#field_suffix'] = format_currency(variable_get('money_default_currency', 'RUB'));
+    $form['sum']['#field_suffix'] = format_currency($currency);
   }
   $submit_text = t('Continue');
   if (!$source_info || !$sum) { // $source not specified, sum not covered with user cash balance:
-    $opts = array();
-    foreach (money_sources_info() as $info) {
-      //$fn = $item['module'] . '_payment_form_callback';
-      if (/*function_exists($fn) && */money_execute_access($operation, $operation_key, $sum, $info, TRUE)) {
-        $opts[$info['source']] = money_sources_info($info['source'], $info['key'], 'title');
-      }
-    }
-    if(!$opts) {
+    $available_sources = _money_available_sources($operation, $operation_key, $sum, TRUE);
+    $opts = array_column($available_sources, 'title', 'source');
+
+    if (!$opts) {
       drupal_access_denied();
       drupal_exit();
     }
-    $last_source = NULL;
+
+    $default_value = $source_info ? $source_info['source'] : NULL;
     $form['source'] = array(
       '#title' => t('Payment method'),
       '#inline' => TRUE,
       '#required' => TRUE,
       '#type' => 'radios',
       '#options' => $opts,
-      '#default_value' => count($opts) == 1 ? key($opts) : $last_source,
+      '#default_value' => count($opts) == 1 ? key($opts) : $default_value,
+    );
+
+    if($source_info) { // hide radios if $source_info is set
+      $form['source']['#prefix'] = "<div class='element-invisible'>";
+      $form['source']['#suffix'] = "</div>";
+    }
+
+    $form['source_key'] = array(
+      '#type' => 'value',
+      '#value' => $source_info ? $source_info['key'] : NULL,
     );
   }
-  else { // $source specified:
+  else { // $source and $sum are specified:
     $fn = money_sources_info($source_info['source'], $source_info['key'], 'module') . '_payment_form_callback';
     if (function_exists($fn)) {
       $submit_text = t('Pay');
@@ -166,9 +184,33 @@ function money_payment_form($form, &$form_state, $operation, $operation_key, $su
   if (!empty($form['source']['#options'])) {
     $form['actions']['submit']['#states']['visible']['input[name="source"]']['checked'] = TRUE;
   }
+
   return $form;
 }
 
+
+function _money_hold_page($operation, $operation_key, $sum = NULL, $source = NULL, $source_key = NULL) {
+  $source = money_sources_info($source, $source_key);
+  money_hold($operation, $operation_key, $sum, $source);
+  drupal_goto(drupal_get_destination());
+}
+
+
+function _money_unhold_page($operation, $operation_key, $source = NULL, $source_key = NULL) {
+  $attributes = drupal_get_query_parameters();
+  $token = $attributes['token'] ?? NULL;
+
+
+  if (drupal_valid_token($token, "money-unhold-{$operation}-{$operation_key}-{$source}-{$source_key}")) {
+    $source_info = money_sources_info($source, $source_key);
+    money_unhold($operation, $operation_key, $source_info);
+  }
+  else {
+    drupal_set_message(t('Invalid token!'), 'error');
+  }
+
+  drupal_goto(drupal_get_destination());
+}
 
 /**
  * Implements hook_form_BASE_FORM_ID_alter().
@@ -189,10 +231,11 @@ function money_form_money_payment_form_alter(&$form, &$form_state, $form_id) {
     else {
       $fn = money_sources_info($source_info['source'], $source_info['key'], 'module') . '_payment_form_callback';
       if (function_exists($fn)) {
-        $form['data'] = array(
+        $form += array('data' => array());
+        $form['data']['#tree'] = TRUE;
+        $form['data'] += array(
             '#type' => 'item',
-            '#title' => t('Payment method: %name', array('%name' => $source_info['title'])),
-            '#tree' => TRUE,
+            '#title' => t('Payment method: !name', array('!name' => $source_info['title'])),
           ) + call_user_func($fn, $operation, $operation_key, $sum, $source_info);
       }
     }
@@ -211,18 +254,21 @@ function money_payment_form_validate($form, &$form_state) {
 
 function money_payment_form_submit($form, &$form_state) {
 
-  $fn = money_sources_info($form_state['values']['source'], isset($form_state['values']['source_key']) ? $form_state['values']['source_key'] : NULL, 'module') . '_payment_form_callback';
+  $fn = money_sources_info($form_state['values']['source'], $form_state['values']['source_key'] ?? NULL, 'module') . '_payment_form_callback';
 
   // User choosed source and press Continue and source payment form callback is exists:
   if (isset($form['source']['#options'][$form_state['values']['source']]) && function_exists($fn)) {
-    $redirect = 'money/payment/' . $form_state['values']['operation'] . '/' . $form_state['values']['operation_key'];
-//    $dest = $_GET['q'] . (isset($_GET['destination']) ? '?destination=' . $_GET['destination'] : '');
-    $dest = isset($_GET['destination']) ? $_GET['destination'] : '';
+    $op = $form_state['values']['operation'];
+    $op_key = $form_state['values']['operation_key'];
+    $sum = $form_state['values']['sum'];
+    $source = $form_state['values']['source'];
+    $source_key = $form_state['values']['source_key'];
+
+    $redirect = "money/payment/{$op}/{$op_key}/{$sum}/{$source}/{$source_key}";
+    $destination = $_GET['destination'] ?? '';
     unset($_GET['destination']);
-    drupal_goto(
-      $redirect . '/' . $form_state['values']['sum'] . '/' . $form_state['values']['source'],
-      array('query' => array('destination' => $dest))
-    );
+
+    drupal_goto($redirect, array('query' => array('destination' => $destination)));
   }
   else {
     money_transaction_begin();
@@ -230,9 +276,10 @@ function money_payment_form_submit($form, &$form_state) {
       'operation' => $form_state['values']['operation'],
       'operation_key' => $form_state['values']['operation_key'],
       'sum' => $form_state['values']['sum'],
+      'currency' => $form_state['values']['currency'] ?? variable_get('money_default_currency', 'RUB'),
       'source' => $form_state['values']['source'],
-      'source_key' => isset($form_state['values']['source_key']) ? $form_state['values']['source_key'] : NULL,
-      'data' => !empty($form_state['values']['data']) ? $form_state['values']['data'] : NULL,
+      'source_key' => $form_state['values']['source_key'] ?? NULL,
+      'data' => $form_state['values']['data'] ?? NULL,
     ));
     $result = money_transaction_save($money_transaction, $m);
     money_transaction_finish();
@@ -247,24 +294,3 @@ function money_payment_form_submit($form, &$form_state) {
     }
   }
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-

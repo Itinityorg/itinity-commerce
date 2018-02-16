@@ -8,27 +8,32 @@ function catalog_page($catalog_object, $term = NULL) {
   if (empty($catalog_object->cid)) {
     // We have virtual catalog object (created at runtime). This object not guaranteed contains all fields like dtatabse columns
     // Fill missing
-    $catalog_object = (array)$catalog_object;
-    $catalog_object += array(
-        'status' => 1,
-        'orders' => array(),
-        'cid' => 0,
-        'tid' => NULL,
-        'vid' => NULL,
-        'is_block' => 0,
-        'title' => NULL,
-        'menu_name' => NULL,
-        'materials_settings' => array(),
-        'description' => NULL,
-        'format' => NULL,
-        'filters' => array(),
-        //'table_view' => FALSE,
-        //'cols' => 1,
-        //'rows' => 10,
-      //  'zoom' => NULL,
-        //'center' => NULL,
+    
+    $missing = array(
+      'status' => 1,
+      'orders' => array(),
+      'cid' => 0,
+      'tid' => NULL,
+      'vid' => NULL,
+      'is_block' => 0,
+      'title' => NULL,
+      'menu_name' => NULL,
+      'materials_settings' => array(),
+      'description' => NULL,
+      'format' => NULL,
+      'filters' => array(),
+      //'table_view' => FALSE,
+      //'cols' => 1,
+      //'rows' => 10,
+    //  'zoom' => NULL,
+      //'center' => NULL,    
     );
-    $catalog_object = (object)$catalog_object;
+    foreach ($missing as $n => $v) {
+      if (!property_exists($catalog_object, $n)) {
+        $catalog_object->{$n} = $v;
+      }
+    }
+
   }
   if (isset($_GET['feed']) && $catalog_object->entity_type === 'node') {
     $catalog_object->depth = 0;
@@ -89,7 +94,7 @@ function catalog_page($catalog_object, $term = NULL) {
   }
 
   // Case of /catalog/4/50 and catalog settings not attached to term or vid
-  if ($term && !$catalog_object->vid && !$catalog_object->tid && arg(1, $_GET['q']) == $catalog_object->cid && arg(2, $_GET['q'])) {
+  if ($term && !$catalog_object->vid && !$catalog_object->tid && arg(0) === 'catalog' && arg(1) == $catalog_object->cid && arg(2)) {
     menu_set_active_item('catalog/' . $catalog_object->cid);
   }
 
@@ -201,8 +206,9 @@ function catalog_page($catalog_object, $term = NULL) {
     $q = $_GET;
     unset($q['q']);
     ksort($q);
-    drupal_add_html_head_link(array('rel' => 'canonical', 'href' => url($uri, array('query' => $q))), TRUE);
     drupal_add_html_head_link(array('rel' => 'shortlink', 'href' => url($uri, array('query' => $q, 'alias' => TRUE,))), TRUE);
+    unset($q['page']); // A.Lazarev wish 18 dec. 2017: Ќа всех страницах пагинации указать атрибут rel="canonical" на первую (основную) страницу.
+    drupal_add_html_head_link(array('rel' => 'canonical', 'href' => url($uri, array('query' => $q))), TRUE);
   }
 
 
@@ -213,7 +219,7 @@ function catalog_page($catalog_object, $term = NULL) {
 
 
 function catalog_object_build_content($catalog_object, $view_mode = NULL, $term = NULL) {
-
+  $catalog_object->cid = $catalog_object->cid ?? NULL;
   $catalog_object->content = array(
     '#entity_type' => 'catalog_object',
     '#bundle' => $catalog_object->cid,
@@ -338,7 +344,7 @@ function catalog_object_build_content($catalog_object, $view_mode = NULL, $term 
 
   // extra field:
   // Display "description" extra field only where not is block, and we in top level or view mode is customized
-  if (!$catalog_object->is_block && (!empty($field_bundle_settings['view_modes'][$view_mode]['custom_settings']) || $view_mode === 'level_0')) {
+  if (empty($catalog_object->is_block) && (!empty($field_bundle_settings['view_modes'][$view_mode]['custom_settings']) || $view_mode === 'level_0')) {
     if (!empty($extra_fields_display_settings['description']['visible'])) {
       $description = $catalog_object->description;
       $format = $catalog_object->format;
@@ -358,11 +364,13 @@ function catalog_object_build_content($catalog_object, $view_mode = NULL, $term 
       if (!filter_format_load($format)) {
         $format = filter_fallback_format();
       }
-      $catalog_object->content['description'] = array(
-        '#type' => 'container',
-        '#attributes' => array('class' => array('field', 'catalog-description')),
-        array('#markup' => check_markup($description, $format),),
-      );
+      if ($description) {
+        $catalog_object->content['description'] = array(
+          '#type' => 'container',
+          '#attributes' => array('class' => array('field', 'catalog-description')),
+          array('#markup' => check_markup($description, $format),),
+        );
+      }
     }
 
   }
@@ -374,13 +382,44 @@ function catalog_object_build_content($catalog_object, $view_mode = NULL, $term 
        */
     // extra field:
   if (!empty($extra_fields_display_settings['object']['visible'])) {
-    $catalog_object->content['object'] = $term ? taxonomy_term_view($term, 'full') : NULL;//$term ? _catalog_entity_view($term, 'taxonomy_term', $term->tid) : NULL;
+    $catalog_object->content['object'] = NULL;
+    if ($term) {
+      $m = addons_extra_field_get_settings('catalog_object', $catalog_object->cid, 'display', $view_mode, 'object', 'view_mode');
+      $catalog_object->content['object'] = taxonomy_term_view($term, $m ? $m : 'full');      
+    }
+  }
+  if (!empty($extra_fields_display_settings['parent']['visible'])) {
+    $catalog_object->content['parent'] = NULL; 
+    if ($term && ($parent_terms = taxonomy_get_parents($term->tid))) {
+      $parent_term = reset($parent_terms);
+      $m = addons_extra_field_get_settings('catalog_object', $catalog_object->cid, 'display', $view_mode, 'parent', 'view_mode');
+      $catalog_object->content['parent'] = taxonomy_term_view($parent_term, $m ? $m : 'full');
+    }
   }
 
   //if (in_array( $catalog_object->materials_settings['mode'], array('list','table'))) // simplest way!
   if (isset($catalog_object->materials_settings['modes'][$catalog_object->materials_settings['mode']]['settings']['rows'])) { // adaptive variant
     if ((!$catalog_object->cid || !empty($extra_fields_display_settings['materials']['visible'])) && ($ids = _catalog_select_entities($catalog_object))) {
+      $pager = array();
       if ($catalog_object->_enable_pager && isset($catalog_object->_pager_element)) { // Internal temporary property added by _catalog_select_entities() function
+      
+        if (!empty($catalog_object->content['description'])) {
+           // A. Lazarev wish 18 dec 2017: —крыть поле "ќписание" на страницах пагинации в списках материалов https://itinity.ru/node/3088
+           
+          if ($pager_dependency = addons_extra_field_get_settings('catalog_object', $catalog_object->cid, 'display', $view_mode, 'description', 'pager_dependency')) { // NULL|first|last @see catalog_extra_field_formatter_settings_form()
+            if (($p = pager_find_page($catalog_object->_pager_element))) {
+              if ($pager_dependency === 'first' || $p != $GLOBALS['pager_total'][$catalog_object->_pager_element] - 1) {
+                $catalog_object->content['description']['#access'] = FALSE;
+              }        
+            }
+            elseif ($pager_dependency === 'last') {
+              $catalog_object->content['description']['#access'] = FALSE;
+            }
+          }
+        }
+
+
+
         $pager = array(
           '#theme' => 'pager',
           '#element' => $catalog_object->_pager_element,//_catalog_pager_element($catalog_object->cid),
@@ -442,10 +481,8 @@ function catalog_object_build_content($catalog_object, $view_mode = NULL, $term 
       $catalog_object->content += array(
         'materials' => theme('catalog_list_entities', array('catalog_object' => $catalog_object, 'entities' => $entities,)),
       );
-      if ($catalog_object->_enable_pager) { // Internal temporary property added by _catalog_select_entities() function
-        // extra field:
-        $catalog_object->content['pager2'] = $pager;
-      }
+
+      $catalog_object->content['pager2'] = $pager;
     }
     elseif (empty($catalog_object->content['terms']['#rows']) && user_is_logged_in()) {
       $catalog_object->content['materials'] = array(
@@ -457,7 +494,7 @@ function catalog_object_build_content($catalog_object, $view_mode = NULL, $term 
   if ($catalog_object->entity_type === 'node') {
     $state = _catalog_get_shared_object_state();
     $feed_uri = 'catalog/' . $catalog_object->cid;
-    $feed_title = 'RSS - ' . $catalog_object->title;
+    $feed_title = 'RSS' . (!empty($catalog_object->title) ? ' - ' . $catalog_object->title : '');
     if (!empty($state['cid']) == $catalog_object->cid && !empty($state['tid'])) {
       $feed_uri .= '/' . _catalog_build_term_url($state['tid']);
       $feed_title .= ' -> ' . taxonomy_term_load($state['tid'])->name;
@@ -500,6 +537,7 @@ function catalog_object_build_content($catalog_object, $view_mode = NULL, $term 
 
     module_invoke_all('entity_view', $catalog_object, 'catalog_object', $view_mode, $GLOBALS['language']->language);
     $type = 'catalog_object';
+    $catalog_object->content['#catalog_object'] = $catalog_object;
     drupal_alter(array('entity_view'), $catalog_object->content, $type);
     //$catalog_object->content = _field_extra_fields_pre_render($catalog_object->content);
   }

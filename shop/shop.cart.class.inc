@@ -14,8 +14,8 @@ class Cart {
   /**
    * Magic method
    */
-  function __construct($uid, $order_node, $cart_id) {
-    $this->load($uid, $order_node, $cart_id);
+  function __construct($shop_id, $account, $order_node) {
+    $this->load($shop_id, $account, $order_node);
   }
 
 
@@ -23,8 +23,8 @@ class Cart {
    * Magic method
    */
   function __get($name) {
-    if (in_array($name, array('uid', 'order', 'cart_id', 'anonymous_key', 'items', 'total_sum',))) {
-      return isset($this->{$name}) ? $this->{$name} : NULL;
+    if (in_array($name, array('uid', 'visitor_id', 'items', 'total_sum', 'shop_id', 'account', 'order_node'), TRUE)) {
+      return $this->{$name} ?? NULL;
     }
   }
 
@@ -64,175 +64,176 @@ class Cart {
   /**
    * Load cart from database
    */
-  private function load($uid, $order_node, $cart_id = NULL) {
-//    if (!empty($order_node->customer) || ($order_node && is_scalar($order_node) && ($order_node = node_load($order_node)) && $order_node->type === 'order')) {
-//      $uid = $order_node->customer;
-//    }
-//    elseif (!empty($order_node->uid) || ($order_node && is_scalar($order_node) && ($order_node = node_load($order_node)) && $order_node->type === 'order')) {
-//      $uid = $order_node->uid;
-//    }
-//    else {
-//      $uid = $uid ? $uid : (!empty($GLOBALS['user']->uid) ? $GLOBALS['user']->uid : 0);
-//    }
-//    $acc = $uid ? user_load($uid) : NULL;
-//    $acc = $acc ? $acc : drupal_anonymous_user();
-
-    $order_node = is_scalar($order_node) ? node_load($order_node) : $order_node;
-    $acc = shop_get_customer($order_node);
-    $cart = array();
+  private function load($shop_id, $account, $order_node) {
 
     if (!empty($order_node->nid)) {
-      // load items from ordered items table
-      $cart += array(
-        'uid' => $order_node->uid,
-        'order' => $order_node->nid,
-      );
-      $query = db_select('shop_cart_items_ordered', 'scio')->fields('scio', array('entity_type', 'entity_id', 'qty', 'price', 'currency', 'title', 'frozen', 'snapshot_id'));
+      $visitor_id = NULL;
+    }
+    else {
+      $visitor_id = anonymous_tracker_track_user($account, 'id');
+    }
+    $cart = array();
+    
+    $shop_cart_load = &drupal_static('shop_cart_load', array());
+    $cid = implode(':', array($order_node->nid ?? NULL, $visitor_id, $shop_id, $account->uid));
+    
+    if (!isset($shop_cart_load[$cid])) {
+      if (!empty($order_node->nid)) {
+        // load items from ordered items table
+        $cart += array(
+          'uid' => $account->uid,
+          'items_source' => 'order',
+        );
+        $query = db_select('shop_cart_items_ordered', 'scio')->fields('scio', array('entity_type', 'entity_id', 'qty', 'price', 'currency', 'title', 'frozen', 'snapshot_id'));
 
-      $query->condition('scio.oid', $order_node->nid);
-      $query->leftJoin('shop_index', 'si', 'si.entity_type = scio.entity_type AND si.entity_id = scio.entity_id');
-      $query->fields('si', array('price', 'currency', 'qty_type', 'qty_fraction', 'title', 'entity_uri'));
+        $query->condition('scio.oid', $order_node->nid);
+        $query->leftJoin('shop_index', 'si', 'si.entity_type = scio.entity_type AND si.entity_id = scio.entity_id');
+        $query->fields('si', array('price', 'currency', 'qty_type', 'qty_fraction', 'title', 'entity_uri'));
 
-      //$query->addExpression('si.qty', 'store_qty');
-      foreach ($query->execute() as $item) {
-        
-        
-        if (!isset($item->si_price)) {
-          $item->si_price = NULL;
-        }
-        if (!isset($item->si_currency)) {
-          $item->si_currency = NULL;
-        }
-        
-        $key = self::key($item->entity_type, $item->entity_id, $item->snapshot_id);
-        if (!$item->frozen && empty($order_node->frozen)) {
-          if ($e = entity_load($item->entity_type, array($item->entity_id))) {
-            $entity = reset($e);
-            $entity->snapshot_id = $item->snapshot_id;
-            $uri = entity_uri($item->entity_type, $entity);
-            $item->entity_uri = $uri['path'];
-            $item->price = array_sum(shop_build_price('product', $entity, $acc));//$entity->price;
-            $item->title = entity_label($item->entity_type, $entity);
-            $item->currency = shop_get_info('currency', 'default');//isset($entity->currency) ? $entity->currency : NULL;
+        foreach ($query->execute() as $item) {
+          
+          
+          if (!isset($item->si_price)) {
+            $item->si_price = NULL;
+          }
+          if (!isset($item->si_currency)) {
+            $item->si_currency = NULL;
+          }
 
-            if (is_null($item->qty_type)) {
-              /**
-               * NULL is pcs
-               * @see product_form_alter()
-               * 'qty_type' => array('#type' => 'select', '#options' => ...
-               */
-              $item->qty_type = t('pcs');
+          if (is_null($item->qty_type)) {
+            /**
+             * NULL is pcs
+             * @see product_form_alter()
+             * 'qty_type' => array('#type' => 'select', '#options' => ...
+             */
+            $item->qty_type = t('pcs');
+          }
+          elseif (is_string($item->qty_type)) {
+            $item->qty_type = t($item->qty_type);
+          }
+          
+          $key = self::key($item->entity_type, $item->entity_id, $item->snapshot_id);
+          if (!$item->frozen && empty($order_node->frozen)) {
+            if ($e = entity_load($item->entity_type, array($item->entity_id))) {
+              $entity = clone $e[$item->entity_id];
+              $entity->snapshot_id = $item->snapshot_id;
+              $uri = entity_uri($item->entity_type, $entity);
+              $item->entity_uri = $uri['path'];
+
+              $price_array = shop_build_price('product', $entity, $account);
+              $item->price = array_sum($price_array);
+              $item->price_array = $price_array;
+
+              $item->title = entity_label($item->entity_type, $entity);
+              $item->currency = shop_get_info('currency', 'default');//isset($entity->currency) ? $entity->currency : NULL;
             }
-            elseif (is_string($item->qty_type)) {
-              $item->qty_type = t($item->qty_type);
+            else {
+              $item->title = t('< --- Deleted object --- >');
             }
           }
           else {
-            $item->title = t('< --- Deleted object --- >');
+            $price_array = shop_build_price('shop_cart_item', $item, $account);
+            $item->price = array_sum($price_array);
+            $item->price_array = $price_array;
+            $item->currency = shop_get_info('currency', 'default');
+          }
+          $cart['items'][$key] = $item;
+        }
+      }
+      else { // shopping cart is not ordered
+          // load by by anonymous key + shop_id pair
+        if ($visitor_id && !is_null($shop_id)) {
+          if ($cart = db_query('SELECT * FROM {shop_cart} WHERE visitor_id = :visitor_id AND shop_id = :shop_id', array(':visitor_id' => $visitor_id, ':shop_id' => $shop_id, ))->fetchAssoc()) {
+            $cart['items_source'] = 'cart';
+            $cart['data'] = $cart['data'] ? unserialize($cart['data']) : array();
+            $cart['data'] = $cart['data'] ? $cart['data'] : array();
+            $query = db_select('shop_cart_items', 'sci')->fields('sci');
+            $query->condition('sci.visitor_id', $cart['visitor_id']);
+            $query->join('shop_index', 'si', 'si.entity_type = sci.entity_type AND si.entity_id = sci.entity_id');
+            $query->condition('si.shop_id', $shop_id);
+            foreach ($query->execute() as $item) {
+              if ($e = entity_load($item->entity_type, array($item->entity_id))) {
+                $entity = clone $e[$item->entity_id];
+                $entity->snapshot_id = $item->snapshot_id;
+
+                $key = self::key($item->entity_type, $item->entity_id, $item->snapshot_id);
+                $uri = entity_uri($item->entity_type, $entity);
+                $price_array = shop_build_price('product', $entity, $account);
+
+                $item = (object) array(
+                  'entity_type' => $item->entity_type,
+                  'entity_id' => $item->entity_id,
+                  'qty' => $item->qty,
+                  'price' => array_sum($price_array),
+                  'price_array' => $price_array,
+                  'currency' => shop_get_info('currency', 'default'),
+                  'si_price' => NULL,
+                  'si_currency' => NULL,
+                  'qty_fraction' => $entity->qty_fraction,
+                  'title' => entity_label($item->entity_type, $entity),
+                  'entity_uri' => $uri['path'],
+                  'snapshot_id' => $item->snapshot_id,
+                );
+
+                if (is_null($entity->qty_type)) {
+                  /**
+                   * NULL is pcs
+                   * @see product_form_alter()
+                   * 'qty_type' => array('#type' => 'select', '#options' => ...
+                   */
+                  $item->qty_type = t('pcs');
+                }
+                elseif (is_string($entity->qty_type)) {
+                  $item->qty_type = t($entity->qty_type);
+                }
+
+                $cart['items'][$key] = $item;
+              }
+            }
+          }
+          else {
+            $cart = array('items_source' => NULL,);
           }
         }
-        else {
-          $item->price = array_sum(shop_build_price('shop_cart_item', $item, $acc));
-          $item->currency = shop_get_info('currency', 'default');
-        }
-        $cart['items'][$key] = $item;
-      }
-    }
-    else { // shopping cart is not ordered
-      if ($cart_id) {
-        if ($cart = db_query('SELECT * FROM {shop_cart} WHERE cart_id = :cart_id', array(':cart_id' => $cart_id))->fetchAssoc()) {
-          $uid = $cart['uid'];
-        }
-      }
-      // load cart from shop_cart and items from shop_cart_items by uid and anonymous key
-      elseif (!$uid) {
-        // load by anonymous key
-        if ($tracking_id = module_invoke('anonymous_tracker', 'track_user')) {//if (!empty($_COOKIE['shop_cart']['anonymous_key'])) {
-          $cart = db_query('SELECT * FROM {shop_cart} WHERE anonymous_key = :key', array(':key' => $tracking_id))->fetchAssoc();
-        }
-      }
-      else {
-        // load by uid
-        $cart = db_query('SELECT * FROM {shop_cart} WHERE uid = :uid', array(':uid' => $uid))->fetchAssoc();
+
+
       }
 
-      if ($cart) {
-        $cart['data'] = $cart['data'] ? unserialize($cart['data']) : array();
-        $cart['data'] = $cart['data'] ? $cart['data'] : array();
-        $query = db_select('shop_cart_items', 'sci')->fields('sci'); //, array('entity_type', 'entity_id', 'qty'));
-        $query->condition('sci.cart_id', $cart['cart_id']);
-        foreach ($query->execute() as $item) {
-          if ($e = entity_load($item->entity_type, array($item->entity_id))) {
-            $entity = reset($e);
-            $entity->snapshot_id = $item->snapshot_id;
-
-            $key = self::key($item->entity_type, $item->entity_id, $item->snapshot_id);
-            $uri = entity_uri($item->entity_type, $entity);
-            $item = (object) array(
-              'entity_type' => $item->entity_type,
-              'entity_id' => $item->entity_id,
-              'qty' => $item->qty,
-              'price' => array_sum(shop_build_price('product', $entity, $acc)),
-              'currency' => shop_get_info('currency', 'default'),
-              'si_price' => NULL,
-              'si_currency' => NULL,
-//              'qty_type' => $entity->qty_type,
-              'qty_fraction' => $entity->qty_fraction,
-              'title' => entity_label($item->entity_type, $entity),
-              'entity_uri' => $uri['path'],
-              'snapshot_id' => $item->snapshot_id,
-            );
-
-            if (is_null($entity->qty_type)) {
-              /**
-               * NULL is pcs
-               * @see product_form_alter()
-               * 'qty_type' => array('#type' => 'select', '#options' => ...
-               */
-              $item->qty_type = t('pcs');
-            }
-            elseif (is_string($entity->qty_type)) {
-              $item->qty_type = t($entity->qty_type);
-            }
-
-            $cart['items'][$key] = $item;
-          }
-        }
-      }
-      else {
-        $cart = array();
-      }
-    }
-
-    // Fill incomplete properties
-    $cart += array(
-      'cart_id' => NULL,
-      'uid' => $uid,
-      'items' => array(),
-      'order' => NULL,
-      'changed' => NULL,
-      'data' => array(),
-    );
-    if (!empty($order_node->nid)) {
-      $cart['anonymous_key'] = NULL;
+      // Fill incomplete properties
+      
+      $cart += array(
+        'items_source' => NULL, // 'order'|'cart'|NULL
+        'shop_id' => $shop_id,
+        'uid' => $account->uid,
+        'account' => $account,
+        'items' => array(),
+        'changed' => NULL,
+        'data' => array(),
+        'visitor_id' => $visitor_id,
+        'order_node' => $order_node,
+      );
+      $shop_cart_load[$cid] = $cart;
     }
     else {
-      if (isset($GLOBALS['user']->uid) && $uid == $GLOBALS['user']->uid) {
-        $tracking_id = module_invoke('anonymous_tracker', 'track_user');
-        $cart += array('anonymous_key' => $tracking_id ? $tracking_id : NULL);//!empty($_COOKIE['shop_cart']['anonymous_key']) ? $_COOKIE['shop_cart']['anonymous_key'] : NULL);
-      }
+      $cart = $shop_cart_load[$cid];
     }
+    
+
     foreach ($cart as $key => $item) {
       $this->$key = $item;
     }
-
-    $this->calc_total();
+    $this->calc_total(); 
+    
+    // DEPRECATED
     // @TODO: next hook used only in progressive_discounts.module, migrate this module to shop_build_price() conception.
+   
+    /*
     foreach (module_implements('shop_cart_load') as $m) {
       if (function_exists($fn = $m . '_shop_cart_load')) {
         $fn($this);
       }
     }
+    */
 
     $this->frozen = !empty($order_node->frozen);
 
@@ -241,6 +242,15 @@ class Cart {
 
 
   /**
+  * Unique identifier of cart object generated by situation (shop_id, order or visitor_id can be NULL)
+  * Used for form wrappers, url tokens, etc
+  */
+  public function currentKey() {
+    return $this->shop_id . ':' . $this->visitor_id . ':' . ($this->order_node->nid ?? NULL);
+  }
+  
+  
+  /**
    * Calculates total sum
    */
   public function calc_total() {
@@ -248,16 +258,7 @@ class Cart {
     foreach ($this->items as $item) {
       $this->total_sum += $item->price * $item->qty;
     }
-
     return $this;
-    // $default_currency = shop_get_info('currency', 'default');
-    // $this->total_sum = array();
-    // foreach ($this->items as $item) {
-    //   $curr = $item->currency ? $item->currency : $default_currency;
-    //   $this->total_sum += array($curr => 0);
-    // 	$this->total_sum[$curr] += $item->price * $item->qty;
-    // }
-    // return $this;
   }
 
   /**
@@ -303,7 +304,12 @@ class Cart {
     return $this->set($entity_type, $entity_id, $snapshot->sid, $new_qty);
   }
 
-
+  
+  public static function shop_id_format($shop_id) {
+    return in_array($shop_id, array(0, '0',), TRUE) ? '0' : ($shop_id ? $shop_id . '' : NULL);
+  }
+  
+  
   /**
    * Set existing item qty or add new in cart
    * $entity can be object or its id only.
@@ -313,6 +319,9 @@ class Cart {
   public function set($entity_type, $entity, $snapshot_id = NULL, $qty) {
     $entity = self::entity2entity($entity_type, $entity);
 
+    if ($this->shop_id !== self::shop_id_format($entity->shop_id)) {
+      throw new \Exception('shop_id\'s must be equal.');
+    }
     if ($qty < 0 || !$entity) {
       return $this;
     }
@@ -336,12 +345,16 @@ class Cart {
 
         if (!$this->item($entity_type, $entity_id, $snapshot_id)) {
           $entity_uri = entity_uri($entity_type, $entity);
+          $price_array = shop_build_price('product', $entity, $this->account);
+
           $this->items[$key] = (object) array(
             'entity_type' => $entity_type,
             'entity_id' => $entity_id,
             'qty' => 0,
-            'price' => $entity->price,
-            'currency' => $entity->currency,
+            'price' => array_sum($price_array),
+            'price_array' => $price_array,
+            'currency' => shop_get_info('currency', 'default') ?? variable_get('money_default_currency', 'RUB'),
+//            'currency' => $entity->currency,
             'title' => entity_label($entity_type, $entity),
             'qty_type' => $entity->qty_type,
             'qty_fraction' => $entity->qty_fraction,
@@ -407,7 +420,7 @@ class Cart {
 
     $result = 0;
     foreach ($this->items as $item_key => $item) {
-      if (mb_strpos($item_key, $key) !== FALSE) {
+      if (strpos($item_key, $key) === 0) {
         $result += $item->qty;
       }
     }
@@ -421,12 +434,12 @@ class Cart {
    * For save cart state commit() call is required.
    */
   public function order($order_node) {
-    if (!$this->order && $order_node->type === 'order') {
-      if (!db_query('SELECT oid FROM {shop_cart_items_ordered} WHERE oid = :id', array(':id' => $order_node->nid))->fetch()) {
-        $this->order = $order_node->nid;
+    //if (!$this->order_node->nid && $order_node->type === 'order') {
+      //if (!db_query('SELECT oid FROM {shop_cart_items_ordered} WHERE oid = :id', array(':id' => $order_node->nid))->fetch()) {
+        $this->order_node = $order_node;
         $this->commit();
-      }
-    }
+      //}
+    //}
     return $this;
   }
 
@@ -435,7 +448,7 @@ class Cart {
    * Freeze ordered cart items. Price, title and currency will unbounded from drupal entities hooks
    */
   public function freeze($entity_type = NULL, $entity_id = NULL) {
-    if ($this->order && $this->items) {
+    if (!empty($this->order_node->nid) && $this->items) {
       $this->commit();
       foreach ($this->items as $item) {
         if (!$entity_type || !$entity_id || ($break = ($entity_type && $entity_id && $item->entity_type == $entity_type && $item->entity_id == $entity_id))) {
@@ -455,7 +468,7 @@ class Cart {
                 ':title' => entity_label($item->entity_type, $entity),
                 ':data' => serialize($data),
                 ':currency' => money_fix_currency($entity->currency),
-                ':oid' => $this->order,
+                ':oid' => $this->order_node->nid,
                 ':entity_type' => $item->entity_type,
                 ':entity_id' => $item->entity_id,
               ));
@@ -467,7 +480,7 @@ class Cart {
                 ':price' => $item->price,
                 ':title' => $item->item,
                 ':currency' => money_fix_currency($item->currency),
-                ':oid' => $this->order,
+                ':oid' => $this->order_node->nid,
                 ':entity_type' => $item->entity_type,
                 ':entity_id' => $item->entity_id,
               ));
@@ -488,7 +501,7 @@ class Cart {
    * Unfreeze order items
    */
   public function unfreeze($entity_type = NULL, $entity_id = NULL) {
-    if ($this->order && $this->items) {
+    if (!empty($this->order_node->nid) && $this->items) {
       $this->commit();
 
       foreach ($this->items as $item) {
@@ -496,7 +509,7 @@ class Cart {
           if (!$entity_type || !$entity_id || ($break = ($entity_type && $entity_id && $item->entity_type == $entity_type && $item->entity_id == $entity_id))) {
             db_query('UPDATE {shop_cart_items_ordered} SET frozen = 0 WHERE oid = :oid AND entity_type = :entity_type AND entity_id = :entity_id',
               array(
-                ':oid' => $this->order,
+                ':oid' => $this->order_node->nid,
                 ':entity_type' => $item->entity_type,
                 ':entity_id' => $item->entity_id,
               ));
@@ -542,80 +555,98 @@ class Cart {
 
     return $this;
   }
-
+  
 
   /**
    * Store cart state into database. @see also __destruct()
    */
   public function commit() {
+    drupal_static_reset('shop_cart_load');
     if ($this->no_commit) {
       return $this->calc_total();
     }
 
     $transaction = db_transaction();
     try {
-      if (!$this->order) { // Cart not ordered
-        if (!$this->cart_id) { // Cart is new
-          if ($this->uid || $this->anonymous_key) {
+      if (empty($this->order_node->nid)) { // Cart not ordered
+        if (!$this->items_source) { // Cart is new
+          if ($this->visitor_id) {
             $db_merge = db_merge('shop_cart');
-            $cart_id_query = db_select('shop_cart', 'sc')->fields('sc', array('cart_id'));
-            if ($this->uid) {
-              $db_merge
-                ->key(array('uid' => $this->uid))
-                ->fields(array('anonymous_key' => $this->anonymous_key));
-              $cart_id_query->condition('uid', $this->uid);
-            }
-            else {
-              $db_merge
-                ->fields(array('uid' => $this->uid))
-                ->key(array('anonymous_key' => $this->anonymous_key));
-              $cart_id_query->condition('anonymous_key', $this->anonymous_key);
-            }
             $db_merge
-              ->fields(array('created' => REQUEST_TIME, 'changed' => REQUEST_TIME, 'data' => serialize($this->data)))
+              ->key(array('visitor_id' => $this->visitor_id, 'shop_id' => $this->shop_id,))
+              ->fields(array(
+                'uid' => $this->uid,
+                'data' => serialize($this->data),
+                'changed' => REQUEST_TIME,
+                'created' => REQUEST_TIME,
+              ))
               ->execute();
-            if (!($this->cart_id = $cart_id_query->execute()->fetchField())) {
-              $transaction->rollback();
-              throw new \Exception(t('Cannot write cart_id'));
+            foreach ($this->items as $item) {
+              db_merge('shop_cart_items')
+                ->key(array(
+                  'visitor_id' => $this->visitor_id,
+                  'entity_type' => $item->entity_type,
+                  'entity_id' => $item->entity_id,
+                  'snapshot_id' => $item->snapshot_id
+                ))
+                ->fields(array('qty' => $item->qty * 1))// Prevent db exception where $item->qty is string type ('123' instead of 123)
+                ->execute();
             }
+            $this->items_source = 'cart';
           }
-
         }
-        else { // Cart with id is already in database
+        else { // Cart already in database
           $db_merge = db_merge('shop_cart')
-            ->key(array('cart_id' => $this->cart_id))
-            ->fields(array('changed' => REQUEST_TIME, 'anonymous_key' => $this->anonymous_key, 'uid' => $this->uid, 'data' => serialize($this->data)))
+            ->key(array('visitor_id' => $this->visitor_id, 'shop_id' => $this->shop_id,))
+            ->fields(array(
+              'uid' => $this->uid, 
+              'data' => serialize($this->data),
+              'changed' => REQUEST_TIME, 
+            ))
             ->execute();
-        }
-        if ($this->cart_id) {
-          db_query('DELETE FROM {shop_cart_items} WHERE cart_id = :id', array(':id' => $this->cart_id));
+          foreach (db_query(
+          'SELECT si.entity_type, si.entity_id 
+          FROM {shop_cart_items} sci 
+          INNER JOIN {shop_index} si ON si.entity_type = sci.entity_type AND si.entity_id = sci.entity_id 
+          WHERE sci.visitor_id = :vid 
+          AND si.shop_id = :sid', array(':vid' => $this->visitor_id,':sid' => $this->shop_id)) as $r) {
+            db_query('DELETE FROM {shop_cart_items} WHERE visitor_id = :vid AND entity_type = :t AND entity_id = :id', array(':vid' => $this->visitor_id, ':t' => $r->entity_type, ':id' => $r->entity_id,));
+          }
           foreach ($this->items as $item) {
             db_merge('shop_cart_items')
               ->key(array(
-                'cart_id' => $this->cart_id,
+                'visitor_id' => $this->visitor_id,
                 'entity_type' => $item->entity_type,
                 'entity_id' => $item->entity_id,
                 'snapshot_id' => $item->snapshot_id
               ))
-              ->fields(array('qty' => $item->qty * 1))// Костыль для кол-ва (*1). Ибо если внезапно сюда попадет не число, то словим ексепшин, и (ВО БЛЕАТЬ) $transaction->rollback() не помогает !!!
+              ->fields(array('qty' => $item->qty * 1))// Prevent db exception where $item->qty is string type ('123' instead of 123)
               ->execute();
           }
         }
       }
-      else { // node->nid found in $this->order  - cart is ordered
-        if ($this->cart_id) { // Cart attach to order operation detected (by cart has cart_id)
-          db_query('UPDATE {shop_cart} SET data = :data WHERE cart_id = :id', array(':id' => $this->cart_id, ':data' => serialize($this->data)));
-          db_query('DELETE FROM {shop_cart_items} WHERE cart_id = :id', array(':id' => $this->cart_id));
+      else { //  $this->order_node->nid  not empty - cart is ordered?
+     
+        if ($this->items_source !== 'order') {// Existing cart attach to order operation detected
+        
+          db_query('UPDATE {shop_cart} SET data = :data WHERE visitor_id = :vid AND shop_id = :sid', array(':vid' => $this->visitor_id, ':sid' => $this->shop_id, ':data' => serialize($this->data)));
+          foreach (db_query(
+          'SELECT si.entity_type, si.entity_id 
+          FROM {shop_cart_items} sci 
+          INNER JOIN {shop_index} si ON si.entity_type = sci.entity_type AND si.entity_id = sci.entity_id 
+          WHERE sci.visitor_id = :vid 
+          AND si.shop_id = :sid', array(':vid' => $this->visitor_id,':sid' => $this->shop_id)) as $r) {
+            db_query('DELETE FROM {shop_cart_items} WHERE visitor_id = :vid AND entity_type = :t AND entity_id = :id', array(':vid' => $this->visitor_id, ':t' => $r->entity_type, ':id' => $r->entity_id,));
+          }
         }
         // Ordered cart editing detected
-        elseif (!order_is_complete(node_load($this->order))) {
-          db_query('DELETE FROM {shop_cart_items_ordered} WHERE oid = :id', array(':id' => $this->order));
+        elseif (!order_is_complete($this->order_node)) {
+          db_query('DELETE FROM {shop_cart_items_ordered} WHERE oid = :id', array(':id' => $this->order_node->nid));
         }
 
-        $order_node = node_load($this->order);
 
         // Update items only where order is new or order is not complete
-        if ($this->cart_id || !order_is_complete($order_node)) {
+        if ($this->items_source !== 'order' || !order_is_complete($this->order_node)) {
           $default_currency = shop_get_info('currency', 'default');
           foreach ($this->items as $item) {
             if (is_null($item->currency)) {
@@ -623,10 +654,7 @@ class Cart {
             }
 
             if ($old_snapshot = snapshot_load($item->snapshot_id)) {
-              $context = array();
-              if (isset($old_snapshot->data['optional_fields'])) {
-                $context['optional_fields'] = $old_snapshot->data['optional_fields'];
-              }
+              $context = array('old_snapshot' => $old_snapshot,);
 
               if ($old_snapshot->bundle == 'cart_item_snapshot') {
                 // delete cart_item_snapshot and create cart_item_ordered_snapshot
@@ -635,7 +663,7 @@ class Cart {
                 $snapshot_id = snapshot_save($snapshot);
                 $item->snapshot_id = $snapshot_id;
               }
-              elseif (isset($order_node->frozen) && !$order_node->frozen) {
+              elseif (isset($this->order_node->frozen) && !$this->order_node->frozen) {
                 // update existing cart_item_ordered_snapshot
                 $snapshot = snapshot_create('cart_item_ordered_snapshot', $item->entity_type, $item->entity_id, 0, 0, $context);
                 $snapshot->sid = $item->snapshot_id;
@@ -646,20 +674,20 @@ class Cart {
             $rate = (drupal_strtolower($default_currency) != drupal_strtolower($item->currency)) ? money_currency_info($item->currency, 'rate') : 1;
 
             if ($e = entity_load($item->entity_type, array($item->entity_id))) {
-              $entity = reset($e);
+              $entity = clone $e[$item->entity_id];
               $entity->snapshot_id = $item->snapshot_id;
               $data = array('object' => $entity, 'html' => '');
             }
 
             $db_merge = db_merge('shop_cart_items_ordered')
               ->key(array(
-                'oid' => $this->order,
+                'oid' => $this->order_node->nid,
                 'entity_type' => $item->entity_type,
                 'entity_id' => $item->entity_id,
                 'snapshot_id' => $item->snapshot_id,
               ))
               ->fields(array(
-                'qty' => $item->qty * 1, // Костыль для кол-ва (*1). Ибо если внезапно сюда попадет не число, то словим ексепшин, и (ВО БЛЕАТЬ) $transaction->rollback() не помогает !!!
+                'qty' => $item->qty * 1,
                 'changed' => REQUEST_TIME,
                 'price' => $item->price * $rate,
                 'currency' => $default_currency,
@@ -672,16 +700,16 @@ class Cart {
         }
       }
       db_ignore_slave();
-    } catch (Exception $e) {
+    } catch (\Exception $e) {
       $transaction->rollback();
       watchdog_exception('shop', $e);
       throw $e;
     }
     // Reload cart from database after update
-    $this->load($this->uid, $this->order, $this->cart_id);
-    if ($this->order) {
-      entity_get_controller('node')->resetCache(array($this->order));
-      cache_clear_all('field:node:' . $this->order, 'cache_field');
+    $this->load($this->shop_id, $this->account, $this->order_node);
+    if (!empty($this->order_node->nid)) {
+      entity_get_controller('node')->resetCache(array($this->order_node->nid));
+      cache_clear_all('field:node:' . $this->order_node->nid, 'cache_field');
     }
     return $this;
   }

@@ -201,48 +201,72 @@ function node_specifications_entity_info() {
 }
 
 class NodeSpecificationsController extends DrupalDefaultEntityController {
+  
+  protected function buildQuery($ids, $conditions = array(), $revision_id = FALSE) {
+    return parent::buildQuery($ids, $conditions, $revision_id)->orderBy('base.weight');
+  }
+  
 	protected function attachLoad(&$specifications, $revision_id = FALSE) {
     foreach ($specifications as $specification) {
       $specification->tids = array();
       $specification->fields = array();
     }
 		//indexes
-		$nsids = array_keys($specifications);
-    foreach (db_query('SELECT nsi.nsid, nsi.tid, td.vid FROM {node_specifications_index} nsi INNER JOIN {taxonomy_term_data} td ON td.tid = nsi.tid WHERE nsi.nsid IN (:nsids)', array(':nsids' => $nsids)) as $r) {
-      $specifications[$r->nsid]->tids[$r->tid] = $r->tid;
+		$nsids = drupal_map_assoc(array_keys($specifications));
+    
+    $static = &drupal_static('NodeSpecificationsController::attachLoad', array());
+    foreach ($nsids as $id) {
+      if (array_key_exists($id, $static)) {
+        unset($nsids[$id]);
+        $specifications[$id]->tids = isset($static[$id]->tids) ? $static[$id]->tids : array();
+        $specifications[$id]->fields = isset($static[$id]->fields) ? $static[$id]->fields : array();
+      }
+      else {
+        $static[$id] = NULL;
+      }
+    }
+    if ($nsids) {
+      foreach (db_query('SELECT nsi.nsid, nsi.tid, td.vid FROM {node_specifications_index} nsi INNER JOIN {taxonomy_term_data} td ON td.tid = nsi.tid WHERE nsi.nsid IN (:nsids)', array(':nsids' => $nsids)) as $r) {
+        $specifications[$r->nsid]->tids[$r->tid] = $r->tid;
+        $static[$r->nsid]->tids[$r->tid] = $r->tid;
+      }
+
+      //fields
+      $q = db_select('node_specifications_fields', 'nsf');
+      $q->fields('nsf')->condition('nsf.nsid', $nsids);
+      $q->leftJoin('node_specifications_fields_variants', 'nsfv', 'nsf.nsid = nsfv.nsid AND nsf.delta = nsfv.delta');
+      $q->fields('nsfv', array('var_id', 'var_weight', 'var_value', 'var_data'));
+      $q->orderBy('nsf.nsid, nsf.weight, nsfv.var_weight');
+
+      //units
+      if (module_exists('shop_units')) {
+        $q->leftJoin('shop_units', 'su', 'nsf.unit_id = su.unit_id');
+        $q->addField('su', 'unit_id', 'unit_id');
+        $q->addField('su', 'title', 'unit_title');
+        $q->addField('su', 'symbol', 'unit_symbol');
+      }
+
+      foreach ($q->execute() as $result) {
+        $result = (array) $result;
+        $delta = $result['delta'];
+        $nsid = $result['nsid'];
+
+        if (!isset($specifications[$nsid]->fields[$delta])) {
+          $specifications[$nsid]->fields[$delta] = $result;
+          $static[$nsid]->fields[$delta] = $result;
+        }
+
+        foreach (array('var_id', 'var_weight', 'var_value', 'var_data',) as $value) {
+          if (isset($result[$value])) {
+            $specifications[$nsid]->fields[$delta]['vars'][$result['var_id']][$value] = $result[$value];
+            $static[$nsid]->fields[$delta]['vars'][$result['var_id']][$value] = $result[$value];
+          }
+          unset($specifications[$nsid]->fields[$delta][$value]);
+          unset($static[$nsid]->fields[$delta][$value]);
+        }
+      }      
     }
 
-		//fields
-		$q = db_select('node_specifications_fields', 'nsf');
-		$q->fields('nsf')->condition('nsf.nsid', $nsids);
-		$q->leftJoin('node_specifications_fields_variants', 'nsfv', 'nsf.nsid = nsfv.nsid AND nsf.delta = nsfv.delta');
-		$q->fields('nsfv', array('var_id', 'var_weight', 'var_value', 'var_data'));
-		$q->orderBy('nsf.nsid, nsf.weight, nsfv.var_weight');
-
-		//units
-		if (module_exists('shop_units')) {
-			$q->leftJoin('shop_units', 'su', 'nsf.unit_id = su.unit_id');
-			$q->addField('su', 'unit_id', 'unit_id');
-			$q->addField('su', 'title', 'unit_title');
-			$q->addField('su', 'symbol', 'unit_symbol');
-		}
-
-		foreach ($q->execute() as $result) {
-			$result = (array) $result;
-			$delta = $result['delta'];
-			$nsid = $result['nsid'];
-
-			if (!isset($specifications[$nsid]->fields[$delta])) {
-				$specifications[$nsid]->fields[$delta] = $result;
-			}
-
-			foreach (array('var_id', 'var_weight', 'var_value', 'var_data',) as $value) {
-				if (isset($result[$value])) {
-					$specifications[$nsid]->fields[$delta]['vars'][$result['var_id']][$value] = $result[$value];
-				}
-				unset($specifications[$nsid]->fields[$delta][$value]);
-			}
-		}
 
 		parent::attachLoad($specifications, $revision_id);
 	}
@@ -329,10 +353,46 @@ function node_specifications_entity_view_alter(&$build, $type) {
     $uri = drupal_lookup_path('alias', $_GET['q']) . $query;
     $urls[$uri] = $uri;
     $uri = $_GET['q'] . $query;
-    $urls[$uri] = $uri;
     if ($data = db_query_range('SELECT * FROM {seo_meta} WHERE entity_type = \'node_specification_filter_presets\' AND uri IN (:urls)', 0, 1, array(':urls' => $urls))->fetch()) {
+
+      if (!empty($build['object']['#term'])) {
+        $entity = $build['object']['#term'];
+      } elseif (!empty($build['#catalog_object'])) {
+        $entity = $build['#catalog_object'];
+      }
+
+      if (!empty($entity)) {
+        $entity->seo['title'] = $data->title;
+        $entity->seo['page_title'] = $data->page_title;
+        $entity->seo['description'] = $data->description;
+        $entity->seo['desired_link'] = $uri;
+        $entity->seo['keywords'] = $data->keywords;
+
+        _seo_token_replace($entity);
+
+        if (!empty($entity->seo['page_title'])) {
+          $value = $entity->seo['page_title'];
+          if (isset($entity->title)) {
+            $entity->title = $value;
+          }
+          elseif (isset($entity->name)) {
+            $entity->name = $value;
+          }
+        }
+      }
+
       _seo_add_meta((array)$data);
+
+      if ($data->title) {
+        global $seo_title_override;
+
+        $seo_title_override = array(
+          'title' => $data->title,
+          'desired_link' => $uri,
+        );
+      }
     }
+    $urls[$uri] = $uri;
   }
 
 // @todo:
@@ -398,10 +458,10 @@ function node_specifications_field_extra_fields() {
  *
  * @see addons_form_field_ui_display_overview_form_alter()
  */
-function node_specifications_extra_field_formatter_settings_form($entity_type, $bundle, $mode, $field_name, $settings) {
+function node_specifications_extra_field_formatter_settings_form($entity_type, $bundle, $field_name, $settings, $view_mode) {
 	$form = array();
 
-	if ($mode === 'display' && $field_name === 'specifications') {
+	if ($field_name === 'specifications') {
 		$specifications = node_specifications_get_names();
 		$visibility_settings = isset($settings['visibility_settings']) ? $settings['visibility_settings'] : array();
 		$options = array();
@@ -440,10 +500,10 @@ function node_specifications_extra_field_formatter_settings_form($entity_type, $
  *
  * @see addons_form_field_ui_display_overview_form_alter()
  */
-function node_specifications_extra_field_formatter_settings_summary($entity_type, $bundle, $mode, $field_name, $settings) {
+function node_specifications_extra_field_formatter_settings_summary($entity_type, $bundle, $field_name, $settings) {
 	$output = '';
 
-	if ($mode == 'display' && $field_name == 'specifications') {
+	if ($field_name == 'specifications') {
     // todo or not todo?
 	}
 
@@ -455,10 +515,10 @@ function node_specifications_extra_field_formatter_settings_summary($entity_type
  */
 function node_specifications_node_load($nodes, $types) {
   if ($field_data = node_specifications_load_field_data(array_keys($nodes))) {
-    $nsids = array();
-    foreach ($field_data as $nid => $data) {
-      $nsids += drupal_map_assoc(array_keys($data));
-    }
+    //$nsids = array();
+    //foreach ($field_data as $nid => $data) {
+    //  $nsids += drupal_map_assoc(array_keys($data));
+    //}
     $all_specs = &drupal_static(__FUNCTION__, NULL);
     if (!isset($all_specs)) {
       $all_specs = node_specifications_load_multiple();
@@ -481,17 +541,19 @@ function node_specifications_node_load($nodes, $types) {
 function node_specifications_node_view($node, $view_mode, $langcode) {
 	if (!empty($node->specifications_data)) {
     //view comparing checkbox
-    static $attached;
-    if (!$attached) {      
-      drupal_add_library('system', 'jquery.cookie');
-      drupal_add_js(drupal_get_path('module', 'node_specifications') . '/js/node_specifications_compare_checkboxes.js');
-      $attached = TRUE;
-    }
     $compare_list = array();
     if (!empty($_COOKIE['compare_list'])) {
       $compare_list = explode(',', $_COOKIE['compare_list']);
     }
     $node->content['compare_link'] = array(
+      '#attached' => array(
+        'library' => array(
+          array('system', 'jquery.cookie'),
+        ),
+        'js' => array(
+          drupal_get_path('module', 'node_specifications') . '/js/node_specifications_compare_checkboxes.js',
+        ),
+      ),
       '#type' => 'checkbox',
       '#title' => t('Compare'),
       '#return_value' => $node->nid,
@@ -989,25 +1051,45 @@ function node_specifications_block_view($delta = '') {
 		break;
 
 		case 'filter_presets':
-			if (arg(0) == 'catalog') {
+			if (arg(0) === 'catalog') {
 				$filter_presets = node_specifications_filter_preset_load_by_base_uri($_GET['q']);
 				if ($filter_presets) {
-					$content['filter_presets'] = array(
+                  $content['filter_content'] = array(
+                    '#type' => 'container',
+                    '#attributes' => array(
+                      'class' => array(
+                        'ns-preset-filter-content',
+                      ),
+                    ),
+                    'content' => array(
+                      '#markup' => '',
+                    ),
+                  );
+
+                  $content['filter_presets'] = array(
 						'#type' => 'container',
 						'#attributes' => array('class' => array('container-inline')),
 					);
 
-					$current_query_params = drupal_get_query_parameters(NULL, array('q', 'page',));
-					$current_uri = url($_GET['q'], array('query' => $current_query_params));
+
+                  $current_query_params = drupal_get_query_parameters(NULL, array('q', 'page', 'u'));
+                  $current_uri = url($_GET['q'], array('query' => $current_query_params));
 
 					//avoid "active" class on all filter preset links
 					$orig_q = $_GET['q'];
 					$_GET['q'] = '';
 					foreach ($filter_presets as $id => $filter_preset) {
-						//set active link "manualy"
+
+						//set active link "manually"
 						$uri = drupal_parse_url($filter_preset['base_uri'] . '?' . $filter_preset['query_params']);
 						$uri = url($uri['path'], array('query' => $uri['query']));
-						$_GET['q'] = $uri == $current_uri ? $orig_q : '';
+
+						if ($uri === $current_uri) {
+						  $_GET['q'] = $orig_q;
+						  $content['filter_content']['content']['#markup'] = $filter_preset['content'] ?? '';
+                        }
+
+//						$_GET['q'] = $uri === $current_uri ? $orig_q : '';
 
 						$content['filter_presets'][] = node_specifications_filter_preset_view($filter_preset);
 					}
@@ -1084,7 +1166,7 @@ function node_specifications_query_catalog_select_entities_alter(QueryAlterableI
 	if (empty($catalog_object)) {
 		return;
 	}
-	if ($catalog_object->entity_type !== 'node' || $catalog_object->is_block || $query->hasTag('node_specifications_do_not_alter')) {
+	if ($catalog_object->entity_type !== 'node' || !empty($catalog_object->is_block) || $query->hasTag('node_specifications_do_not_alter')) {
 		return;
 	}
 
@@ -1114,7 +1196,8 @@ function node_specifications_query_catalog_select_entities_alter(QueryAlterableI
 
 	//calculate filtered nids
 	if (array_intersect_key(_node_specifications_get_filter_query_symbols(), $_GET)) {
-		$cache = cache_get(_node_specifications_cache_id('node_specifications_filter_'));
+//		$cache = cache_get(_node_specifications_cache_id('node_specifications_filter_'));
+    $cache = NULL;
 		if ($cache) {
 			$filtered_nids = $cache->data;
 		}
@@ -1149,14 +1232,60 @@ function node_specifications_query_catalog_select_entities_alter(QueryAlterableI
 
 			//shop filters
 			if ((!empty($_GET['p']) || !empty($_GET['in_stock'])) && module_exists('shop')) {
+
+        $def = variable_get('money_default_currency', 'RUB');
+        if (module_exists('multicurrency')) {
+          $money_currency_info = money_currency_info();
+          $money_currency_info_enabled = array_filter(array_column($money_currency_info, 'enabled', 'id'));
+        }
+        else {
+          $money_currency_info_enabled = array($def => TRUE);
+        }
+
+        $db_or = db_or();
+
 				$q = db_select('shop_index', 'si')
 					->fields('si', array('entity_id'))
 					->condition('si.entity_type', 'node');
 
-				//price
-				if (isset($_GET['p']['min']) && isset($_GET['p']['max'])) {
-					$q->condition('si.price', array($_GET['p']['min'], $_GET['p']['max']), 'BETWEEN');
-				}
+        foreach (array_keys($money_currency_info_enabled) as $fs_code) {
+          $rate = ($fs_code == $def) ? 1 : $money_currency_info[$fs_code]['rate'];
+
+          if ($rate > 0) {
+            $db_and = db_and();
+            if (!empty($_GET['p']['min']) || !empty($_GET['p']['max'])) {
+              $_GET['p'] += array('min' => 0, 'max' => 0,);
+              
+              $minmax = array_map('abs', array($_GET['p']['min'], $_GET['p']['max']));
+              asort($minmax);
+              if (array_sum($minmax)) {
+                $db_and->isNotNull('si.price');
+                if ($minmax[0]) {
+                  $db_and->condition('si.price', $minmax[0] / $rate, '>=');
+                }
+                if ($minmax[1]) {
+                  $db_and->condition('si.price', $minmax[1] / $rate, '<=');
+                }                
+              }
+            }
+
+            if ($fs_code == $def) {
+              $db_and->condition(db_or()->condition('si.currency', $fs_code)->isNull('si.currency'));
+            }
+            else {
+              $db_and->condition('si.currency', $fs_code);
+            }
+
+            $db_or->condition($db_and);
+          }
+        }
+
+        $q->condition($db_or);
+
+        //price
+//				if (isset($_GET['p']['min']) && isset($_GET['p']['max'])) {
+//					$q->condition('si.price', array($_GET['p']['min'], $_GET['p']['max']), 'BETWEEN');
+//				}
 
 				//in_stock
 				if (!empty($_GET['in_stock'])) {
@@ -1167,8 +1296,8 @@ function node_specifications_query_catalog_select_entities_alter(QueryAlterableI
 			}
 
 			//taxonomy filter
-			if (!empty($_GET['t']) && is_array($_GET['t'])) {
-				foreach (taxonomy_term_load_multiple($_GET['t']) as $term) {
+			if (!empty($_GET['t'])) {
+				foreach (taxonomy_term_load_multiple((array)$_GET['t']) as $term) {
 					$filtered_tids = array($term->tid);
 					foreach (taxonomy_get_tree($term->vid, $term->tid) as $t) {
 						$filtered_tids[] = $t->tid;
@@ -1252,6 +1381,7 @@ function node_specifications_node_type_update($info) {
 			->fields(array('node_type' => $info->type))
 			->condition('node_type', $info->old_type)->execute();
 		drupal_static_reset('node_specifications_load_indexes');
+    drupal_static_reset('NodeSpecificationsController::attachLoad');
 	}
 }
 
@@ -1310,6 +1440,7 @@ function node_specifications_save($specification) {
     module_invoke_all($is_new ? 'node_specifications_insert' : 'node_specifications_update', $specification);
 	}
   drupal_static_reset('node_specifications_node_load');
+  drupal_static_reset('NodeSpecificationsController::attachLoad');
 	return $result;
 }
 
@@ -1328,6 +1459,7 @@ function node_specifications_delete($specification) {
     db_delete('node_specifications_fields_variants')->condition('nsid', $nsid)->execute();
     db_delete('node_specifications_index')->condition('nsid', $nsid)->execute();
     drupal_static_reset('node_specifications_load_indexes');
+    drupal_static_reset('NodeSpecificationsController::attachLoad');
     cache_clear_all();
   }
 }
@@ -1344,7 +1476,7 @@ function node_specifications_load_field_data($nids) {
 	$result = array();
   if ($nids) {
     $nsids = array();
-    foreach (db_query('SELECT * FROM {node_specifications_fields_data} WHERE nid IN (:nids)', array(':nids' => $nids)) as $r) {
+    foreach (db_query('SELECT nsfd.* FROM {node_specifications_fields_data} nsfd INNER JOIN {node_specifications} ns ON ns.nsid = nsfd.nsid WHERE nid IN (:nids) ORDER BY ns.weight ASC', array(':nids' => $nids)) as $r) {
       //field_type text stores data in "text" column with var_id == 0
       if ($r->var_id == 0 && !empty($r->text)) {
         $result[$r->nid][$r->nsid][$r->delta] = $r->text;
@@ -1445,7 +1577,8 @@ function node_specifications_save_fields(&$fields, $nsid) {
 	$max_values = db_query('SELECT MAX(nsf.delta) AS delta, MAX(nsf.weight) AS weight FROM {node_specifications_fields} nsf WHERE nsid = :nsid', array(':nsid' => $nsid))->fetchAssoc();
 
 	db_delete('node_specifications_fields')->condition('nsid', $nsid)->execute();
-
+  drupal_static_reset('node_specifications_load_field');
+  drupal_static_reset('NodeSpecificationsController::attachLoad');
 	foreach ($fields as &$field) {
 		if (empty($field['delta'])) {
 			$field['delta'] = ++$max_values['delta'];
@@ -1654,6 +1787,7 @@ function node_specifications_filter_preset_load_by_base_uri($base_uri) {
 }
 
 function node_specifications_filter_preset_save($preset) {
+  $preset['content'] = is_array($preset['content']) ? $preset['content']['value'] : $preset['content'] ?? '';
 	if (empty($preset['weight'])) {
 		$preset['weight'] = db_query('SELECT MAX(weight) FROM {node_specifications_filter_presets}')->fetchField() + 1;
 	}

@@ -9,35 +9,59 @@ function shop_carts_list_form($form, &$form_state) {
 	$header = array(
 		'created' => array('data' => t('Created'), 'field' => 'sc.created', 'sort' => 'desc',),
 		'changed' => array('data' => t('Changed'), 'field' => 'sc.changed', 'sort' => 'desc',),
-		'cart_num' => array('data' => t('# cart'), 'field' => 'sc.cart_id',),
-		'cart_status' => array('data' => t('Status'),),
-		'order_num' => array('data' => t('# order'),),
-		'user' => array('data' => t('User'),),
+		'cart_id' => array('data' => t('Cart ID'), 'field' => 'sc.visitor_id',),
+    'shop_id' => array('data' => t('Shop'), 'field' => 'sc.shop_id',),
+		'user' => array('data' => t('User'), 'field' => module_exists('social_profile') ? 'u.lfm' : 'u.name'),
 		'cart_content' => array('data' => t('Cart content'),),
 		'cart_sum' => array('data' => t('Sum'),),
-		'notes' => array('data' => t('Notes'),)
 	);
-	$query = db_select('shop_cart', 'sc');
-	$query->fields('sc', array('cart_id', 'uid',));
-	$query = $query->extend('PagerDefault');
-	$query->extend('TableSort')->orderByHeader($header);
-	$query->limit(50);
+  
+  $query = db_select('shop_cart', 'sc')->fields('sc');
+  $query->join('users', 'u', 'u.uid = sc.uid');
+  $query = $query->extend('PagerDefault');
+  $query->extend('TableSort')->orderByHeader($header);
+  $query->limit(50);
 	$rows = array();
 	$row_template = array_fill_keys(array_keys($header), array('data' => '&nbsp;',));
 	foreach ($query->execute() as $result) {
-		$shop_cart = shop_cart($result->uid, NULL, $result->cart_id);
+    $items = array();
+    $total_sum = 0;
+    foreach (db_query(
+    'SELECT si.entity_type, si.entity_id, sci.snapshot_id, si.price, sci.qty
+    FROM {shop_cart_items} sci 
+    INNER JOIN {shop_index} si ON si.entity_type = sci.entity_type AND si.entity_id = sci.entity_id 
+    WHERE sci.visitor_id = :vid AND si.shop_id = :sid', array(
+      ':vid' => $result->visitor_id,
+      ':sid' => $result->shop_id,
+    )) as $r) {
+      if ($e = entity_load($r->entity_type, array($r->entity_id))) {
+        $entity = clone $e[$r->entity_id];
+        $entity->snapshot_id = $r->snapshot_id;
+        $r->entity_uri = entity_uri($r->entity_type, $entity)['path'];
+        $r->price = array_sum(shop_build_price('product', $entity, $result->uid));
+        $r->title = entity_label($r->entity_type, $entity);
+        $items[] = $r;
+        $total_sum += $r->price * $r->qty;
+      }
+      
+    }
+		//$shop_cart = shop_cart($result->shop_id, $result->uid);
 		$row = $row_template;
-		$row['created']['data'] = format_date($shop_cart->created, 'short');
-		$row['changed']['data'] = format_date($shop_cart->changed, 'short');
-		$row['cart_num']['data'] = $shop_cart->cart_id;
-		$row['user']['data'] = theme('username', array('account' => user_load($shop_cart->uid)));
-		if (!empty($shop_cart->items)) {
+		$row['created']['data'] = format_date($result->created, 'short');
+		$row['changed']['data'] = format_date($result->changed, 'short');
+		$row['cart_id']['data'] = $result->visitor_id;
+    $row['shop_id']['data'] = l(shop_list_shops($result->shop_id)['name'], shop_list_shops($result->shop_id)['uri']);
+		$row['user']['data'] = theme('username', array('account' => $result));
+    if (!$items) {
+      $row['cart_content']['data'] = '&nbsp;';
+    }
+		else {
 			$item_links = array();
-			foreach ($shop_cart->items as $cart_item) {
+			foreach ($items as $cart_item) {
 				$item_links[] = array(
 					'title' => $cart_item->title . '</a> - <small>' . theme('price', array(
 						'price' => $cart_item->price,
-						'currency' => $cart_item->currency,
+						'currency' => shop_get_info('currency', 'default'),
 						'qty' => $cart_item->qty * 1,
 						)) . '</small>',
 					'html' => TRUE,
@@ -49,8 +73,8 @@ function shop_carts_list_form($form, &$form_state) {
 			}
 			$row['cart_content']['data'] = array('#theme' => 'links', '#links' => $item_links,);
 		}
-		if ($shop_cart->total_sum) {
-			$row['cart_sum']['data'] = theme('price', array('price' => $shop_cart->total_sum,));
+		if ($total_sum) {
+			$row['cart_sum']['data'] = theme('price', array('price' => $total_sum,));
 		}
 		$rows[] = $row;
 	}
@@ -183,7 +207,7 @@ function shop_payments_form($form, &$form_state){
   $q->fields('so', array('nid'));
   $q->leftJoin('node', 'n', 'n.nid = so.nid');
   $q->condition('so.is_paid', 1);
-  $q->orderBy('n.changed', 'DESC');
+  $q->orderBy('so.payment_timestamp', 'DESC');
   $q = $q->extend('PagerDefault')->limit(50);
   $nids = $q->execute()->fetchCol();
 
@@ -194,7 +218,7 @@ function shop_payments_form($form, &$form_state){
     $price = array_sum(shop_build_price('order', $node, $customer));
 
     $row = $row_template;
-    $row['date'] = format_date($node->changed, 'short');
+    $row['date'] = format_date($node->payment_timestamp, 'short');
     $row['total'] = theme('price', array('price' => $price, 'currency' => $def_currency));
     $row['order_num'] = l($node->order_num, "node/{$nid}", array('attributes' => array('class' => array('popup',))));
     $row['payment_method'] = money_sources_info($node->payment_method, NULL, 'title');
@@ -408,4 +432,10 @@ function _shop_date_filter_for_graph_subform_submit($form, &$form_state) {
 
 function _shop_date_filter_for_graph_subform_reset($form, &$form_state) {
 	$form_state['redirect'] = $_GET['q'];
+}
+
+
+function admin_shop_profit_admin_form($form, $form_state) {
+  $source_info = money_sources_info('site');
+  return money_source_transactions_overview_form($form, $form_state, $source_info);
 }

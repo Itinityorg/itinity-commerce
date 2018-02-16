@@ -42,6 +42,13 @@ function shop_schema() {
         'not null' => FALSE,
         'default' => NULL,
       ),
+      'shop_id' => array(
+        'description' => 'Shop identifier (int, string, string+int), default is "0"',
+        'type' => 'varchar',
+        'length' => 255,
+        'not null' => TRUE,
+        'default' => '0',  
+      ),
       'price' => array(
         'description' => 'Price of product',
         'type' => 'numeric',
@@ -115,28 +122,31 @@ function shop_schema() {
       'price' => array('price'),
       'qty' => array('qty'),
       'qty_type' => array('qty_type'),
+      'shop_id' => array('shop_id',),
     ),
   );
 
   $schema['shop_cart'] = array(
     'description' => 'Shop carts storage',
     'fields' => array(
-      'cart_id' => array(
-        'description' => 'Record id',
-        'type' => 'serial',
-        'not null' => TRUE,
-      ),
       'uid' => array(
         'description' => 'Account id',
         'type' => 'int',
         'unsigned' => TRUE,
         'not null' => TRUE,
       ),
-      'anonymous_key' => array(
-        'description' => 'Anonymous identifier in cookies',
-        'type' => 'varchar',
-        'length' => '128',
+      'visitor_id' => array(
+        'description' => 'Site visitor identifier by anonymous_tracker module',
+        'type' => 'int',
+        'unsigned' => TRUE,
         'not null' => TRUE,
+      ),
+      'shop_id' => array(
+        'description' => 'Shop identifier (int, string, string+int), default is "0"',
+        'type' => 'varchar',
+        'length' => 255,
+        'not null' => TRUE,
+        'default' => '0',  
       ),
       'created' => array(
         'description' => 'Date of creation',
@@ -156,9 +166,11 @@ function shop_schema() {
         'not null' => FALSE,
       ),
     ),
-    'primary key' => array('cart_id'),
+    'unique keys' => array(
+      'shop_id_visitor_id' => array('shop_id', 'visitor_id', ),
+    ),
     'indexes' => array(
-      'anonymous_key' => array('anonymous_key'),
+      'visitor_id' => array('visitor_id'),
       'changed' => array('changed'),
       'uid' => array('uid'),
     ),
@@ -166,8 +178,8 @@ function shop_schema() {
   $schema['shop_cart_items'] = array(
     'description' => 'Products in shop cart',
     'fields' => array(
-      'cart_id' => array(
-        'description' => 'Id in shop_cart table',
+      'visitor_id' => array(
+        'description' => 'Site visitor identifier by anonymous_tracker module',
         'type' => 'int',
         'unsigned' => TRUE,
         'not null' => TRUE,
@@ -201,9 +213,10 @@ function shop_schema() {
       ),
     ),
     'unique keys' => array(
-      'cart_id_entity' => array('cart_id', 'entity_type', 'entity_id', 'snapshot_id')
+      'visitor_id_entity' => array('visitor_id', 'entity_type', 'entity_id', 'snapshot_id'),
     ),
     'indexes' => array(
+      'visitor_id' => array('visitor_id',),
       'qty' => array('qty'),
     ),
   );
@@ -1201,6 +1214,136 @@ function shop_update_7125() {
   db_query('DELETE FROM {menu_links} WHERE link_path LIKE \'admin/shop/%\' AND module = \'system\' AND customized = 0');
   variable_set('menu_rebuild_needed', TRUE);
 }
+
+/**
+* change anonymous_key type
+*/
+function shop_update_7126() {
+  db_change_field('shop_cart', 'anonymous_key', 'anonymous_key', array(
+    'description' => 'Anonymous identifier in cookies',
+    'type' => 'int',
+    'unsigned' => TRUE,
+    'not null' => TRUE,
+  ));
+}
+
+
+/**
+* Rename {shop_cart}.anonymous_key to visitor_id
+*/
+function shop_update_7127() {
+  db_change_field('shop_cart', 'anonymous_key', 'visitor_id', array(
+    'description' => 'Site visitor identifier by anonymous_tracker module',
+    'type' => 'int',
+    'unsigned' => TRUE,
+    'not null' => TRUE,
+  ));
+  db_drop_index('shop_cart', 'anonymous_key');
+  db_add_index('shop_cart', 'visitor_id', array('visitor_id',));
+}
+
+
+/**
+* Add {shop_cart}.shop_id
+*/
+function shop_update_7128() {
+  db_add_field('shop_cart', 'shop_id', array(
+    'description' => 'Shop identifier (int, string, string+int), default is "0"',
+    'type' => 'varchar',
+    'length' => 255,
+    'not null' => TRUE,
+    'default' => '0',   
+  ));
+  db_add_index('shop_cart', 'shop_id', array('shop_id',));
+}
+
+
+/**
+* Add unique key shop_id_visitor_id into {shop_cart}
+*/
+function shop_update_7129() {
+  $del_carts = [];
+  foreach (db_query('SELECT GROUP_CONCAT(sc.uid) AS uids, GROUP_CONCAT(a.uid) AS a_uids, GROUP_CONCAT(sc.cart_id) AS cart_ids
+    FROM {shop_cart} sc
+    LEFT JOIN {anonymous_tracker} a ON a.id = sc.visitor_id
+    GROUP BY sc.visitor_id
+    HAVING COUNT(sc.visitor_id) > 1') as $r) {
+    $uids = explode(',', $r->uids);
+    $a_uids = explode(',', $r->a_uids);
+    $cart_ids = explode(',', $r->cart_ids);
+    foreach ($uids as $idx => $uid) {
+      if ($uid != $a_uids[$idx] || $idx) {
+        $del_carts[] = $cart_ids[$idx];
+      }
+    }
+  }
+  
+  if ($del_carts) {
+    db_query('DELETE FROM {shop_cart} WHERE cart_id IN (:ids)', array(':ids' => $del_carts));
+    db_query('DELETE FROM {shop_cart_items} WHERE cart_id IN (:ids)', array(':ids' => $del_carts));
+  }
+  
+  db_add_unique_key('shop_cart', 'shop_id_visitor_id', array('shop_id', 'visitor_id', ));
+}
+
+
+/**
+* Update {shop_cart_items} structure
+*/
+function shop_update_7131() {
+  db_add_field('shop_cart_items', 'visitor_id', array(
+    'description' => 'Site visitor identifier by anonymous_tracker module',
+    'type' => 'int',
+    'unsigned' => TRUE,
+     // Temporary set as default NULL to avoid exception at update process
+    'not null' => FALSE,
+    'default' => NULL,
+    ));
+  db_drop_unique_key('shop_cart_items', 'cart_id_entity');
+
+  foreach (db_query('SELECT cart_id, visitor_id FROM {shop_cart}') as $r) {
+    db_query('UPDATE {shop_cart_items} SET visitor_id = :id WHERE cart_id = :cid', array(
+      ':id' => $r->visitor_id,
+      ':cid' => $r->cart_id,
+    ));
+  }
+  db_query('DELETE FROM {shop_cart_items} WHERE visitor_id IS NULL');
+  db_change_field('shop_cart_items', 'visitor_id', 'visitor_id', array(
+    'description' => 'Site visitor identifier by anonymous_tracker module',
+    'type' => 'int',
+    // Set new added field equals to scheme definition
+    'unsigned' => TRUE, 
+    'not null' => TRUE,
+  ));
+  
+  db_add_unique_key('shop_cart_items', 'visitor_id_entity', array('visitor_id', 'entity_type', 'entity_id', 'snapshot_id'));
+  db_add_index('shop_cart_items', 'visitor_id', array('visitor_id',));
+}
+
+
+/**
+* Update {shop_index} structure
+*/
+function shop_update_7132() {
+  db_add_field('shop_index', 'shop_id', array(
+    'description' => 'Shop identifier (int, string, string+int), default is "0"',
+    'type' => 'varchar',
+    'length' => 255,
+    'not null' => TRUE,
+    'default' => '0',  
+  ));
+  db_add_index('shop_index', 'shop_id', array('shop_id',));
+}
+
+
+/**
+* Drop cart_id columns
+*/
+function shop_update_7133() {
+  db_drop_field('shop_cart', 'cart_id');
+  db_drop_field('shop_cart_items', 'cart_id');
+}
+
 
 
 // @TODO: delete 'delivery' array from shop_info

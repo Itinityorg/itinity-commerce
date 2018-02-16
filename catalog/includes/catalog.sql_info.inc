@@ -334,7 +334,7 @@ function user_catalog_sql_info($catalog_object) {
 
   }
 
-  if ($catalog_object->entity_type === 'node' && $catalog_object->is_block) {
+  if ($catalog_object->entity_type === 'node' && !empty($catalog_object->is_block)) {
     $result['filters']['current_profile'] = array(
       'description' => t('Only materials belonging to the currently displayed user profile'),
       'settings form' => array(
@@ -393,55 +393,147 @@ function social_profile_catalog_sql_info_alter(&$sql_info, $catalog_object) {
 function product_catalog_sql_info($catalog_object) {
   if (shop_get_info('entity_types', $catalog_object->entity_type, $catalog_object->bundle)) {
     $entity_info = entity_get_info($catalog_object->entity_type);
-    return array(
-      'orders' => array(
-        'price' => array(
-          'label' => t('Price'),
-          'by' => 'si.price',
-          'commands' => array(
-            'innerJoin' => array(
-              array(
-                'shop_index',
-                'si',
-                'si.entity_type = :entity_type AND si.entity_id = base.' . $entity_info['entity keys']['id'],
-                array(':entity_type' => $catalog_object->entity_type,),
-              ),
-            ),
-          ),
-        ),
-        'qty' => array(
-          'label' => t('Qty'),
-          'by' => 'si.qty DESC',
-          'commands' => array(
-            'innerJoin' => array(
-              array(
-                'shop_index',
-                'si',
-                'si.entity_type = :entity_type AND si.entity_id = base.' . $entity_info['entity keys']['id'],
-                array(':entity_type' => $catalog_object->entity_type,),
-              ),
-            ),
+    $result['orders']['price'] = array(
+      'label' => t('Price'),
+      'by' => 'si.price',
+      'commands' => array(
+        'innerJoin' => array(
+          array(
+            'shop_index',
+            'si',
+            'si.entity_type = :entity_type AND si.entity_id = base.' . $entity_info['entity keys']['id'],
+            array(':entity_type' => $catalog_object->entity_type,),
           ),
         ),
       ),
-      'filters' => array(
-        'in_stock' => !shop_get_info('balances', 'settings', 'track') ? array() : array( // filter method internal key.
-          'description' => t('In stock'),
-          'where' => 'si.qty > 0 OR si.qty IS NULL',
-          'exposed' => TRUE,
-          'commands' => array(
-            'innerJoin' => array(
-              array(
-                'shop_index',
-                'si',
-                'si.entity_type = :entity_type AND si.entity_id = base.' . $entity_info['entity keys']['id'],
-                array(':entity_type' => $catalog_object->entity_type,),
-              ),
+    );
+
+    if (module_exists('multicurrency')) {
+      // dirty hack
+      //  ğåêóğñèâíàÿ ëÿìáäà-ôóíêöèÿ, ïğèíèìàşùàÿ ìàññèâ âàëşò è âîçâğàùàşùàÿ âûğàæåíèå âèäà
+      // IF(si.currency = 'EUR', si.price * 70, IF(si.currency = 'USD', si.price * 60, IF(si.currency = 'RUB', IF(...))))
+      // @todo õğàíèòü êóğñû âàëşò â ÁÄ è íîğìàëüíî äæîéíèòü òàáëèöó, à íå âîò ıòî âîò âñå
+      $if_expression = function ($list) use (&$if_expression) {
+        return ($item = array_pop($list)) ? "IF(si.currency = '" . $item['id'] . "', si.price * " . $item['rate'] . ", " . $if_expression($list) . ")" : 'si.price';
+      };
+
+      $money_currency_info_enabled = array_filter(money_currency_info(), function ($item) { return !empty($item['rate']); });
+
+      $result['orders']['price']['commands']['addExpression'] = array(array($if_expression($money_currency_info_enabled), 'multicurrency_price'));
+      $result['orders']['price']['by'] = 'multicurrency_price';
+    }
+
+    $result['orders']['qty'] = array(
+      'label' => t('Qty'),
+      'by' => 'si.qty DESC',
+      'commands' => array(
+        'innerJoin' => array(
+          array(
+            'shop_index',
+            'si',
+            'si.entity_type = :entity_type AND si.entity_id = base.' . $entity_info['entity keys']['id'],
+            array(':entity_type' => $catalog_object->entity_type,),
+          ),
+        ),
+      ),
+    );
+
+    $result['filters'] = array(
+      'in_stock' => !shop_get_info('balances', 'settings', 'track') ? array() : array( // filter method internal key.
+        'description' => t('In stock'),
+        'where' => 'si.qty > 0 OR si.qty IS NULL',
+        'exposed' => TRUE,
+        'commands' => array(
+          'innerJoin' => array(
+            array(
+              'shop_index',
+              'si',
+              'si.entity_type = :entity_type AND si.entity_id = base.' . $entity_info['entity keys']['id'],
+              array(':entity_type' => $catalog_object->entity_type,),
             ),
           ),
         ),
       ),
     );
+    $min = !empty($catalog_object->filters['price']['settings']['min']) ? $catalog_object->filters['price']['settings']['min'] : 0;
+    $max = !empty($catalog_object->filters['price']['settings']['max']) ? $catalog_object->filters['price']['settings']['max'] : 0;
+    if ($min > $max && $max !== '') {
+      list($min ,$max) = array($max, $min);
+    }
+    $result['filters']['price'] = array(
+      'description' => t('Price'),
+      'settings form' => array(
+        '#inline' => TRUE,
+        'min' => array(
+          '#type' => 'digit',
+          '#title' => t('from'),
+          '#default_value' => $min,
+          '#field_suffix' => format_currency(variable_get('money_default_currency', 'RUB')),
+          '#float' => TRUE,
+          '#min' => 0,
+        ),
+        'max' => array(
+          '#type' => 'digit',
+          '#title' => t('to'),
+          '#default_value' => $max,
+          '#field_suffix' => format_currency(variable_get('money_default_currency', 'RUB')),
+          '#float' => TRUE,
+          '#min' => 0,
+        ),
+      ),
+    );
+    if ($min || $max) {
+      $result['filters']['price']['commands']['innerJoin'] = array(
+        array(
+          'shop_index',
+          'si',
+          'si.entity_type = :entity_type AND si.entity_id = base.' . $entity_info['entity keys']['id'],
+          array(':entity_type' => $catalog_object->entity_type,),
+        ),
+      );
+
+      $def = variable_get('money_default_currency', 'RUB');
+
+      if (module_exists('multicurrency')) {
+        $money_currency_info = money_currency_info();
+        $money_currency_info_enabled = array_filter(array_column($money_currency_info, 'enabled', 'id'));
+      }
+      else {
+        $money_currency_info_enabled = array($def => TRUE);
+      }
+
+      $db_or = db_or();
+
+      foreach (array_keys($money_currency_info_enabled) as $fs_code) {
+        $rate = ($fs_code == $def) ? 1 : $money_currency_info[$fs_code]['rate'];
+        $rate = $rate ? $rate : 0;
+        if ($rate > 0) {
+          $db_and = db_and()
+            ->isNotNull('si.price')
+            ->condition('si.price', $min / $rate, '>=')
+            ->condition('si.price', $max / $rate, '<=');
+
+          if ($fs_code == $def) {
+            $db_and->condition(db_or()->condition('si.currency', $fs_code)->isNull('si.currency'));
+          }
+          else {
+            $db_and->condition('si.currency', $fs_code);
+          }
+
+          $db_or->condition($db_and);
+        }
+      }
+
+      $result['filters']['price']['commands']['condition'][] = array($db_or);
+
+//      $result['filters']['price']['commands']['where'] = array(
+//        array(
+//          ($min ? 'si.price IS NOT NULL AND si.price >= :min' : '') . ($max ? ($min ? ' AND ' : '') . 'si.price <= :max' : ''),
+//          array(':min' => $min, ':max' => $max,),
+//        ),
+//      );
+    }
+    return $result;
   }
 }
 
@@ -535,7 +627,7 @@ function field_catalog_sql_info($catalog_object) {
   );
   $field_types = field_info_field_types();
   foreach (field_info_instances($catalog_object->entity_type, $catalog_object->bundle) as $field_name => $instance) {
-    $field_info_field  = field_info_field($field_name);
+    $field_info_field = field_info_field($field_name);
         //m($field_info_field['type']);
 
     if ($field_info_field['type'] === 'taxonomy_term_reference') {
@@ -595,7 +687,7 @@ function field_catalog_sql_info($catalog_object) {
 
   // Filters:
   foreach (field_info_instances($catalog_object->entity_type, $catalog_object->bundle) as $field_name => $instance) {
-    $field_info_field  = field_info_field($field_name);
+    $field_info_field= field_info_field($field_name);
     $table = 'field_data_' . $field_name;
     if (in_array($field_info_field['type'], array('number_decimal', 'number_integer'), TRUE)) {
       $min = isset($catalog_object->filters[$field_name]['settings']['min']) ? $catalog_object->filters[$field_name]['settings']['min'] : NULL;
@@ -916,7 +1008,7 @@ function catalog_catalog_sql_info($catalog_object) {
       ),
     );
   }
-  if ($catalog_object->is_block) {
+  if (!empty($catalog_object->is_block)) {
     $result['filters']['exclude_current'] = array(
       'description' => t('Exclude object already displayed in main content'),
       'default' => TRUE,
@@ -977,13 +1069,15 @@ function catalog_catalog_sql_info($catalog_object) {
   // ********************   created fields
   $form = array();
   if (!empty($catalog_object->filters['created']['settings']['curr_month'])) {
-    $created[1] =  strtotime(date("Y-m-01"));
-    $created[2] =  strtotime(date("Y-m-".date("t")));
-  } else {
-    foreach (array(1, 2) as $d_numb) {
-      $created[$d_numb] = isset($catalog_object->filters['created']['settings']['it'.$d_numb]) ? $catalog_object->filters['created']['settings']['it'.$d_numb] : '';
+    $created[1] =  strtotime(date('Y-m-01'));
+    $created[2] =  strtotime(date('Y-m-' . date('t')));
+  }
+  else {
+    $created[1] = !empty($catalog_object->filters['created']['settings']['it1']) ? $catalog_object->filters['created']['settings']['it1'] : 0;
+    $created[2] = !empty($catalog_object->filters['created']['settings']['it2']) ? $catalog_object->filters['created']['settings']['it2'] : 0;
+    if (!empty($catalog_object->filters['created']['settings']['one_day'])) {
+      $created[2] = $created[1];
     }
-    if (!empty($catalog_object->filters['created']['settings']['one_day'])) $created[2] = $created[1];
   }
   $form['it1'] = array(
     '#type' => 'datetime',
@@ -1030,11 +1124,11 @@ function catalog_catalog_sql_info($catalog_object) {
     '#field_prefix' => '<div class="container-inline">',
     '#field_suffix' => '</div>',
     'description' => t('Created'),
-     'settings form' => $form,
+    'settings form' => $form,
     'commands' => array(
           'where' => array(
              array('base.created > :it1', array(':it1' => $created[1])),
-             array('base.created < :it2', array(':it2' => $created[2] + 24*60*60)),
+             array('base.created < :it2', array(':it2' => $created[2] + (24 * 60 * 60))),
             ),
     ),
   );
@@ -1082,9 +1176,6 @@ function poll_catalog_sql_info($catalog_object) {
 }
 
 
-/*
- * @todo delete
- * doesn't work anymore
 function new_price_catalog_sql_info($catalog_object) {
   if (shop_get_info('entity_types', $catalog_object->entity_type, $catalog_object->bundle)) {
     $entity_info = entity_get_info($catalog_object->entity_type);
@@ -1120,7 +1211,6 @@ function new_price_catalog_sql_info($catalog_object) {
     );
   }
 }
-*/
 
 
 function shop_variants_catalog_sql_info($catalog_object) {
@@ -1141,10 +1231,10 @@ function shop_variants_catalog_sql_info($catalog_object) {
                 '#title' => '',
                 '#type' => 'select',
                 '#options' => array(
-                  // IKW: ĞĞ¿Ñ†Ğ¸Ğ¸: ĞŸĞ¾ĞºĞ°Ğ·Ğ°Ñ‚ÑŒ Ñ‚Ğ¾Ğ»ÑŒĞºĞ¾ Ğ³Ğ»Ğ°Ğ²Ğ½Ñ‹Ğ¹ Ğ²Ğ°Ñ€Ğ¸Ğ°Ğ½Ñ‚ - ĞŸĞ¾ĞºĞ°Ğ·Ğ°Ñ‚ÑŒ Ñ‚Ğ¾Ğ»ÑŒĞºĞ¾ Ğ¿ĞµÑ€Ğ²Ñ‹Ğ¹ ÑƒÑ€Ğ¾Ğ²ĞµĞ½ÑŒ Ğ¸ĞµÑ€Ğ°Ñ€Ñ…Ğ¸Ğ¸ - ĞŸĞ¾ĞºĞ°Ğ·Ğ°Ñ‚ÑŒ Ğ¿ĞµÑ€Ğ²Ñ‹Ğ¹ Ğ¸ Ğ²Ñ‚Ğ¾Ñ€Ğ¾Ğ¹ ÑƒÑ€Ğ¾Ğ²Ğ½Ğ¸ Ğ¸ĞµÑ€Ğ°Ñ€Ñ…Ğ¸Ğ¸
+                  // IKW: Îïöèè: Ïîêàçàòü òîëüêî ãëàâíûé âàğèàíò - Ïîêàçàòü òîëüêî ïåğâûé óğîâåíü èåğàğõèè - Ïîêàçàòü ïåğâûé è âòîğîé óğîâíè èåğàğõèè
                   NULL => t('Display only main variant'),
-                  1 => t('Display only 1st level of hierarchy'), // IKW - Ğ¿Ğ¸ÑˆĞµĞ¼ Ğ¾Ğ´Ğ½Ğ¾, Ğ¸Ğ¼ĞµĞµĞ¼ Ğ² Ğ²Ğ¸Ğ´Ñƒ Ğ´Ñ€ÑƒĞ³Ğ¾Ğµ - Ğ² Ñ€ĞµĞ°Ğ»Ğµ Ğ´Ğ¾Ğ»Ğ¶Ğ½Ñ‹ Ğ¿Ğ¾ĞºĞ°Ğ·Ğ°Ğ½Ñ‹ Ğ¢ĞĞ›Ğ¬ĞšĞ ĞºĞ¾Ñ€Ğ½ĞµĞ²Ñ‹Ğµ Ğ²Ğ°Ñ€Ğ¸Ğ°Ğ½Ñ‚Ñ‹ Ñ depth = 0
-                  2 => t('Display 1st and 2nd levels of hierarchy'),// IKW - Ğ¿Ğ¸ÑˆĞµĞ¼ Ğ¾Ğ´Ğ½Ğ¾, Ğ¸Ğ¼ĞµĞµĞ¼ Ğ² Ğ²Ğ¸Ğ´Ñƒ Ğ´Ñ€ÑƒĞ³Ğ¾Ğµ - Ğ² Ñ€ĞµĞ°Ğ»Ğµ Ğ´Ğ¾Ğ»Ğ¶Ğ½Ñ‹ Ğ¿Ğ¾ĞºĞ°Ğ·Ğ°Ğ½Ñ‹ Ğ¢ĞĞ›Ğ¬ĞšĞ ĞºĞ¾Ñ€Ğ½ĞµĞ²Ñ‹Ğµ Ğ²Ğ°Ñ€Ğ¸Ğ°Ğ½Ñ‚Ñ‹ Ñ depth = 0 Ğ¿Ğ»ÑÑ Ğ²Ğ°Ñ€Ğ¸Ğ°Ğ½Ñ‚Ñ‹ Ñ ÑƒÑ€Ğ¾Ğ²Ğ½ĞµĞ¼ 1, Ğ½Ğ¾ Ğ½Ğµ Ğ±Ğ¾Ğ»ĞµĞµ
+                  1 => t('Display only 1st level of hierarchy'), // IKW - ïèøåì îäíî, èìååì â âèäó äğóãîå - â ğåàëå äîëæíû ïîêàçàíû ÒÎËÜÊÎ êîğíåâûå âàğèàíòû ñ depth = 0
+                  2 => t('Display 1st and 2nd levels of hierarchy'),// IKW - ïèøåì îäíî, èìååì â âèäó äğóãîå - â ğåàëå äîëæíû ïîêàçàíû ÒÎËÜÊÎ êîğíåâûå âàğèàíòû ñ depth = 0 ïëşñ âàğèàíòû ñ óğîâíåì 1, íî íå áîëåå
                 ),
                 '#default_value' => isset($catalog_object->filters['hide_variants']['settings']['level']) ? $catalog_object->filters['hide_variants']['settings']['level'] : NULL,
               ),
@@ -1162,15 +1252,15 @@ function shop_variants_catalog_sql_info($catalog_object) {
         ),
       );
       if (empty($catalog_object->filters['hide_variants']['settings']['level'])) {
-        // ĞÑ‚Ğ¾Ğ±Ñ€Ğ°Ğ·Ğ¸Ñ‚ÑŒ Ñ‚Ğ¾Ğ»ÑŒĞºĞ¾ Ğ³Ğ»Ğ°Ğ²Ğ½Ñ‹Ğµ Ğ²Ğ°Ñ€Ğ¸Ğ°Ğ½Ñ‚Ñ‹ (Ñ‚.Ğµ. Ñ‚Ğµ, ĞºĞ¾Ñ‚Ğ¾Ñ€Ñ‹Ğµ Ğ½Ğµ ÑĞ²Ğ»ÑÑÑ‚ÑÑ Ğ´Ğ¾Ñ‡ĞµÑ€Ğ½Ğ¸Ğ¼Ğ¸ Ğ²Ğ¾Ğ¾Ğ±Ñ‰Ğµ Ğº Ñ‡ĞµĞ¼Ñƒ-Ğ»Ğ¸Ğ±Ğ¾)
+        // Îòîáğàçèòü òîëüêî ãëàâíûå âàğèàíòû (ò.å. òå, êîòîğûå íå ÿâëÿşòñÿ äî÷åğíèìè âîîáùå ê ÷åìó-ëèáî)
         $result['filters']['hide_variants']['commands']['where'][] = array('sv.nid IS NULL');
       }
       else {
         $level = $catalog_object->filters['hide_variants']['settings']['level'];
-        if ($level == 1) {// IKW - Ğ¿Ğ¸ÑˆĞµĞ¼ Ğ¾Ğ´Ğ½Ğ¾, Ğ¸Ğ¼ĞµĞµĞ¼ Ğ² Ğ²Ğ¸Ğ´Ñƒ Ğ´Ñ€ÑƒĞ³Ğ¾Ğµ - Ğ² Ñ€ĞµĞ°Ğ»Ğµ Ğ´Ğ¾Ğ»Ğ¶Ğ½Ñ‹ Ğ¿Ğ¾ĞºĞ°Ğ·Ğ°Ğ½Ñ‹ Ğ¢ĞĞ›Ğ¬ĞšĞ ĞºĞ¾Ñ€Ğ½ĞµĞ²Ñ‹Ğµ Ğ²Ğ°Ñ€Ğ¸Ğ°Ğ½Ñ‚Ñ‹ Ñ depth = 0
+        if ($level == 1) {// IKW - ïèøåì îäíî, èìååì â âèäó äğóãîå - â ğåàëå äîëæíû ïîêàçàíû ÒÎËÜÊÎ êîğíåâûå âàğèàíòû ñ depth = 0
           $result['filters']['hide_variants']['commands']['where'][] = array('sv.nid IS NULL OR depth = 0');
         }
-        else {// IKW - Ğ¿Ğ¸ÑˆĞµĞ¼ Ğ¾Ğ´Ğ½Ğ¾, Ğ¸Ğ¼ĞµĞµĞ¼ Ğ² Ğ²Ğ¸Ğ´Ñƒ Ğ´Ñ€ÑƒĞ³Ğ¾Ğµ - Ğ² Ñ€ĞµĞ°Ğ»Ğµ Ğ´Ğ¾Ğ»Ğ¶Ğ½Ñ‹ Ğ¿Ğ¾ĞºĞ°Ğ·Ğ°Ğ½Ñ‹ Ğ¢ĞĞ›Ğ¬ĞšĞ ĞºĞ¾Ñ€Ğ½ĞµĞ²Ñ‹Ğµ Ğ²Ğ°Ñ€Ğ¸Ğ°Ğ½Ñ‚Ñ‹ Ñ depth = 0 Ğ¿Ğ»ÑÑ Ğ²Ğ°Ñ€Ğ¸Ğ°Ğ½Ñ‚Ñ‹ Ñ ÑƒÑ€Ğ¾Ğ²Ğ½ĞµĞ¼ 1, Ğ½Ğ¾ Ğ½Ğµ Ğ±Ğ¾Ğ»ĞµĞµ
+        else {// IKW - ïèøåì îäíî, èìååì â âèäó äğóãîå - â ğåàëå äîëæíû ïîêàçàíû ÒÎËÜÊÎ êîğíåâûå âàğèàíòû ñ depth = 0 ïëşñ âàğèàíòû ñ óğîâíåì 1, íî íå áîëåå
           $result['filters']['hide_variants']['commands']['where'][] = array('sv.nid IS NULL OR depth = 0 OR depth = 1');
         }
       }
@@ -1552,9 +1642,9 @@ function task_catalog_sql_info($catalog_object) {
     'description' => t('Title of task'),
     'settings form' => array(
         'it' => array(
-        '#type'          => 'textfield',
+        '#type' => 'textfield',
         '#default_value' => $title,
-        '#description'   => t('Task title contains this text'),
+        '#description' => t('Task title contains this text'),
       ),
     ),
     'commands' => array(
@@ -1626,9 +1716,8 @@ function task_catalog_sql_info($catalog_object) {
       $start[1] = strtotime('midnight first day of this month'); // analog strtotime('0:0'));
       $start[2] = strtotime('last day of this month');
     } else {
-      foreach (array(1, 2) as $d_numb) {
-        $start[$d_numb] = isset($catalog_object->filters['start']['settings']['it'.$d_numb]) ? $catalog_object->filters['start']['settings']['it'.$d_numb] : '';
-      }
+      $start[1] = !empty($catalog_object->filters['start']['settings']['it1']) ? $catalog_object->filters['start']['settings']['it1'] : 0;
+      $start[2] = !empty($catalog_object->filters['start']['settings']['it2']) ? $catalog_object->filters['start']['settings']['it2'] : 0;
       if (!empty($catalog_object->filters['start']['settings']['curr_day'])) {
         $start[1] = $start[2] = strtotime('0:0'); // analog  strtotime('midnight this day')
       }
@@ -1679,18 +1768,18 @@ function task_catalog_sql_info($catalog_object) {
      );
 
     $result['filters']['start'] = array(
-      '#type'         => 'item',
+      '#type' => 'item',
       '#field_prefix' => '<div class="container-inline">',
       '#field_suffix' => '</div>',
       'description' => t('Start working'),
-       'settings form' => $form,
+      'settings form' => $form,
       'commands' => array(
             'where' => array(
                array(
                  'ta.start > :it1',  array(':it1' => $start[1]),
                ),
                array(
-                 'ta.start < :it2',  array(':it2' => $start[2] + 24*60*60),
+                 'ta.start < :it2',  array(':it2' => $start[2] + (24 * 60 * 60)),
                ),
               ),
       ),
@@ -1704,9 +1793,8 @@ function task_catalog_sql_info($catalog_object) {
       $deadline[2] = strtotime('last day of this month');
     }
     else {
-      foreach (array(1, 2) as $d_numb) {
-        $deadline[$d_numb] = isset($catalog_object->filters['deadline']['settings']['it'.$d_numb]) ? $catalog_object->filters['deadline']['settings']['it'.$d_numb] : '';
-      }
+      $deadline[1] = !empty($catalog_object->filters['deadline']['settings']['it1']) ? $catalog_object->filters['deadline']['settings']['it1'] : 0;
+      $deadline[2] = !empty($catalog_object->filters['deadline']['settings']['it2']) ? $catalog_object->filters['deadline']['settings']['it2'] : 0;
       if (!empty($catalog_object->filters['deadline']['settings']['curr_day'])) {
         $deadline[1] = $deadline[2] = strtotime('0:0'); // analog  strtotime('midnight this day')
       }
@@ -1747,22 +1835,21 @@ function task_catalog_sql_info($catalog_object) {
       '#title' => t('Current month'),
       '#default_value' => !empty($catalog_object->filters['deadline']['settings']['curr_month']),
      );
-
     $result['filters']['deadline'] = array(
-      '#type'         => 'item',
+      '#type' => 'item',
       '#field_prefix' => '<div class="container-inline">',
       '#field_suffix' => '</div>',
       'description' => t('Deadline'),
-       'settings form' => $form,
+      'settings form' => $form,
       'commands' => array(
-            'where' => array(
-               array(
-                 'ta.deadline > :it1',  array(':it1' => $deadline[1]),
-               ),
-               array(
-                 'ta.deadline < :it2',  array(':it2' => $deadline[2] + 24*60*60),
-               ),
-              ),
+        'where' => array(
+          array(
+            'ta.deadline > :it1',  array(':it1' => $deadline[1]),
+          ),
+          array(
+            'ta.deadline < :it2',  array(':it2' => $deadline[2] + 24*60*60),
+          ),
+        ),
       ),
     );
     //author field
@@ -1810,9 +1897,9 @@ function task_catalog_sql_info($catalog_object) {
       'description' => t('Internal number'),
        'settings form' => array(
          'it' => array(
-          '#type'             => 'textfield',
-          '#default_value'    => $internal_number,
-          '#size'             => 5,
+          '#type' => 'textfield',
+          '#default_value' => $internal_number,
+          '#size' => 5,
           '#element_validate' => array('element_validate_number'),
          ),
        ),

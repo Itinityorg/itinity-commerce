@@ -531,3 +531,6 @@ msgstr "Множественный выбор"
 
 msgid "With labels"
 msgstr "С метками"
+
+msgid "Content"
+msgstr "Содержимое"

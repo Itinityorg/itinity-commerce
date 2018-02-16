@@ -50,6 +50,15 @@ msgstr "До суммы заказа"
 msgid "to the order sum @sum"
 msgstr "до суммы заказа @sum"
 
+msgid "Add issuing point"
+msgstr "Добавить пункт выдачи"
+
+msgid "Delivery region"
+msgstr "Регион доставки"
+
+msgid "Add region"
+msgstr "Добавить регион"
+
 
 msgid "Allow payment methods"
 msgstr "Разрешить способы оплаты"
@@ -60,5 +69,8 @@ msgstr "Настройки способа доставки %name были сох
 msgctxt "Shop"
 msgid "Free"
 msgstr "Бесплатно"
+
+msgid "Required time, hours"
+msgstr "Требуемое время, часы"
 
 

@@ -7,13 +7,13 @@
 				
 				if (!$('input[id*="multifield-op-delete"]', $row).length) {
           
-          var elements = 'input, select, textarea';
+          var elements = 'input:not(:hidden):not(:submit), select, textarea';
           
           function canBeCleared($el) {
-            return $el.is(':visible') && !$el.attr('disabled') && !$el.attr('readonly') && ($el.val() || $el.is(':checked'));
+            return /*$el.is(':visible') && */!$el.attr('disabled') && !$el.attr('readonly') && ($el.val() || $el.is(':checked'));
           }
           
-					var $a = $('<a class="form-submit element-invisible" style="float:right" href="#">' + Drupal.t('Clear') + '</a>');
+					var $a = $('<a class="form-submit multifield-op-delete element-invisible" style="float:right" href="#">' + Drupal.t('Clear') + '</a>');
 					$(elements, $row).each(function() {
 						if (canBeCleared($(this))) {
 							$a.removeClass('element-invisible');

@@ -6,30 +6,24 @@
 	margin: -29px 160px 0 0;
 }
 
-#admin-menu-account   .admin-menu-account > a  {
-  position: relative;
-  padding-left: 42px !important;
-  min-height: 32px;
+#admin-menu-account   .admin-menu-account > a {
+  height: 32px;
 }
 
-#admin-menu-account  .admin-menu-account a  img {
-  position: absolute;
-  top: 2px;
-  left: 8px;
+#admin-menu-account  .admin-menu-account a img {
+  display: inline-block;
+  vertical-align: middle;
   max-width: 30px;
-  height: 26px;
+  height: 21px;
 }
 
 #admin-menu  .admin-menu-account .admin-menu-text {
   margin-right: 5px;
 }
 
-
-@media (max-width: 1600px) {
-  #admin-menu-account .admin-menu-account > a {
-    padding-left: 32px !important;
-  }
-
+.admin-menu-account .user-picture-stub {
+  width: 20px !important;
+  height: 20px !important;
+  font-size: 14px !important;
+  line-height: 18px;
 }
-
-

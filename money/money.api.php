@@ -165,7 +165,20 @@ function hook_money_operation_get_recipient($operation, $operation_key) {
   }
 }
 
-// hook_money_operation_get_recipient_alter($recipient, $recipient_key);
+
+/**
+ * Alters money_operation_get_recipient()
+ *
+ * @param $source_info
+ *  Result of original money_operation_get_recipient()
+ * @param $context
+ *  An associative array of incoming parameters of original money_operation_get_recipient()
+ */
+function hook_money_operation_get_recipient_alter(&$source_info, $context) {
+  $source = $source_info['source'];
+  $source_key = $source_info['source_key'];
+  $recipient = money_sources_info($source, $source_key);
+}
 
 
 /**
@@ -187,6 +200,7 @@ function hook_money_payment_widget_alter(&$build, $context) {
 
 /**
  * Alters money_get_available()
+ *
  * @param $available
  * @param $context
  */
@@ -194,6 +208,15 @@ function hook_money_get_available_alter(&$available, $context) {
   list($source_info, $operation, $operation_key) = array_values($context);
 }
 
+
+/**
+ * @param $rows
+ * @param $source_info
+ * @param $money_transactions
+ */
+function hook_money_transactions_list_alter(&$rows, $source_info, $money_transactions) {
+
+}
 
 
 

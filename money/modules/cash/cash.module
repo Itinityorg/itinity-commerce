@@ -18,7 +18,11 @@ function cash_money_sources_info($source = NULL, $source_key = NULL) {
       'external' => TRUE,
       'online' => FALSE,
       'description' => t('Payment at pickup or courier'),
-      'icon_url' => 'img/cash.png'
+      'icon_url' => 'img/cash.png',
+      'overview' => array(
+        'title' => t('Cash'),
+        'description' => t('Cash on receipt'),
+      ),
     ),
   );
 }

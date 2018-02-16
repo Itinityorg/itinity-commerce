@@ -216,7 +216,7 @@ function order_notify_info() {
         ),
 				'sms' => array(
 					'default' => FALSE,
-					'locked' => TRUE,
+					'locked' => FALSE,
 				),
       ),
     ),
@@ -290,8 +290,8 @@ function _notify_order_customer($message) {
 
 function _notify_order_author($message) {
 	$result = array();
-	if (!empty($message['params']['node']->uid)) {
-		$result =  array($message['params']['node']->uid);
+	if (!empty($message['params']['order']->uid)) {
+		$result =  array($message['params']['order']->uid);
 	}
 	return $result;
 }

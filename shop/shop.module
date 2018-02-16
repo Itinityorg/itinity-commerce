@@ -134,10 +134,11 @@ function shop_menu() {
 
   $items['admin/shop/profit'] = array(
     'title' => 'Shop profit',
-    'page callback' => 'drupal_goto',
-    'page arguments' => array('admin/config/money/transactions/site'),
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('admin_shop_profit_admin_form'),
     'access arguments' => array('administer moneys'),
     'type' => MENU_LOCAL_TASK,
+    'file' => 'shop.admin.inc',
   );
 
   // @todo Is this part deprecated and should be deleted?
@@ -162,10 +163,10 @@ function shop_menu() {
   );
 
   
-  $items['js/shop-cart-payment-button-ajax'] = array(
-    'title' => 'Shop payment button reloader AJAX callback',
+  $items['js/shop-cart-buy-button-ajax'] = array(
+    'title' => 'Shop buy button reloader AJAX callback',
     'access arguments' => array('access content'),
-    'page callback' => '_shop_cart_payment_button_ajax',
+    'page callback' => '_shop_cart_buy_button_ajax',
     'delivery callback' => 'shop_cart_ajax_deliver',
     'theme callback' => 'ajax_base_page_theme',
     'file' => 'shop.cart.block.inc',
@@ -176,6 +177,7 @@ function shop_menu() {
     'title' => 'Delivery methods',
     'access arguments' => array('access content'),
     'page callback' => 'shop_delivery_conditions_overview',
+    'page arguments' => array(2, ),
     'file' => 'shop.pages.inc',
   );
   
@@ -239,7 +241,7 @@ function shop_theme($existing, $type, $theme, $path) {
       'file' => 'shop.theme.inc',
       'render element' => 'panel',
     ),
-    'shop_cart_inblock_form' => array(
+    'shop_carts_block_form' => array(
       'file' => 'shop.cart.block.inc',
       'render element' => 'form',
     ),
@@ -273,11 +275,7 @@ function shop_cron() {
       }      
     }
   }
-   // ///delete cart items of anonymous users older than 1 month
-  ///foreach (db_query('SELECT cart_id FROM {shop_cart} WHERE changed <= :t AND uid = 0', array(':t' => REQUEST_TIME - (30.5 * 24 * 3600))) as $r) {
-   // /db_delete('shop_cart')->condition('cart_id', $r->cart_id)->execute();
-   // /db_delete('shop_cart_items')->condition('cart_id', $r->cart_id)->execute();
-  ///}
+  
 }
 
 
@@ -286,7 +284,8 @@ function shop_cron() {
 */
 function shop_user_delete($account) {
   // Set account uid in shopping cart to zero
-  db_query('UPDATE {shop_cart} SET uid = 0 WHERE uid = :uid', array(':uid' => $account->uid,));
+  // DEPRECATED @see shop_anonymous_tracking_record_delete() 
+  // db_query('UPDATE {shop_cart} SET uid = 0 WHERE uid = :uid', array(':uid' => $account->uid,));
 }
 
 
@@ -294,73 +293,9 @@ function shop_user_delete($account) {
  * Implements hook_init().
  */
 function shop_init() {
-
-  ////if ($router_item = menu_get_item()) {
-  ////  if (!$router_item['delivery_callback'] || $router_item['delivery_callback'] === 'drupal_deliver_html_page') {
-  ////    _shop_set_cart_cookie();
-  ////  }
-  ////}
   drupal_add_css(drupal_get_path('module', 'shop') . '/css/shop.css');
 }
 
-
-/**
-@TODO:
-IKW: ≈сли аноним сделал заказ и тут же зарегистрировалс€ или вошел под таким же емейлом, 
-то заказ не должен исчезнуть, а закрепилс€ за ним (поле заказчик как раз дл€ этого)
-
-*/
-/**
- * Implements hook_user_login().
- * Attach anonymous cart to user
- */
-function shop_user_login(&$edit, $account) {
- //// if (!empty($_COOKIE['shop_cart']['anonymous_key'])) {
- ////   // wtf:
- ////   db_query('UPDATE {shop_cart} SET uid = :uid WHERE anonymous_key = :key', array(':uid' => $account->uid, ':key' => $_COOKIE['shop_cart']['anonymous_key'],));
- ////   db_query('UPDATE {shop_cart} SET anonymous_key = :key WHERE uid = :uid', array(':uid' => $account->uid, ':key' => $_COOKIE['shop_cart']['anonymous_key'],));
- //// }
-}
-
-
-function DEPRECATED______shop_set_cart_cookie() {
-  // Grant or refresh a personal unique cookie key for anonymous identification in shop cart. 
-  // For best performance we NOT use sessions mechanism because any changes in $_SESSION will always written into database (session table). 
-  // For more information see drupal_session_initialize() ->> session_set_save_handler()
-  if (
-    empty($_COOKIE['shop_cart']['anonymous_key']) 
-    || 
-    empty($_COOKIE['shop_cart']['checksum'])
-    ||
-    // Cookie hack detected:
-    $_COOKIE['shop_cart']['checksum'] !== ($checksum = drupal_hash_base64(drupal_get_private_key() . ':' . $_COOKIE['shop_cart']['anonymous_key']))        
-    ) {
-    // Validate anonymous_key of user shop cart. Generate new key if current is not valid.
-    if (
-      empty($_COOKIE['shop_cart']['anonymous_key']) ||
-      empty($_COOKIE['shop_cart']['checksum']) ||
-      (isset($checksum) && $_COOKIE['shop_cart']['checksum'] !== $checksum)) {
-      $anonymous_key = drupal_get_token(drupal_random_bytes(55) . 'shop_cart_anonymous_key');
-      $checksum = drupal_hash_base64(drupal_get_private_key() . ':' . $anonymous_key);
-    }
-    else {
-      $anonymous_key = $_COOKIE['shop_cart']['anonymous_key'];
-    }
-    $params = session_get_cookie_params();
-    $expire = REQUEST_TIME + (3600 * 24 * 365);
-    $keys = array(
-      'anonymous_key' => $anonymous_key,
-    );
-    if (isset($checksum)) {
-      $keys['checksum'] = $checksum;
-    }
-    $_COOKIE['shop_cart'] = array();
-    foreach ($keys as $key => $val) {
-      setcookie('shop_cart[' . $key . ']', $val, $expire, $params['path'], $params['domain'], $params['secure'], $params['httponly']);
-      $_COOKIE['shop_cart'][$key] = $val;
-    }
-  }  
-}
 
 
 /**
@@ -376,7 +311,6 @@ function shop_entity_load($entities, $type) {
           if (!property_exists($entity, $key)) {
             $entity->{$key} = NULL;
             $ids[$id] = $id;
-            break;
           }
         }
       }
@@ -384,7 +318,7 @@ function shop_entity_load($entities, $type) {
     if ($ids) {
       foreach (db_query('SELECT * FROM {shop_index} WHERE entity_type=:t AND entity_id IN(:ids)', array(':t' => $type, ':ids' => $ids,)) as $r) {
         $id = $r->entity_id;
-        if (isset($entities[$id])) {
+        //if (isset($entities[$id])) {
           foreach ($r as $property => $value) {
             if (!in_array($property, array('entity_type', 'entity_id', 'revision_id', 'title',), TRUE)) {
               $entities[$id]->{$property} = $value;
@@ -398,7 +332,7 @@ function shop_entity_load($entities, $type) {
 
           // Product is available on request if both global and local 'goods_on_request' settings enabled
           $entities[$id]->goods_on_request = (int) (shop_get_info('balances', 'settings', 'goods_on_request') && !empty($entities[$id]->goods_on_request));
-        }
+        //}
       }
     }
   }
@@ -476,16 +410,17 @@ function _shop_index_entity($entity_type, $entity) {
       $url = $uri['path'];
     }    
     $fields = array(
-      'price' => $entity->price,
-      'currency' => $entity->currency,
-      'qty' => $entity->qty,
-      'qty_type' => $entity->qty_type,
-      'qty_fraction' => $entity->qty_fraction,
+      'price' => $entity->price ? $entity->price : 0,
+      'currency' => $entity->currency ?? NULL,
+      'qty' => $entity->qty ?? NULL,
+      'qty_type' => $entity->qty_type ?? NULL,
+      'qty_fraction' => $entity->qty_fraction ?? NULL,
       // cache title and url for shop cart routines
       'title' => entity_label($entity_type, $entity),
       'entity_uri' => $url,
       'goods_on_request' => isset($entity->goods_on_request) ? $entity->goods_on_request : 0,
       'supply_time' => isset($entity->supply_time) ? $entity->supply_time : NULL,
+      'shop_id' => $entity->shop_id ?? '0',
     );
     
     //parse {shop_index} table schema for non shop.module related fields(ex: new_price.module)
@@ -535,7 +470,7 @@ function shop_field_attach_delete($entity_type, $entity) {
   list($id, $vid, $bundle) = entity_extract_ids($entity_type, $entity);
   if (shop_get_info('entity_types', $entity_type, $bundle)) {
     foreach (db_query('SELECT * FROM {shop_cart_items_ordered} WHERE entity_type = :type AND entity_id = :id GROUP BY oid', array(':type' => $entity_type, ':id' => $id)) as $r) {
-      shop_cart(NULL, $r->oid)->freeze($entity_type, $id);
+      shop_cart(0, NULL, $r->oid)->freeze($entity_type, $id);
     }
   }
   db_query('DELETE FROM {shop_index} WHERE entity_type = :entity_type AND entity_id = :id', array(':entity_type' => $entity_type, ':id' => $id));
@@ -544,31 +479,139 @@ function shop_field_attach_delete($entity_type, $entity) {
 }
 
 
+
+
+
+
+
+
+
+/**
+* List registered shops
+*/
+function shop_list_shops($shop_id = NULL) {
+  $cached = &drupal_static(__FUNCTION__);
+  if (is_null($cached)) {
+    $cached = array(
+      0 => array(
+        'name' => t('Site'),
+        'uri' => NULL,
+      ),
+    );
+    foreach (module_implements('list_shops') as $module) {
+      if ($module !== 'shop') {
+        $fn = $module . '_list_shops';
+        foreach ($fn() as $id => $info) {
+          $info += array(
+            'name' => $id,
+            'uri' => NULL,
+          );
+          $cached[$id] = $info;
+        }        
+      }
+
+    }
+  }
+  return isset($shop_id) ? (isset($cached[$shop_id]) ? $cached[$shop_id] : NULL) : $cached;
+}
+
+
+/**
+* Implements hook_list_shops() @see shop_list_shops()
+*/
+function organisations_shop_list_shops() {
+  $result = array();
+  $node_types = array();
+  foreach (organisations_info() as $nt => $item) {
+    if ($item['enabled'] && !empty($item['settings']['products']) && array_filter($item['settings']['publications'])) {
+      $node_types[] = $nt;
+    }
+  }
+  if ($node_types) {
+    foreach (db_query('SELECT nid, title FROM {node} WHERE type IN (:t)', array(':t' => $node_types)) as $r) {
+      $result['org-' . $r->nid] = array(
+        'name' => $r->title,
+        'uri' => 'node/' . $r->nid,
+      );
+    }
+  }
+  return $result;
+}
+
+/**
+* Load multiple shop carts
+*/
+function shop_cart_multiple($account = NULL, $shop_id = NULL) {
+  
+  $result = array();
+  $account = $account ? $account : $GLOBALS['user'];
+  $shop_id = Shop\Cart::shop_id_format($shop_id);
+  if (!is_null($shop_id)) {
+    $result[$shop_id] = shop_cart($shop_id, $account);
+  }
+  elseif ($visitor_id = anonymous_tracker_track_user($account, 'id')) {
+    foreach (db_query('SELECT si.shop_id, COUNT(sci.entity_id) AS cnt, sci.visitor_id
+    FROM {shop_cart_items} sci 
+    INNER JOIN {shop_index} si ON si.entity_type = sci.entity_type AND si.entity_id = sci.entity_id 
+    WHERE sci.visitor_id = :vid GROUP BY si.shop_id HAVING cnt > 0', array(':vid' => $visitor_id)) as $r) {
+      $result[$r->shop_id] = shop_cart($r->shop_id, $account);
+    }  
+  }
+
+  return $result;
+}
+
 /**
 * Initialize shop cart object
 */
-function shop_cart($account = NULL, $order_node = NULL, $cart_id = NULL, $reset = FALSE) {
+function shop_cart($shop_id = NULL, $account = NULL, $order_node = NULL, $reset = FALSE) {
+  if ($order_node) {
+    if (is_scalar($order_node)) {
+      if (!($order_node = node_load($order_node))) {
+        throw new \Exception('Order node not found in database');
+      }
+    }
+    if (!is_object($order_node)) {
+      throw new \Exception('Invalid node object');
+    }
+    elseif ($order_node->type !== 'order') {
+      throw new \Exception('Invalid node type');
+    }
+    $shop_id = Shop\Cart::shop_id_format($order_node->shop_id);
+    if (!shop_list_shops($shop_id)) {
+      throw new \Exception($shop_id . ' not found');
+    }
+    $account = shop_get_customer($order_node);
+  }
+  else {
+    $order_node = NULL;
+    $shop_id = isset($shop_id) ? Shop\Cart::shop_id_format($shop_id) : '0';
+    if (!shop_list_shops($shop_id)) {
+      throw new \Exception('Shop id "' . $shop_id . '" not found');
+    }
+    if (!$account) {
+      $account = $GLOBALS['user'];
+    }
+    elseif (is_scalar($account) && !($account = user_load($account))) {
+      throw new \Exception('User not found');
+    }
+  }
+  
+  return new Shop\Cart(Shop\Cart::shop_id_format($shop_id), $account, $order_node);
+  
+  
+  
+  // OLD
   $carts = &drupal_static(__FUNCTION__, array());
-
-//  if(!empty($order_node->customer) || ($order_node && is_scalar($order_node) && ($order_node = node_load($order_node)))){
-//    $uid = $order_node->customer;
-//  }
-//  elseif (!empty($order_node->uid) || ($order_node && is_scalar($order_node) && ($order_node = node_load($order_node)))) {
-//    $uid = $order_node->uid;
-//  }
-//  else {
-//    $uid = $account ? (is_scalar($account) ? $account : $account->uid) : $GLOBALS['user']->uid;
-//  }
-  $order_node = is_scalar($order_node) ? node_load($order_node) : $order_node;
-  $customer = shop_get_customer($order_node);
-  $uid = $customer->uid;
-  $key = $uid . ':' . (!empty($order_node->nid) ? $order_node->nid : 0) . ':' . $cart_id;
+  $shop_id = isset($shop_id) ? $shop_id : 0;
+  $shop_id = Shop\Cart::shop_id_format($shop_id);
+  $key = $shop_id . ':' . $uid . ':' . (!empty($order_node->nid) ? $order_node->nid : 0);
 
   if (!isset($carts[$key]) || $reset) {
     if (count($carts) >= 20) {// Memory limit - 20 carts in this static storage
       array_shift($carts);
     }
-    $carts[$key] =  new Shop\Cart($uid, $order_node, $cart_id);
+    $carts[$key] =  new Shop\Cart($shop_id, $uid, $order_node);
   }
   return $carts[$key];
 }
@@ -614,8 +657,18 @@ function shop_block_save($delta = '', $edit = array()) {
  * Implements hook_block_view().
  */
 function shop_block_view($delta = '') {
-  module_load_include('inc', 'shop', 'shop.cart.block');
-  return _shop_block_view($delta);
+  
+  
+  if ($delta === 'cart') {
+    if (!preg_match('/^(user\/(\d+\/)?)?shop\/cart/', $_GET['q'])) { // Hide on *shop/cart pages
+      $GLOBALS['conf']['cache'] = 0; // Force disable page caching for correct cart displaying.
+      $block['subject'] = l(t('Cart'), 'shop/cart', array('query' => drupal_get_destination()));
+      module_load_include('inc', 'shop', 'shop.cart.block');
+      $block['content']['form'] = drupal_get_form('shop_carts_block_form');
+      return $block;
+    }    
+  }
+
 }
 
 
@@ -740,13 +793,13 @@ function shop_form_alter(&$form, &$form_state, $form_id) {
     $attributes = drupal_get_query_parameters();
 
     // IKW: ѕоказывать мотивирующий текст только если пользователь пришел с корзины
-    if (isset($attributes['destination']) && ($attributes['destination'] == 'shop/cart/order')) {
+    if (isset($attributes['destination']) && strpos($attributes['destination'], 'shop/cart') === 0) {
       $motivational_text = array();
       $motivational_text[] = t("Please login or register for 2 minutes to complete checkout.");
       $motivational_text[] = t("Personal account provides extended capabilities for order management and saves your time.");
 
-      if(user_access('submit orders', drupal_anonymous_user())) {
-        $motivational_text[] = t("Also you can proceed to <a href='@shop-cart-order'>checkout without registration</a>.", array('@shop-cart-order' => url('shop/cart/order')));
+      if (user_access('submit orders', drupal_anonymous_user())) {
+        $motivational_text[] = t("Also you can proceed to <a href='@shop-cart-order'>checkout without registration</a>.", array('@shop-cart-order' => url('shop/cart')));
       }
 
       drupal_set_message(implode('<br/>', $motivational_text));
@@ -886,6 +939,12 @@ function shop_form_money_payment_config_form_alter(&$form, &$form_state, $form_i
     '#default_value' => shop_get_info('general', 'default_payment_method'),
     '#weight' => -1,
   );
+
+  // cash account injection
+  // add 'hold' checkbox to 'user' source settings
+  if(isset($form['money_payment_systems_settings']['user'])) {
+    $form['money_payment_systems_settings']['user']['settings']['behavior']['#options']['hold'] = t('Hold money for desired transaction');
+  }
 
   $form['#submit'][] = 'shop_form_money_payment_config_form_alter_submit';
 }

@@ -1173,7 +1173,7 @@ function catalog_block_view_alter(&$data, $block) {
 * @see catalog_block_view_alter()
 */
 function _catalog_menu_block_pre_render($elements) {
-  $GLOBALS['_catalog_real_q'] = $_GET['q'];
+  $GLOBALS['_catalog_real_q'][] = $_GET['q'];
   $_GET['q'] = $GLOBALS['_catalog_overrided_q'];
   return $elements;
 }
@@ -1184,7 +1184,9 @@ function _catalog_menu_block_pre_render($elements) {
 * @see catalog_block_view_alter(), _catalog_menu_block_pre_render()
 */
 function _catalog_menu_block_post_render($data) {
-  $_GET['q'] = $GLOBALS['_catalog_real_q'];
+  if ($q = array_pop($GLOBALS['_catalog_real_q'])) {
+    $_GET['q'] = $q;
+  }
   return $data;
 }
 
@@ -1209,8 +1211,6 @@ function _catalog_taxonomy_term_uri($term) {
   $state = _catalog_get_shared_object_state();
   if (!empty($state['cid'])) {
 
-
-
     static $catalog_object;
     if (!isset($catalog_object) || $state['cid'] != $catalog_object->cid) {
       $catalog_object = catalog_object_load($state['cid']);
@@ -1218,10 +1218,10 @@ function _catalog_taxonomy_term_uri($term) {
 
     // Fix for term field displayed in non-native catalog context. Find preferred catalog for this term and use it for url if possible
     if ($catalog_object->vid != $term->vid) {
-      static $overrided = array();
-      if (!isset($overrided[$state['cid']])) {
-        $overrided[$state['cid']] = 0;
-        foreach (db_query('SELECT * FROM {catalog_objects} WHERE NOT is_block AND status AND (vid = :vid OR tid = :tid) AND entity_type = :entity_type AND bundle = :bundle AND cid <> :cid',
+      static $overridden = array();
+      if (!isset($overridden[$state['cid']])) {
+        $overridden[$state['cid']] = 0;
+        foreach (db_query('SELECT * FROM {catalog_objects} WHERE NOT is_block AND status AND (vid = :vid OR tid = :tid) AND entity_type = :entity_type AND bundle = :bundle AND cid = :cid',
         array(
         ':vid' => $term->vid,
         ':tid' => $term->tid,
@@ -1229,11 +1229,11 @@ function _catalog_taxonomy_term_uri($term) {
         ':bundle' => $catalog_object->bundle,
         ':cid' => $catalog_object->cid,
         )) as $r) {
-          $overrided[$state['cid']] = $r->cid;
+          $overridden[$state['cid']] = $r->cid;
           break;
         }
       }
-      $state['cid'] = $overrided[$state['cid']] ? $overrided[$state['cid']] : $state['cid'];
+      $state['cid'] = $overridden[$state['cid']] ?: $state['cid'];
     }
 
 
@@ -1330,19 +1330,22 @@ function catalog_entity_view_alter(&$build, $entity_type) {
       foreach (element_get_visible_children($build) as $key) {
         if (is_array($build[$key]) && (!field_info_field($key) || field_get_items($entity_type, $entity, $key))) {
           if (isset($build[$key]['#title'])) {
-            $catalog_object->content['#header'][$key] = $build[$key]['#title'];
+            if ($build['#bundle'] === $catalog_object->bundle) {
+              $catalog_object->content['#header'][$key] = $build[$key]['#title'];
+            }
             if (!empty($build[$key]['#type'])) {
               if ($build[$key]['#type'] === 'user_profile_category') {
                 $build[$key]['#title'] = '';  //'#title_display' = 'invisible' do not work in 'user_profile_category' element type
-              } else {
-                if (!in_array($build[$key]['#type'], array('checkbox', 'select', ))) {
-                  $build[$key][$key]['#title_display'] = 'invisible';
-                }
               }
-            } else {
+              elseif (!in_array($build[$key]['#type'], array('checkbox', 'select', ))) {
+                $build[$key][$key]['#title_display'] = 'invisible';
+              }
+            }
+            else {
               $build[$key]['#label_display'] = 'hidden';
             }
-          }  else {
+          }
+          elseif ($build['#bundle'] === $catalog_object->bundle) {
             $catalog_object->content['#header'][$key] = $key;
           }
         }
@@ -1603,6 +1606,16 @@ function catalog_field_extra_fields() {
           'label_display' => 'hidden',
           'weight' => -1,
         ),
+        'parent' => array(
+          'label' => t('Parent category'),
+          'description' => t('Representation of parent category'),
+          'weight' => 0,   
+          'default_display' => array(
+            'default' => array(
+              'visible' => FALSE,
+            ),
+          ),          
+        ),
         'object' => array(
           'label' => t('Current category'),
           'description' => t('Representation of current category'),
@@ -1671,7 +1684,7 @@ function catalog_field_extra_fields() {
       );
     }
     if (!$catalog_object->vid && !$catalog_object->tid) {
-      unset($return['catalog_object'][$cid]['display']['object'], $return['catalog_object'][$cid]['display']['terms']);
+      unset($return['catalog_object'][$cid]['display']['parent'], $return['catalog_object'][$cid]['display']['object'], $return['catalog_object'][$cid]['display']['terms']);
     }
     else {
 
@@ -1684,11 +1697,7 @@ function catalog_field_extra_fields() {
         $v = taxonomy_vocabulary_load($catalog_object->vid);
       }
       if ($v) {
-        $field_view_mode_settings = field_view_mode_settings('taxonomy_term', $v->machine_name);
-        $return['catalog_object'][$cid]['display']['object']['description'] = t('Representation of current category in <a href="@url" target="_blank">full mode</a>', array(
-          '@url' => url('admin/structure/taxonomy/' . $v->machine_name . '/display' . (!empty($field_view_mode_settings['full']['custom_settings']) ? '/full' : '')),
-        ));
-        // Список категорий словаря "куку" или подкатегорий в зависимости от текущего состояния
+        // Список категорий словаря или подкатегорий в зависимости от текущего состояния
         $return['catalog_object'][$cid]['display']['terms']['description'] = t('List of %vocabulary categories or subcategories according to current state, in <a href="@url" target="_blank">"teaser" view mode</a>', array(
           '%vocabulary' => $v->name,
           '@url' => url('admin/structure/taxonomy/' . $v->machine_name . '/display/teaser'),
@@ -2075,9 +2084,9 @@ function _catalog_change_field_ui_page_title($catalog_object) {
 /**
 * Implements hook_extra_field_formatter_settings_form() defined in addons module
 */
-function catalog_extra_field_formatter_settings_form($entity_type, $bundle, $mode, $field_name, $settings) {
+function catalog_extra_field_formatter_settings_form($entity_type, $bundle, $field_name, $settings, $view_mode) {
   $form = array();
-  if ($entity_type === 'catalog_object' && $mode === 'display') {
+  if ($entity_type === 'catalog_object') {
     if ($field_name === 'terms') {
       $catalog_object = catalog_object_load($bundle);
       $vocabulary = taxonomy_vocabulary_load($catalog_object->vid);
@@ -2127,6 +2136,22 @@ function catalog_extra_field_formatter_settings_form($entity_type, $bundle, $mod
         ),
       );
     }
+    
+    if ($field_name === 'parent' || $field_name === 'object') {
+      
+      $catalog_object = catalog_object_load($bundle);
+      if ($vocabulary = taxonomy_vocabulary_load($catalog_object->vid)) {
+        $view_mode_opts = addons_entity_view_modes('taxonomy_term', $vocabulary->machine_name, FALSE, 'label', array('rss', 'search_index',));
+        $form['view_mode'] = array(
+          '#type' => 'select',
+          '#inline' => TRUE,
+          '#title' => t('View mode'),
+          '#options' => array(NULL => t('Default')) + $view_mode_opts,
+          '#default_value' =>  $settings['view_mode'] ?? 'full',
+        );        
+      }
+
+    }
     if ($field_name === 'materials') {
       if (empty($settings['modes'])) {
         $settings['modes']['list']['enabled'] = 1;
@@ -2173,6 +2198,18 @@ function catalog_extra_field_formatter_settings_form($entity_type, $bundle, $mod
           '#title' => t('Display modes'),
         );
       }
+    }
+    if ($field_name === 'description') {
+      $form['pager_dependency'] = array(
+        '#type' => 'select',
+        '#title' => t('Display on paginaton pages'),
+        '#options' => array(
+          NULL => t('On all pages'),
+          'first' => t('Only on first page'),
+          'last' => t('Only on last page'),
+        ),
+        '#default_value' =>  $settings['pager_dependency'] ?? NULL,
+      );
     }
   }
   return $form;
@@ -2222,19 +2259,19 @@ function catalog_field_ui_display_overview_form_validate($form, &$form_state) {
   }
 }
 
-function catalog_extra_field_formatter_settings_summary($entity_type, $bundle, $mode, $field_name, $settings) {
-  if ($entity_type === 'catalog_object' && $mode === 'display') {
+function catalog_extra_field_formatter_settings_summary($entity_type, $bundle, $field_name, $settings) {
+  if ($entity_type === 'catalog_object') {
     if ($field_name == 'terms') {
       if (!empty($settings['table_view'])) {
-        $output = array(t('Mode' ) . ': ' . drupal_strtolower(t('Table output')));
+        $output[] = '<strong>' . t('Mode' ) . '</strong>: ' . drupal_strtolower(t('Table output'));
       }
       else {
-        $output[] = t('Cols') . ': ' . (isset($settings['cols']) ? $settings['cols'] : '1');
+        $output[] = '<strong>' . t('Cols') . '</strong>: ' . (isset($settings['cols']) ? $settings['cols'] : '1');
         if (!empty($settings['colwrap'])) {
-          $output[] = t('Alignment by columns');// . ': ' . t('yes');
+          $output[] = '<strong>' . t('Alignment by columns') . '</strong>';// . ': ' . t('yes');
         }
       }
-      $output[] = t('Alignment in cells') . ': ' . drupal_strtolower(!empty($settings['center']) ? t('On the center') : t('On the left edge'));
+      $output[] = '<strong>' . t('Alignment in cells') . '</strong>: ' . drupal_strtolower(!empty($settings['center']) ? t('On the center') : t('On the left edge'));
       return implode('<br/>', $output);
     }
     if ($field_name === 'materials') {
@@ -2245,24 +2282,24 @@ function catalog_extra_field_formatter_settings_summary($entity_type, $bundle, $
       }
       $output = array();
       if ($settings['modes']) {
-        $output[] = t('Display as' ) . ': <strong>' . $settings['modes'][$settings['mode']]['settings']['caption'] .'</strong>';
+        $output[] = '<strong>' . t('Display as' ) . '</strong>: ' . $settings['modes'][$settings['mode']]['settings']['caption'];
       }
       switch ($settings['mode']) {
         case 'list':
-          $output[] = t('Cols') . ': <strong>' . (isset($settings['modes']['list']['settings']['cols']) ? $settings['modes']['list']['settings']['cols'] : 1) . '</strong>';
-          $output[] = t('Rows') . ': <strong>' . (isset($settings['modes']['list']['settings']['rows']) ? $settings['modes']['list']['settings']['rows'] : 10) . '</strong>';
+          $output[] = '<strong>' . t('Cols') . '</strong>: ' . (isset($settings['modes']['list']['settings']['cols']) ? $settings['modes']['list']['settings']['cols'] : 1);
+          $output[] = '<strong>' . t('Rows') . '</strong>: ' . (isset($settings['modes']['list']['settings']['rows']) ? $settings['modes']['list']['settings']['rows'] : 10);
           if (!empty($settings['modes']['list']['settings']['colwrap'])) {
-            $output[] = t('Alignment by columns');// . ': ' . t('yes');
+            $output[] = '<strong>' . t('Alignment by columns') . '</strong>';// . ': ' . t('yes');
           }
           if (!empty($settings['modes']['list']['settings']['center'])) {
-            $output[] = t('Centered cells');// . ': ' . (!empty($settings['modes']['list']['settings']['center']) ? t('yes') : t('no'));
+            $output[] = '<strong>' . t('Centered cells') . '</strong>';// . ': ' . (!empty($settings['modes']['list']['settings']['center']) ? t('yes') : t('no'));
           }
-          $output[] = t('Text zoom') . ': <span style="font-size: ' . (!empty($settings['modes']['list']['settings']['zoom']) ? $settings['modes']['list']['settings']['zoom'] / 100 : 1) . 'em">' . (!empty($settings['modes']['list']['settings']['zoom']) ? ($settings['modes']['list']['settings']['zoom']) . '%' : t('none')) . '</span>';
+          $output[] = '<strong>' . t('Text zoom') . '</strong>: <span style="font-size: ' . (!empty($settings['modes']['list']['settings']['zoom']) ? $settings['modes']['list']['settings']['zoom'] / 100 : 1) . 'em">' . (!empty($settings['modes']['list']['settings']['zoom']) ? ($settings['modes']['list']['settings']['zoom']) . '%' : t('none')) . '</span>';
         break;
         case 'table':
-          $output[] = t('Rows') . ': <strong>' . (isset($settings['modes']['table']['settings']['rows']) ? $settings['modes']['table']['settings']['rows'] : 10) . '</strong>';
-          $output[] = t('Centered cells') . ': ' . (!empty($settings['modes']['table']['settings']['center']) ? t('yes') : t('no'));
-          $output[] = t('Text zoom') . ': <span style="font-size: ' . (!empty($settings['modes']['table']['settings']['zoom']) ? $settings['modes']['table']['settings']['zoom'] / 100 : 1) . 'em">' . (!empty($settings['modes']['table']['settings']['zoom']) ? ($settings['modes']['table']['settings']['zoom']) . '%' : t('none')) . '</span>';
+          $output[] = '<strong>' . t('Rows') . '</strong>: ' . (isset($settings['modes']['table']['settings']['rows']) ? $settings['modes']['table']['settings']['rows'] : 10);
+          $output[] = '<strong>' . t('Centered cells') . '</strong>: ' . (!empty($settings['modes']['table']['settings']['center']) ? t('yes') : t('no'));
+          $output[] = '<strong>' . t('Text zoom') . '</strong>: <span style="font-size: ' . (!empty($settings['modes']['table']['settings']['zoom']) ? $settings['modes']['table']['settings']['zoom'] / 100 : 1) . 'em">' . (!empty($settings['modes']['table']['settings']['zoom']) ? ($settings['modes']['table']['settings']['zoom']) . '%' : t('none')) . '</span>';
         break;
       }
             $switches = _catalog_materials_settings_mode_switches($settings);
@@ -2270,6 +2307,21 @@ function catalog_extra_field_formatter_settings_summary($entity_type, $bundle, $
               $output[]  = '<strong>' . t('Enabled modes') . '</strong>: '. (($switches) ? implode (', ', $switches) : t('None'));
             }
       return implode('<br/>', $output);
+    }
+    if ($field_name === 'object' || $field_name === 'parent') {
+      $output = array();
+      $catalog_object = catalog_object_load($bundle);
+      if ($vocabulary = taxonomy_vocabulary_load($catalog_object->vid)) {
+        $view_mode_opts = addons_entity_view_modes('taxonomy_term', $vocabulary->machine_name, FALSE, 'label', array('rss', 'search_index',));
+        $m = isset($settings['view_mode']) && isset($view_mode_opts[$settings['view_mode']]) ? $view_mode_opts[$settings['view_mode']] : NULL;
+        $m = $m ? $m : (isset($view_mode_opts['full']) ? $view_mode_opts['full'] : t('Default'));
+        $output[] = '<strong>' . t('Display as') . '</strong>: ' . $m;
+        
+      }
+      return implode('<br/>', $output);
+    }
+    if ($field_name === 'description') {
+      return '<strong>' . t('Display on paginaton pages') . '</strong>: ' . (empty($settings['pager_dependency']) ? t('On all pages') : ($settings['pager_dependency'] === 'first' ? t('Only on first page') : t('Only on last page')));
     }
   }
 }

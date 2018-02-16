@@ -503,9 +503,6 @@ msgstr "Текущая категория"
 msgid "Children categories"
 msgstr "Дочерние категории"
 
-msgid "Representation of current category in <a href=\"@url\" target=\"_blank\">full mode</a>"
-msgstr "Представление текущей категории в <a href=\"@url\" target=\"_blank\">полном режиме просмотра</a>"
-
 msgid "List of %vocabulary categories or subcategories according to current state, in <a href=\"@url\" target=\"_blank\">\"teaser\" view mode</a>"
 msgstr "Список категорий или подкатегорий словаря %vocabulary в зависимости от текущего состояния, в <a href=\"@url\" target=\"_blank\">режиме просмотра \"в списке\"</a>"
 
@@ -617,6 +614,38 @@ msgstr "Поле %name"
 
 msgid "Content view mode"
 msgstr "Режим отображения содержимого"
+
+msgid "Parent category"
+msgstr "Родительская категория"
+
+msgid "Representation of parent category"
+msgstr "Представление родительской категории"
+
+msgid "Display on paginaton pages"
+msgstr "Отображать на страницах пагинации"
+
+msgid "On all pages"
+msgstr "На всех страницах"
+
+msgid "Only on first page"
+msgstr "Только на первой странице"
+
+msgid "Only on last page"
+msgstr "Только на последней странице"
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 

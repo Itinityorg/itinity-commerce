@@ -22,6 +22,7 @@ define('ADDONS_ENTITY_SELECTOR_COOKIE_MAX_RECENTS', 10);
  **/
 function _addons_process_entity_selector($element, &$form_state) {
   $element += array(
+    '#selector_entity_type' => NULL,
     '#selector_bundles' => NULL,
     '#size' => 58,
     '#selector_roles' => NULL,
@@ -33,6 +34,7 @@ function _addons_process_entity_selector($element, &$form_state) {
     '#field_suffix' => '',
     '#suffix' => '',
   );
+  $element['#selector_entity_type'] = $element['#selector_entity_type'] ? $element['#selector_entity_type'] : 'node';
   $entity_info = entity_get_info($element['#selector_entity_type']);
   if (empty($element['#selector_order_by'])) {
     $element['#selector_order_by'] = array();
@@ -235,17 +237,31 @@ function _addons_entity_selector_post_render($html, $element) {
 /**
  * Helper func. Get first occurrence of image in rendered entity or default image.
  */
-function _addons_entity_selector_get_entity_default_image($entity_type, $entity = NULL) {
+function _addons_entity_selector_get_entity_default_image($entity_type, $entity = NULL, $style = '56x42') {
   $img = NULL;
   if ($entity_type === 'user') {
     $img = $entity ? theme('user_picture', array('account' => $entity)) : theme('user_picture');
   }
-  else {
-    $img = NULL;
+  elseif ($entity) {
+    list(, , $bundle) = entity_extract_ids($entity_type, $entity);
+
+    foreach (field_info_instances($entity_type, $bundle) as $field_name => $instance) {
+      $field_info = field_info_field($field_name);
+
+      if ($field_info['type'] === 'image') {
+        if ($items = field_get_items($entity_type, $entity, $field_name)) {
+          $item = reset($items);
+          $field_view = field_view_value($entity_type, $entity, $field_name, $item, array());
+          $img = render($field_view);
+        }
+
+        break;
+      }
+    }
   }
 
   if ($img && preg_match('/<img\s/sui', $img)) {
-    $style = '56x42';
+    $style = $style ?? '56x42';
     $img = trim(preg_replace('/^.*?<img(?:\s+.*?)?(?:"|\s+)src="(.*?)".*?$/sui', '$1', $img));
     $img = preg_replace('/[\?\#].*$/', '', $img);
     $img = preg_replace('/^' . preg_quote($GLOBALS['base_url'], '/') . '\//', '', $img);
@@ -345,12 +361,15 @@ function addons_validate_entity_selector(&$element, &$form_state, $complete_form
         $query->addTag($element['#selector_entity_type'] . '_selector');
         // $query->addTag($element['#selector_entity_type'] . '_selector_autocomplete');
         $query->addMetaData('selector_params', $element['#selector_params']);
-
-        foreach ((array)$selector_conditions as $field_name => $data) {
-          $query->condition(preg_match('/.\../', $field_name) ? $field_name : $table_alias . '.' . $field_name, isset($data[0]) ? $data[0] : NULL, isset($data[1]) ? $data[1] : NULL);
+        foreach ((array) $selector_conditions as $field_name => $data) {
+          $query->condition(preg_match('/.\../', $field_name) ? $field_name : $table_alias . '.' . $field_name, isset($data[0]) ? ($data[0] || is_scalar($data[0]) ? $data[0] : NULL) : NULL, isset($data[1]) ? $data[1] : NULL);
         }
         if (!$query->execute()->fetchCol()) {
-          form_error($element, t('@entity_type "%name" does not match the specified conditions.', array('@entity_type' => $entity_info['label'], '%name' => entity_label($element['#selector_entity_type'], $entity))));
+          form_error($element, t('@entity_type "%name" does not matches to specified conditions in %field field.', array(
+            '@entity_type' => $entity_info['label'],
+            '%name' => entity_label($element['#selector_entity_type'], $entity),
+            '%field' => $element['#title'],
+          )));
           $has_errors = TRUE;
         }
       }
@@ -398,49 +417,80 @@ function addons_validate_entity_selector(&$element, &$form_state, $complete_form
 
 function _addons_entity_selector_autocomplete_item($entity_type, $entity, $string = NULL) {
   $entity_info = entity_get_info($entity_type);
-  list($id, , $bundle) = entity_extract_ids($entity_type, $entity);
-  $html = '';
-  if ($img = _addons_entity_selector_get_entity_default_image($entity_type, $entity)) {//_addons_entity_selector_get_entity_image_preview($entity_type, $entity)) {
-    $html .= '<img src="' . check_plain($img) . '"/> ';
-  }
+  list($id) = entity_extract_ids($entity_type, $entity);
+  $label = entity_label($entity_type, $entity);
 
-  $classes = array('autocomplete-item');
-  if ($unpublished = isset($entity->status) && !$entity->status) {
-    $classes[] = 'unpublished';
-  }
+  $build_array = module_invoke_all('entity_selector_autocomplete_item_renderable_array', $entity_type, $entity);
+  $html = render($build_array);
+
+  $context = array('entity_type' => $entity_type, 'entity' => $entity);
+
+  drupal_alter('entity_selector_autocomplete_item_renderable_array', $context);
+
+  return array($label . ' [:' . $entity_info['entity keys']['id'] . ':' . $id . ':]' => $html);
+}
+
+
+function addons_entity_selector_autocomplete_item_renderable_array($entity_type, $entity) {
+  $entity_info = entity_get_info($entity_type);
+  list($id, , $bundle) = entity_extract_ids($entity_type, $entity);
 
   $label = entity_label($entity_type, $entity);
+  $unpublished = isset($entity->status) && $entity->status === NODE_NOT_PUBLISHED;
   $note = $more_info = array();
+  $edit_url = NULL;
+  $classes = array('autocomplete-item');
+  $img = _addons_entity_selector_get_entity_default_image($entity_type, $entity);
+  $img_path = $img ? check_plain($img) : NULL;
+
+  if ($unpublished) {
+    $classes[] = 'unpublished';
+  }
 
   if ($entity_type === 'node' && !empty($entity_info['bundles'][$bundle]['label'])) {
     $note[] = drupal_strtolower($entity_info['bundles'][$bundle]['label']);
   }
-  if ($entity_type === 'user') {
+  elseif ($entity_type === 'user') {
     $more_info[] = $entity->name;
   }
+
   if ($unpublished) {
     $note[] = drupal_strtolower($entity_type === 'user' ? t('Blocked') : t('Not published'));
   }
 
-  $edit_url = NULL;
-
   if (($entity_type === 'node' && node_access('update', $entity)) || ($entity_type === 'user' && user_edit_access($entity))) {
-    $edit_url = $entity_type . '/' . $id . '/edit';
+    $edit_url = "{$entity_type}/{$id}/edit";
   }
 
-  $html .=
-    '<div
-    data-url="' . check_plain(url(entity_uri($entity_type, $entity)['path'])) . '"
-    data-edit-url="' . check_plain(url($edit_url)) . '"
-    data-selector-entity-id="' . $id . '"
-    class="' . implode(' ', $classes) . '">' .
-    (isset($string) ? preg_replace('/(' . preg_quote($string, '/') . ')/ui', '<strong class="highlighted">$1</strong>', check_plain($label)) : check_plain($label)) .
-    ($note = $note ? ' <em>(' . implode(', ', $note) . ')</em>' : '') .
-    ($more_info ? '<br /><small>' . implode(', ', $more_info) . '</small>' : '') .
-    '</div>';
+  $data_url = check_plain(url(entity_uri($entity_type, $entity)['path']));
+  $data_edit_url = check_plain(url($edit_url));
 
-  $html = '<div class="entity-selector-autocomplete-item">' . $html . '</div>';
-  return array($label . ' [:' . $entity_info['entity keys']['id'] . ':' . $id . ':]' => $html);
+  $value = (isset($string) ? preg_replace('/(' . preg_quote($string, '/') . ')/ui', '<strong class="highlighted">$1</strong>', check_plain($label)) : check_plain($label)) .
+    ($note = $note ? ' <em>(' . implode(', ', $note) . ')</em>' : '') .
+    ($more_info ? '<br /><small>' . implode(', ', $more_info) . '</small>' : '');
+
+  return array(
+    '#type' => 'container',
+    '#attributes' => array(
+      'class' => array('entity-selector-autocomplete-item'),
+    ),
+    'image' => array( // @todo -- move image part to social profile?
+      '#theme' => 'image',
+      '#path' => $img_path,
+      '#access' => !is_null($img_path),
+    ),
+    'label' => array(
+      '#theme' => 'html_tag',
+      '#tag' => 'div',
+      '#value' => $value,
+      '#attributes' => array(
+        'data-url' => $data_url,
+        'data-edit-url' => $data_edit_url,
+        'data-selector-entity-id' => $id,
+        'class' => implode(' ', $classes),
+      ),
+    ),
+  );
 }
 
 
@@ -535,7 +585,7 @@ function addons_entity_selector_autocomplete($selector_params_encoded, $token, $
         }
         if (!empty($selector_params['conditions']) && is_array($selector_params['conditions'])) {
           foreach ($selector_params['conditions'] as $field_name => $data) {
-            $query->condition(preg_match('/.\../', $field_name) ? $field_name : $table_alias . '.' . $field_name, isset($data[0]) ? $data[0] : NULL, isset($data[1]) ? $data[1] : NULL);
+            $query->condition(preg_match('/.\../', $field_name) ? $field_name : $table_alias . '.' . $field_name, isset($data[0]) ? ($data[0] || is_scalar($data[0]) ? $data[0] : NULL) : NULL, isset($data[1]) ? $data[1] : NULL);
           }
         }
         if (ctype_digit($string)) {
@@ -631,8 +681,8 @@ function addons_entity_selector_autocomplete($selector_params_encoded, $token, $
 }
 
 /**
-* Callback for /addons/entity_selector/node/%node
-*/
+ * Callback for /addons/entity_selector/node/%node
+ */
 function addons_entity_selector_entity_view_callback($node, $view_mode = 'full') {
   $view = node_view($node, $view_mode);
   unset($view['#contextual_links']);

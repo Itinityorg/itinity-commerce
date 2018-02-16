@@ -14,45 +14,9 @@ function theme_shop_cart($variables) {
   $total = $total ? theme('price', array('price' => array_sum($total))) : '';
   $curr = shop_get_info('currency', 'default');
 
-  switch ($variables['mode']) {
-    /*
-    case 'none':
-      return $total;
-      break;
-    case 'min':
-      return '<strong>' . ($items ? format_plural(count($items), '1 product', '@count products') . '&nbsp;&ndash;&nbsp;' . $total : t('No purchases')) . '</strong>';
-      break;
+  $qtys = shop_units_options();
 
-    case 'min_digit':
-      return '<span>(' . count($items) . ')</span>' . ($variables['shop_cart_sum_purchases'] ? ' ' . $total : '');
-      break;
-    case 'list_without_prices':
-      $rows = array();
-      foreach ($items as $item) {
-        $title_truncated = truncate_utf8($item->title, 50, TRUE, TRUE);
-        $rows[] = array(
-          'id' => 'cart-item-' . $item->entity_type . '-' . $item->entity_id,
-          'data' => array(
-            array(
-              'data' => '<span title="' . check_plain($item->title) . '">' . (!$variables['has_links'] ? check_plain($title_truncated) : l($title_truncated, $item->entity_uri)) . '</span>',
-              'class' => array('col-title',),
-            ),
-            array(
-              'data' => theme('price', array('qty' => '- ' . $item->qty * 1,)),
-              'class' => array('col-price',),
-            ),
-          ),
-          'style' => 'border-bottom:none',
-        );
-      }
-      return theme('table', array(
-        'header' => array(),
-        'rows' => $rows,
-        'empty' => '<strong>' . t('No purchases') . '</strong>',
-        'attributes' => array(),
-      )) . ($variables['shop_cart_sum_purchases'] ? $total : '');
-      break;
-    */
+  switch ($variables['mode']) {
     case 'max':
       $header = array(
         'image' => array(
@@ -89,16 +53,23 @@ function theme_shop_cart($variables) {
         $img = NULL;
         $key = Shop\Cart::key($item->entity_type, $item->entity_id, $item->snapshot_id);
 
-        if (($e = entity_load($item->entity_type, array($item->entity_id))) && ($img = product_get_image($e[$item->entity_id], $item->entity_type))) {
-          $has_images = TRUE;
+        $entities = entity_load($item->entity_type, array($item->entity_id));
+        $entity = isset($entities[$item->entity_id]) ? clone $entities[$item->entity_id] : NULL;
+
+        if ($entity) {
+          $entity->snapshot_id = $item->snapshot_id;
+          $img = product_get_image($entity, $item->entity_type);
+          $has_images = $has_images || !empty($img);
         }
+
         if ($variables['shop_cart']->frozen) {
           $item_snapshot = snapshot_load($item->snapshot_id);
-          $original_price = isset($item_snapshot->data['price']['price']) ? $item_snapshot->data['price']['price'] : $item->si_price;
+          $original_price = $item_snapshot->data['price']['price'] ?? $item->si_price;
         }
         else {
-          $original_price = $item->si_price;
+          $original_price = $entity ? shop_build_price('shop_cart_item', $entity, $variables['shop_cart']->uid, 'price') : $item->si_price;
         }
+
 
         $has_discounts = $has_discounts || ($item->price != $original_price);
 
@@ -113,7 +84,7 @@ function theme_shop_cart($variables) {
               'class' => array('col-title'),
             ),
             'qty' => array(
-              'data' => $item->qty * 1 . ' ' . $item->qty_type,
+              'data' => $item->qty * 1 . ' ' . (isset($qtys[$item->qty_type]) ? $qtys[$item->qty_type] : $item->qty_type),
               'class' => array('col-qty'),
             ),
             'price' => array(
@@ -168,7 +139,7 @@ function theme_shop_cart($variables) {
                 'data' => t('Delivery') . ':',
               ),
               array(
-                'data' => $total_sum['delivery'] ? theme('price', array('price' => $total_sum['delivery'])) : t('for free'),
+                'data' => in_array($total_sum['delivery'], array(), TRUE) ? t('Unknown') : ($total_sum['delivery'] ? theme('price', array('price' => $total_sum['delivery'])) : t('for free')),
               ),
             ),
           );
@@ -223,11 +194,32 @@ function theme_shop_cart($variables) {
       $rows[] = $hr;
 
       foreach ($items as $item) {
-        $price_string = ($item->qty * 1) . ' x ' . theme('price', array('price' => $item->si_price,)) .
-          (($item->si_price && $item->si_price != $item->price) ? ' -' . abs(round($item->price * 100 / $item->si_price - 100)) . '%' : '') .
-          ' = ' . theme('price', array('price' => $item->price * $item->qty, 'currency' => $item->currency,));
+        // @see case 'max'
+        $entities = entity_load($item->entity_type, array($item->entity_id));
+        $entity = isset($entities[$item->entity_id]) ? clone $entities[$item->entity_id] : NULL;
 
-        $dots_count = max(3, _shop_cart_mail_dots(check_plain($item->title), $price_string) - 4);
+        if ($entity) {
+          $entity->snapshot_id = $item->snapshot_id;
+        }
+
+        if ($variables['shop_cart']->frozen) {
+          $item_snapshot = snapshot_load($item->snapshot_id);
+          $original_price = $item_snapshot->data['price']['price'] ?? $item->si_price;
+        }
+        else {
+          $original_price = $entity ? shop_build_price('shop_cart_item', $entity, $variables['shop_cart']->uid, 'price') : $item->si_price;
+        }
+
+        $has_discounts = $item->price != $original_price;
+
+        $price_string = $item->qty * 1 . ' ' . (isset($qtys[$item->qty_type]) ? $qtys[$item->qty_type] : $item->qty_type);
+        $price_string .= ' x ';
+        $price_string .= format_price($original_price, $item->currency);
+        $price_string .= $has_discounts ? ' ' . round(!$original_price ? '0' : $item->price * 100 / $original_price - 100) . '%' : '';
+        $price_string .= ' = ';
+        $price_string .= theme('price', array('price' => $item->price * $item->qty,));
+
+        $dots_count = max(3, _shop_cart_mail_dots(check_plain($item->title), $price_string));
         $rows[] = l($item->title, $item->entity_uri) . ' ' . str_repeat('.', $dots_count) . ' ' . $price_string;
       }
 
@@ -258,54 +250,6 @@ function theme_shop_cart($variables) {
 
       return implode("\r\n", $rows);
       break;
-
-    /*
-    case 'default':
-    default:
-      $rows = array();
-      foreach ($items as $item) {
-        $title_truncated = truncate_utf8($item->title, 50, TRUE, TRUE);
-        $rows[] = array(
-          'id' => 'cart-item-' . $item->entity_type . '-' . $item->entity_id,
-          'data'	=> array(
-            array(
-              'data' =>  '<span title="' . check_plain($item->title) . '">' . (!$variables['has_links'] ? check_plain($title_truncated) : l($title_truncated, $item->entity_uri)) . '</span>',
-              'class' => array('col-title',),
-            ),
-            array(
-              'data' => $item->qty * 1 . '&nbsp;x',
-              'class' => array('col-qty',),
-            ),
-            array(
-              'data' => theme('price', array('price' => $item->price,)),
-              'class' => array('col-price',),
-            ),
-          ),
-          'style'	=> 'border-bottom:none',
-        );
-      }
-
-      if (count($rows) > 1 &&  $total) {
-        $rows[] = array(
-          'data' => array(
-            array(
-              //'header' => TRUE,
-              'colspan' => 2,
-              'data' => '<strong>' . t('Total') . ':</strong>',
-              'class' => array('col-title',),
-            ),
-            array(
-              //'header' => TRUE,
-              'data' => '<strong>' . $total . '</strong>',
-              'class' => array('col-price',),
-            ),
-          ),
-          'style'	=> 'border-bottom:none',
-        );
-      }
-      return theme('table', array('header' => array(), 'rows' => $rows, 'empty' => '<strong>' . t('No purchases') . '</strong>', 'attributes' => array()));
-
-      */
   }
 }
 

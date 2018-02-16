@@ -118,6 +118,7 @@ function changelog_event_save($event) {
 						'nid' => $event['entity_id'],
 						'uid' => $event['uid'],
 						'pid' => NULL,
+            'status' => COMMENT_PUBLISHED, // Force set comment as published because comments added under cron can be status=0 @see $defaults in comment_save()
 						'subject' => 'Status message', // not use t()
 						'changelog_id' => $event['changelog_id'], // @see changelog_comment_insert()
 						'comment_body' => array(
@@ -136,7 +137,7 @@ function changelog_event_save($event) {
 					if (!$event['raw_text']) {
 						$event['raw_text'] = $comment->comment_body[LANGUAGE_NONE][0]['value'];
 					}
-					if (!$comment->comment_body[LANGUAGE_NONE][0]['value']) {
+					if (empty($comment->comment_body[LANGUAGE_NONE][0]['value'])) {
 						$comment->comment_body[LANGUAGE_NONE][0]['value'] = $event['raw_text'];
 					}
 				}

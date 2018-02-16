@@ -20,6 +20,7 @@ msgstr "Идентификатор отслеживания"
 msgid "Unassigned"
 msgstr "Не назначен"
 
-
+msgid "Last browser user agent"
+msgstr "Последний браузер"
 
 

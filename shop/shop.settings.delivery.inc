@@ -1,13 +1,13 @@
 <?php
 
 function shop_settings_delivery_method_form($form, &$form_state, $method) {
-  if ($info = shop_delivery_info($method)) {
+  if ($info = shop_delivery_info(NULL, $method)) {
     drupal_set_title(t('Settings for %name delivery method', array('%name' => $info['name'])), PASS_THROUGH);
     $form['#delivery_method'] = $method;
-    if ($info['settings callback'] && ($settings_form = shop_delivery_settings_form($method))) {
+    if ($info['settings callback'] && ($settings_form = shop_delivery_settings_form(NULL, $method))) {
       $form['settings'] = array(
         '#tree' => TRUE,
-        '#type' => 'container',
+        '#type' => 'item', // 'item' enables #element_validate support for method settings form
       ) + $settings_form;
     }
     $payment_allow_opts = array();
@@ -46,16 +46,21 @@ function shop_settings_delivery_method_form($form, &$form_state, $method) {
   }
 }
 
+function shop_settings_delivery_method_form_validate($form, &$form_state) {
+  // TODO
+}
 
 function shop_settings_delivery_method_form_submit($form, &$form_state) {
+  
   $shop_delivery_info = variable_get('shop_delivery_info', array());
   if (isset($form_state['values']['settings'])) {
     $shop_delivery_info[$form['#delivery_method']]['settings'] = $form_state['values']['settings'];
   }
   $shop_delivery_info[$form['#delivery_method']]['payment_allow'] = isset($form_state['values']['payment_allow']) ? $form_state['values']['payment_allow'] : array();
-  variable_set('shop_delivery_info', $shop_delivery_info);
-  drupal_static_reset('shop_delivery_info');
-  drupal_set_message(t('Settings for %name delivery method was updated.', array('%name' => shop_delivery_info($form['#delivery_method'], 'name'))));
+  shop_delivery_info_save(NULL, $shop_delivery_info);
+  /*variable_set('shop_delivery_info', $shop_delivery_info);
+  drupal_static_reset('shop_delivery_info');*/
+  drupal_set_message(t('Settings for %name delivery method was updated.', array('%name' => shop_delivery_info(NULL, $form['#delivery_method'], 'name'))));
 }
 
 
@@ -174,7 +179,7 @@ function shop_settings_delivery_form_submit($form, &$form_state) {
     }
   }
   foreach ($data as $key => $info) {
-    if (trim(drupal_strtolower($info['title'])) === trim(drupal_strtolower(shop_delivery_info($key, 'name')))) {
+    if (trim(drupal_strtolower($info['title'])) === trim(drupal_strtolower(shop_delivery_info(NULL, $key, 'name')))) {
       unset($data[$key]['title']);
     }
   }

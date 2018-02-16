@@ -111,7 +111,7 @@ function _catalog_select_entities($catalog_object, $rss_mode = FALSE, $return_al
         ),
     )));
   }
-  else {
+  elseif (!empty($catalog_object->filters)) {
     foreach ($catalog_object->filters as $filter_method => $settings) {
       if (!empty($settings['enabled'])) {
         if (!empty($catalog_sql_info['filters'][$filter_method]['commands'])) {
@@ -166,7 +166,7 @@ function _catalog_select_entities($catalog_object, $rss_mode = FALSE, $return_al
   }
 
   $query->addTag('catalog_select_entities');
-    $query->addTag('catalog_object:' . $catalog_object->cid);
+  $query->addTag('catalog_object:' . (!empty($catalog_object->cid) ? $catalog_object->cid : NULL));
   //$query->{'#catalog_object'} = $catalog_object; //<<  TODO: Remove it, use metadata
   $query->addMetaData('catalog_object', $catalog_object);
   $query->addMetaData('op', 'view'); // needed for node access
@@ -245,7 +245,6 @@ function _catalog_select_entities($catalog_object, $rss_mode = FALSE, $return_al
   }
   //q($query);
   $result = $query->execute()->fetchCol();
-
   if ($enable_pager && !$result) {
       unset($catalog_object->_pager_element);
       PagerDefault::$maxElement--;
@@ -255,7 +254,7 @@ function _catalog_select_entities($catalog_object, $rss_mode = FALSE, $return_al
       unset($pager_page_array[$pager_element]);
       unset($pager_limits[$pager_element]);
   }
-
+  drupal_alter('catalog_select_entities', $result, $catalog_object);
   return $result;
 }
 

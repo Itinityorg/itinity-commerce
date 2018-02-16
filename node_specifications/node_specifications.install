@@ -234,31 +234,35 @@ function node_specifications_schema() {
 	);
 
 	$schema['node_specifications_filter_presets'] = array(
-		'fields' => array(
-			'id' => array(
-				'type' => 'serial',
-				'unsigned' => TRUE,
-				'not null' => TRUE,
-			),
-			'title' => array(
-				'type' => 'varchar',
-				'length' => '255',
-				'not null' => FALSE,
-			),
-			'base_uri' => array(
-				'type' => 'text',
-				'not null' => FALSE,
-			),
-			'query_params' => array(
-				'type' => 'text',
-				'not null' => FALSE,
-			),
-			'weight' => array(
-				'type' => 'int',
-				'not null' => TRUE,
-				'default' => 0,
-			),
-		),
+      'fields' => array(
+        'id' => array(
+          'type' => 'serial',
+          'unsigned' => TRUE,
+          'not null' => TRUE,
+        ),
+        'title' => array(
+          'type' => 'varchar',
+          'length' => '255',
+          'not null' => FALSE,
+        ),
+        'content' => array(
+          'type' => 'text',
+          'not null' => FALSE,
+        ),
+        'base_uri' => array(
+          'type' => 'text',
+          'not null' => FALSE,
+        ),
+        'query_params' => array(
+          'type' => 'text',
+          'not null' => FALSE,
+        ),
+        'weight' => array(
+          'type' => 'int',
+          'not null' => TRUE,
+          'default' => 0,
+        ),
+      ),
 		'primary key' => array('id'),
 		'indexes' => array(
 			'base_uri' => array(array('base_uri', 100)),
@@ -638,6 +642,18 @@ function node_specifications_update_7021() {
       ));
   }
 
+}
+
+/**
+ * Add content field to filter presets.
+ */
+function node_specifications_update_7022() {
+  if (!db_field_exists('node_specifications_filter_presets', 'content')) {
+    db_add_field('node_specifications_filter_presets', 'content', array(
+      'type' => 'text',
+      'not null' => FALSE,
+    ));
+  }
 }
 
 

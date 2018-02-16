@@ -176,6 +176,19 @@ msgstr "182 руб."
 msgid "For indicate percents like this: [:%:]"
 msgstr "Для указания процентов, вот так: [:%:]"
 
+msgctxt "price for qty"
+msgid "for"
+msgstr "за"
+
+msgid "Units of measurement"
+msgstr "Единицы измерения"
+
+msgid "empty"
+msgstr "пусто"
+
+
+
+
 
 
 

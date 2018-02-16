@@ -246,11 +246,11 @@ function product_entity_view($entity, $entity_type, $view_mode, $language) {
       }
     }
 
-    if ($field_extra_fields_get_display['price']['visible'] && !empty($entity->price)) { // '0.00' is TRUE :)
+    if (!empty($field_extra_fields_get_display['price']['visible']) && !empty($entity->price)) { // '0.00' is TRUE :)
       $entity->content['price'] = product_entity_price_view($entity_type, $entity, $bundle, $view_mode);
     }
 
-    if ($field_extra_fields_get_display['qty']['visible'] && shop_get_info('balances', 'settings', 'track')) {
+    if (!empty($field_extra_fields_get_display['qty']['visible']) && shop_get_info('balances', 'settings', 'track')) {
       $entity->content['qty'] = array(
         '#type' => 'item',
         '#title' => t('Qty'),
@@ -300,7 +300,7 @@ function product_entity_view($entity, $entity_type, $view_mode, $language) {
       }
     }
 
-    $only_on_request = $entity->goods_on_request && isset($entity->qty) && ($entity->qty == 0);
+    $only_on_request = ($entity->goods_on_request ?? FALSE) && isset($entity->qty) && ($entity->qty == 0);
 
     if ($only_on_request) {
       $entity->content['goods_on_request'] = array(
@@ -315,7 +315,7 @@ function product_entity_view($entity, $entity_type, $view_mode, $language) {
         $rows = array(); // name | cost | time
         $has_time_column = FALSE;
         $variants_found = FALSE;
-        foreach (shop_delivery_info() as $method => $data) {
+        foreach (shop_delivery_info($entity) as $method => $data) {
           if ($data['enabled'] && !empty($data['settings']['variants'])) {
             $variants_found = TRUE;
             if (!empty($field_settings[$method]) && ($field_settings[$method] = array_filter($field_settings[$method]))) {
@@ -324,7 +324,7 @@ function product_entity_view($entity, $entity_type, $view_mode, $language) {
 
                   $row = array(
                     '_name' => array(
-                      'data' => $variant['name'],
+                      'data' => $variant['name'] ?? $variant['geoaddress']['address']['keywords'] ?? '',
                     ),
                     '&nbsp;', // искуственные отступы между ячейками, т.к. используется класс supress-css (см.ниже), который убивает стиль padding (см. модуль addons)
                     '_cost' => array(),
@@ -333,7 +333,7 @@ function product_entity_view($entity, $entity_type, $view_mode, $language) {
                   );
 
 
-                  if ($cost = shop_delivery_cost($method, array('variant' => $idx), $entity->price)) {
+                  if ($cost = shop_delivery_cost($entity, $method, array('variant' => $idx), $entity->price)) {
                     $row['_cost']['data'] = theme('price', array('price' => $cost));
                   }
                   else {
@@ -344,7 +344,7 @@ function product_entity_view($entity, $entity_type, $view_mode, $language) {
 
                   /*
                   OLD:
-                  $required_time = shop_delivery_calc_required_time($method, array('variant' => $idx));
+                  $required_time = shop_delivery_required_time($entity, $method, array('variant' => $idx));
                   if (module_exists('timetables') && !empty($variant['timetable'])) {
                     $tz = variable_get('date_default_timezone', @date_default_timezone_get());
                     $current_day_of_week = format_date(REQUEST_TIME, 'custom', 'w', $tz);
@@ -366,7 +366,7 @@ function product_entity_view($entity, $entity_type, $view_mode, $language) {
                       $row['_time']['data'] = format_date(strtotime('today +' . ($day - $current_day_of_week + ($current_day_of_week >= $day ? 7 : 0)) . ' day') + key($timetable[$day]), 'custom', 'd M');
                     }
                   }*/
-                  
+
                   $has_time_column = $has_time_column || !empty($row['_time']['data']);
                   $rows[] = array(
                     'class' => array(drupal_html_class('delivery-method-item-' . $method)),
@@ -381,7 +381,7 @@ function product_entity_view($entity, $entity_type, $view_mode, $language) {
           $link = array(
             '#type' => 'link',
             '#title' => t('Delivery conditions'),
-            '#href' => 'shop/delivery-conditions-overview',
+            '#href' => 'shop/delivery-conditions-overview/' . $id,
             '#attributes' => array(
               'target' => '_blank',
               'class' => array('popup',),
@@ -412,7 +412,7 @@ function product_entity_view($entity, $entity_type, $view_mode, $language) {
             $entity->content['delivery_conditions'] = $link;
           }
         }
-      }      
+      }
     }
 
   }
@@ -435,9 +435,9 @@ function product_entity_price_view($entity_type, $entity, $bundle, $view_mode, $
 
   $percents = $percents . '';
   $percents *= 1;
-  
+
   $price_wrap = $view_mode === 'full' ? 'h2' : 'div';// SEO wants H2
-  
+
   $build = array(
     '#type' => 'item',
     '#attributes' => array(
@@ -449,7 +449,7 @@ function product_entity_price_view($entity_type, $entity, $bundle, $view_mode, $
       '#price' => $real_price,
       '#format' => isset($price_settings['currency_format']) ? $price_settings['currency_format'] : NULL,
       '#currency' => $currency,
-      '#access' => $percents && (!empty($price_settings['show_old_price']) || !isset($price_settings['show_old_price'])),
+      '#access' => $real_price && $percents && (!empty($price_settings['show_old_price']) || !isset($price_settings['show_old_price'])),
       '#attributes' => array(
         'class' => array('old-price',),
       ),
@@ -459,6 +459,7 @@ function product_entity_price_view($entity_type, $entity, $bundle, $view_mode, $
     'price' => array(
       '#theme' => 'price',
       '#price' => $price_summary,
+      '#access' => !!$price_summary,
       '#format' => isset($price_settings['currency_format']) ? $price_settings['currency_format'] : NULL,
       '#currency' => $currency,
       '#prefix' => "<$price_wrap>",
@@ -508,7 +509,9 @@ function product_entity_price_view($entity_type, $entity, $bundle, $view_mode, $
     );
     $build['you_save']['#markup'] = $price_settings['your_save_text'];
   }
-
+  
+  $build['#access'] = $real_price || $price_summary;
+  
   return $build;
 }
 
@@ -520,7 +523,7 @@ function product_preprocess_node(&$variables) {
   $node = !empty($variables['node']) ? $variables['node'] : NULL;
   if ($node && shop_get_info('entity_types', 'node', $node->type) && (empty($variables['classes_array']) || !in_array('on-sale', $variables['classes_array']))) {
     if (($price_summary = shop_build_price('product', $node)) && !empty($price_summary['price']) && $price_summary['price'] > array_sum($price_summary)) {
-      $variables['classes_array'][] = 'on-sale';     
+      $variables['classes_array'][] = 'on-sale';
     }
   }
 }
@@ -675,10 +678,15 @@ function product_request_form_submit($form, &$form_state) {
 }
 
 
+function product_buy_allowed($entity_type, $entity) {
+  $access = module_invoke_all('product_buy_allowed', $entity_type, $entity);
+  return !in_array(FALSE, $access, TRUE);
+}
+
 /**
  * Checks what product can be placed to shop cart
  */
-function product_buy_allowed($entity_type, $entity) {
+function product_product_buy_allowed($entity_type, $entity) {
   if (isset($entity->status) && !$entity->status) {
     return FALSE;
   }
@@ -694,7 +702,7 @@ function product_buy_allowed($entity_type, $entity) {
   }
 
   if ($entity->qty > 0) {
-    if ($item = shop_cart()->item($entity_type, $entity)) {
+    if ($item = shop_cart($entity->shop_id)->item($entity_type, $entity)) {
       return ($item->qty < $entity->qty) || !shop_get_info('balances', 'settings', 'track');
     }
     else {
@@ -726,7 +734,7 @@ function product_buy_button_form($form, &$form_state, $entity_type, $entity, $vi
 
     if (product_buy_allowed($entity_type, $entity)) {
       $display_qty_field = addons_extra_field_get_settings($entity_type, $bundle, 'display', $view_mode, 'buy_button' . ($is_secondary ? '2' : ''), 'qty');
-      $shop_cart = shop_cart();
+      $shop_cart = shop_cart($entity->shop_id);
       $in_cart_qty = $shop_cart->countItem($entity_type, $entity);
       $qty_title = NULL;
       if ($entity->qty_type) {
@@ -739,9 +747,9 @@ function product_buy_button_form($form, &$form_state, $entity_type, $entity, $vi
       $min = min($max, !empty($entity->qty) || !shop_get_info('balances', 'settings', 'track') ? 1 : 0);
       $form += array(
         '#token' => user_is_logged_in() ? FALSE : NULL,
-        'shop_cart_anonymous_key' => array(
+        'shop_cart_current_key' => array(
           '#type' => 'hidden',
-          '#default_value' => drupal_hmac_base64('shop_cart_anonymous_key', $shop_cart->anonymous_key . drupal_get_private_key() . drupal_get_hash_salt()),
+          '#default_value' => drupal_hmac_base64('shop_cart_current_key', $shop_cart->currentKey() . drupal_get_private_key() . drupal_get_hash_salt()),
         ),
         '#entity_type' => $entity_type,
         '#entity_id' => $id,
@@ -755,6 +763,10 @@ function product_buy_button_form($form, &$form_state, $entity_type, $entity, $vi
           '#type' => 'hidden',
           '#value' => $id,
         ),
+        'shop_id' => array(
+          '#type' => 'hidden',
+          '#value' => $entity->shop_id,          
+        ),
         'bundle' => array(
           '#type' => 'hidden',
           '#value' => $bundle,
@@ -763,7 +775,6 @@ function product_buy_button_form($form, &$form_state, $entity_type, $entity, $vi
           '#type' => 'hidden',
           '#value' => $view_mode,
         ),
-
         'qty' => array(
           '#type' => 'digit',
           '#step' => $step = shop_get_info('balances', 'settings', 'qty_fraction') && !empty($entity->qty_fraction) ? $entity->qty_fraction * 1 : 1,
@@ -797,8 +808,8 @@ function product_buy_button_form($form, &$form_state, $entity_type, $entity, $vi
             (
             $in_cart_qty * 1
               ?
-              ' ' . t('(@count already in <a href="@uri">cart</a>)', array('@count' => $in_cart_qty * 1, '@uri' => url('shop/cart', array('query' => array('destination' => $_GET['q']))),))
-              //t('Already in <a href="@uri">cart</a> (@qty)', array('@uri' => url('shop/cart', array('query' => array('destination' => $_GET['q']))), '@qty' => $node->in_cart_qty))
+              ' ' . t('(@count already in <a href="@uri">cart</a>)', array('@count' => $in_cart_qty * 1, '@uri' => url('shop/cart/' . $entity->shop_id, array('query' => array('destination' => $_GET['q']))),))
+              //t('Already in <a href="@uri">cart</a> (@qty)', array('@uri' => url('shop/cart/' . $entity->shop_id, array('query' => array('destination' => $_GET['q']))), '@qty' => $node->in_cart_qty))
               :
               ''
             ) .
@@ -816,8 +827,8 @@ function product_buy_button_form($form, &$form_state, $entity_type, $entity, $vi
         $form['qty']['#attributes']['readonly'] = TRUE;
       }
       $purchase_action = addons_extra_field_get_settings($form['#entity_type'], $form['#bundle'], 'display', $form['#view_mode'], 'buy_button' . ($is_secondary ? '2' : ''), 'purchase_action');
-      $purchase_action = $purchase_action ? $purchase_action : 'stay';
-      if ($purchase_action == 'stay') {
+      $purchase_action = $purchase_action ? $purchase_action : 'stay'; // 'stay|leave'
+      if ($purchase_action === 'stay') {
         $form['#attributes']['class'][] = 'purchase-action-stay'; // needs for shop-cart block js
       }
 
@@ -826,7 +837,7 @@ function product_buy_button_form($form, &$form_state, $entity_type, $entity, $vi
       // Caution: hook_forms() don't solves this problem!
       // Fix: Insert intermediate redirect on entity page that guaranteed contains same form.
       $entity_uri = entity_uri($entity_type, $entity);
-      $form['#action'] = url($entity_uri['path'], array('query' => $purchase_action == 'stay' ? array(drupal_get_destination()) : array('destination' => 'shop/cart')));
+      $form['#action'] = url($entity_uri['path'], array('query' => $purchase_action == 'stay' ? array(drupal_get_destination()) : array('destination' => 'shop/cart/' . $entity->shop_id)));
       $form['is_secondary'] = array(
         '#type' => 'hidden',
         '#default_value' => $is_secondary,
@@ -842,13 +853,13 @@ function product_buy_button_form($form, &$form_state, $entity_type, $entity, $vi
 }
 
 function product_buy_button_form_validate($form, &$form_state) {
-  if (!module_invoke('anonymous_tracker', 'track_user')) {//if (user_is_anonymous() && empty($_COOKIE['shop_cart'])) { // Skip clients with disabled cookies, see also shop_init()
-    form_set_error('shop_cart_anonymous_key', t('Please enable cookie in Your browser.'));
+  if (!anonymous_tracker_track_user()) {
+    form_set_error('shop_cart_current_key', t('Please enable cookie in Your browser.'));
   }
   else {
-    $shop_cart = shop_cart();
-    if (!isset($form_state['values']['shop_cart_anonymous_key']) || $form_state['values']['shop_cart_anonymous_key'] !== drupal_hmac_base64('shop_cart_anonymous_key', $shop_cart->anonymous_key . drupal_get_private_key() . drupal_get_hash_salt())) {
-      form_set_error('shop_cart_anonymous_key', t('The form has become outdated. Please reload this page.'));
+    $shop_cart = shop_cart($form_state['values']['shop_id']);
+    if (!isset($form_state['values']['shop_cart_current_key']) || $form_state['values']['shop_cart_current_key'] !== drupal_hmac_base64('shop_cart_current_key', $shop_cart->currentKey() . drupal_get_private_key() . drupal_get_hash_salt())) {
+      form_set_error('shop_cart_current_key', t('The form has become outdated. Please reload this page.'));
     }
   }
 }
@@ -858,46 +869,44 @@ function product_buy_button_form_validate($form, &$form_state) {
  * Submission of buy product button
  */
 function _product_buy_button_form_submit($form, &$form_state) {
- // if (!user_is_anonymous() || !empty($_COOKIE['shop_cart'])) { // Skip clients with disabled cookies, see also shop_init()
-    $shop_cart = shop_cart();
-    if ($e = entity_load($form['#entity_type'], array($form['#entity_id']))) {
-      $entity = reset($e);
+  if ($e = entity_load($form['#entity_type'], array($form['#entity_id']))) {
+    
+    $entity = reset($e);
+    $shop_cart = shop_cart($entity->shop_id);
+    if (!isset($entity->status) || $entity->status) { // Only entities with status or not supported status entities
+      $entity_title = entity_label($form['#entity_type'], $entity);
 
-      if (!isset($entity->status) || $entity->status) { // Only entities with status or not supported status entities
-        $entity_title = entity_label($form['#entity_type'], $entity);
+      $snapshot = snapshot_create('cart_item_snapshot', $form['#entity_type'], $form['#entity_id']);
+      $item_key = Shop\Cart::key($form['#entity_type'], $form['#entity_id'], $snapshot->sid);
 
-        $snapshot = snapshot_create('cart_item_snapshot', $form['#entity_type'], $form['#entity_id']);
-        $item_key = Shop\Cart::key($form['#entity_type'], $form['#entity_id'], $snapshot->sid);
-
-        $desired_qty = ($form_state['values']['qty'] + (isset($shop_cart->items[$item_key]->qty) ? $shop_cart->items[$item_key]->qty : 0)) * 1;
-        // Limited or unlimited product
-        if (!is_null($entity->qty) && $entity->qty < $desired_qty && shop_get_info('balances', 'settings', 'track') && !$entity->goods_on_request) {
-          drupal_set_message(t('Sorry, we have only @qty products %title in our shop.', array(
+      $desired_qty = ($form_state['values']['qty'] + (isset($shop_cart->items[$item_key]->qty) ? $shop_cart->items[$item_key]->qty : 0)) * 1;
+      // Limited or unlimited product
+      if (!is_null($entity->qty) && $entity->qty < $desired_qty && shop_get_info('balances', 'settings', 'track') && !$entity->goods_on_request) {
+        drupal_set_message(t('Sorry, we have only @qty products %title in our shop.', array(
+          '%title' => $entity_title,
+          '@qty' => $entity->qty,
+        )), 'warning');
+      }
+      elseif ($shop_cart->set($form['#entity_type'], $entity, NULL, $desired_qty)) { //->item($form['#entity_type'], $entity)) {
+        $purchase_action = addons_extra_field_get_settings($form['#entity_type'], $form['#bundle'], 'display', $form['#view_mode'], 'buy_button' . ($form_state['values']['is_secondary'] ? '2' : ''), 'purchase_action');
+        $purchase_action = $purchase_action ? $purchase_action : 'stay'; // 'stay|leave'
+        if (!empty($form_state['no_redirect']) || $purchase_action == 'stay') {
+          drupal_set_message(t('Product %title has been added in Your <a href="@uri">cart</a>.', array(
             '%title' => $entity_title,
-            '@qty' => $entity->qty,
-          )), 'warning');
-        }
-        elseif ($shop_cart->set($form['#entity_type'], $entity, NULL, $desired_qty)) { //->item($form['#entity_type'], $entity)) {
-          $purchase_action = addons_extra_field_get_settings($form['#entity_type'], $form['#bundle'], 'display', $form['#view_mode'], 'buy_button' . ($form_state['values']['is_secondary'] ? '2' : ''), 'purchase_action');
-          $purchase_action = $purchase_action ? $purchase_action : 'stay';
-          if (!empty($form_state['no_redirect']) || $purchase_action == 'stay') {
-            drupal_set_message(t('Product %title has been added in Your <a href="@uri">cart</a>.', array(
-              '%title' => $entity_title,
-              '@uri' => url('shop/cart')
-            )));
-          }
-          else {
-            if (empty($form_state['no_redirect'])) {
-              $_GET['destination'] = 'shop/cart?destination=' . $_GET['q'];
-            }
-          }
+            '@uri' => url('shop/cart/' . $entity->shop_id)
+          )));
         }
         else {
-          drupal_set_message(t('The form has become outdated. Please reload this page.'), 'error');
+          if (empty($form_state['no_redirect'])) {
+            $_GET['destination'] = 'shop/cart/' . $entity->shop_id . '?destination=' . $_GET['q'];
+          }
         }
       }
+      else {
+        drupal_set_message(t('The form has become outdated. Please reload this page.'), 'error');
+      }
     }
- // }
+  }
 }
 
 
@@ -922,7 +931,8 @@ function product_form_alter(&$form, &$form_state, $form_id) {
 
     drupal_add_css(drupal_get_path('module', 'product') . '/product.form.css');
     $form['title']['#title'] = t('Name', array(), array('context' => 'product'));
-    $currency_options = array(shop_get_info('currency', 'default') => t(strtolower(shop_get_info('currency', 'default'))))
+
+    $currency_options = array(shop_get_info('currency', 'default') => t(strtolower(shop_get_info('currency', 'default')), array(), array('context' => 'currency')))
       + (!empty(shop_get_info('currency', 'available')) ? shop_get_info('currency', 'available') : array())
       + (isset($form['#entity']->currency) ? array($form['#entity']->currency => t(strtolower($form['#entity']->currency))) : array());
     $form['price'] = array(
@@ -973,10 +983,33 @@ function product_form_alter(&$form, &$form_state, $form_id) {
       $form['price']['currency']['#attributes']['class'][] = 'element-invisible';
       $form['price']['price']['#field_suffix'] = check_plain(reset($form['price']['currency']['#options']));
     }
+    
+    
+    $def = $form['#entity']->qty_type ?? NULL;
+    $opts = shop_units_options();
+    if (!$def) {
+      if (isset($opts['PCE'])) {
+        $opts = array('PCE' => $opts['PCE']) + $opts;
+      }
+    }
+    else {
+      $opts += array($def => $def);
+    }
+    $form['price']['qty_type'] = array(
+      '#type' => 'select',
+      '#options' => $opts,
+      '#title' => t('Units of measurement'),
+      '#title_display' => 'invisible',
+      '#field_prefix' => ' &nbsp; ' . t('for', array(), array('context' => 'price for qty')),
+      //'#title_display' => shop_get_info('balances', 'settings', 'track') ? 'invisible' : 'before',
+      '#inline' => TRUE,
+      
+      '#default_value' => $def,
+    );
     $float = shop_get_info('balances', 'settings', 'qty_fraction');
     $form['qty'] = array(
       '#type' => 'item',
-      //'#inline' => TRUE,
+      '#inline' => TRUE,
       '#attributes' => array(
         'class' => array('product-wrapper',),
       ),
@@ -984,7 +1017,6 @@ function product_form_alter(&$form, &$form_state, $form_id) {
       'qty' => array(
         '#title' => t('Qty in stock'),
         '#type' => 'digit',
-        //'#inline' => TRUE,
         '#step' => $float ? (!empty($form['#entity']->qty_fraction) ? $form['#entity']->qty_fraction : .1) : 1,//1,
         '#float' => $float,
         '#min' => 0,
@@ -992,19 +1024,13 @@ function product_form_alter(&$form, &$form_state, $form_id) {
         '#size' => 5,
         '#attributes' => array(
           'style' => 'text-align:right',
-          'placeholder' => html_entity_decode('  &infin;  '), // infinity symbol ( oo )
+          'placeholder' => html_entity_decode('  &infin;  '), // infinity symbol
         ),
-        //'#title_display' => 'invisible',
         '#default_value' => isset($form['#entity']->qty) ? $form['#entity']->qty : '',
-        //	'#access' => shop_get_info('balances', 'settings', 'track'),
       ),
-      //'qty_wrapper' => array(
-      //'#type' => 'item',
-      //'#inline' => TRUE,
       'note_not_in_stock' => array(
-        '#type' => 'item',
-        //'#inline' => TRUE,
-        '#markup' => '(<span class="js-hide">0 - </span>' . drupal_strtolower(shop_get_info('balances', 'settings', 'track') ? t('Not in stock') : t('Unlimited')) . ')',
+        '#type' => 'container',
+        '#children' => '(<span class="js-hide">0 - </span>' . drupal_strtolower(shop_get_info('balances', 'settings', 'track') ? t('Not in stock') : t('Unlimited')) . ')',
         '#states' => array(
           'visible' => array(
             'input[name="qty"]' => array('value' => '0'),
@@ -1013,9 +1039,8 @@ function product_form_alter(&$form, &$form_state, $form_id) {
         '#access' => shop_get_info('balances', 'settings', 'track'),
       ),
       'note_any_qty' => array(
-        '#type' => 'item',
-        //'#inline' => TRUE,
-        '#markup' => '(<span class="js-hide">empty - </span>' . drupal_strtolower(t('Unlimited')) . ')',
+        '#type' => 'container',
+        '#children' => '(<span class="js-hide">' . t('empty') . ' - </span>' . drupal_strtolower(t('Unlimited')) . ')',
         '#states' => array(
           'visible' => array(
             'input[name="qty"]' => array('value' => ''),
@@ -1025,29 +1050,19 @@ function product_form_alter(&$form, &$form_state, $form_id) {
       ),
       'qty_fraction' => array(
         '#type' => 'digit',
-        //'#inline' => TRUE,
         '#title' => t('Qty fraction'),
         '#min' => 0,
         '#max' => 1000000,
         '#step' => 0.1,
         '#size' => 4,
         '#description' => '',
-        '#default_value' => isset($form['#entity']->qty_fraction) ? $form['#entity']->qty_fraction : '',
-        '#access' => (bool) shop_get_info('balances', 'settings', 'qty_fraction'),
+        '#default_value' => $form['#entity']->qty_fraction ?? '',
+        '#access' => shop_get_info('balances', 'settings', 'qty_fraction'),
       ),
-      'qty_type' => array(
-        '#type' => 'select',
-        //'#inline' => TRUE,
-        '#options' => array('' => t('pcs')) + shop_units_options() + (isset($form['#entity']->qty_type) ? array($form['#entity']->qty_type => $form['#entity']->qty_type) : array()),
-        '#title' => t('Units of measurement'),
-        '#title_display' => shop_get_info('balances', 'settings', 'track') ? 'invisible' : 'before',
-        '#default_value' => isset($form['#entity']->qty_type) ? $form['#entity']->qty_type : NULL,
-      ),
-      //),
     );
     $form['goods_on_request'] = array(
       '#type' => 'container',
-      '#access' => (bool) shop_get_info('balances', 'settings', 'goods_on_request'),
+      '#access' => shop_get_info('balances', 'settings', 'goods_on_request'),
       'goods_on_request' => array(
         '#type' => 'checkbox',
         '#title' => t('Available on request'),
@@ -1184,9 +1199,9 @@ function product_field_extra_fields() {
  * Implements hook_extra_field_formatter_settings_form() defined in addons_form_field_ui_display_overview_form_alter()
  * Returns settings sub-form for extra field
  */
-function product_extra_field_formatter_settings_form($entity_type, $bundle, $mode, $field_name, $settings) {
+function product_extra_field_formatter_settings_form($entity_type, $bundle, $field_name, $settings, $view_mode) {
   $form = array();
-  if ($mode === 'display' && shop_get_info('entity_types', $entity_type, $bundle)) {
+  if (shop_get_info('entity_types', $entity_type, $bundle)) {
     if ($field_name === 'price') {
       $form['currency_format'] = array(
         '#type' => 'select',
@@ -1371,10 +1386,10 @@ function product_extra_field_formatter_settings_form($entity_type, $bundle, $mod
         );
         foreach ($opts as $method => $items) {
           $form['display'][$method] = array(
-            '#title' => shop_delivery_info($method, 'title'),
+            '#title' => shop_delivery_info(NULL, $method, 'title'),
           );
           foreach ($items as $idx => $item) {
-            if ($enabled = shop_delivery_info($method, 'enabled')) {
+            if ($enabled = shop_delivery_info(NULL, $method, 'enabled')) {
               $form['display'][$method]['#type'] = 'item';
             }
             $form['display'][$method][$idx] = array(
@@ -1395,8 +1410,8 @@ function product_extra_field_formatter_settings_form($entity_type, $bundle, $mod
  * Implements hook_extra_field_formatter_settings_summary() defined in addons_form_field_ui_display_overview_form_alter()
  * Returns information about actual settings of extra field
  */
-function product_extra_field_formatter_settings_summary($entity_type, $bundle, $mode, $field_name, $settings) {
-  if ($mode === 'display' && shop_get_info('entity_types', $entity_type, $bundle)) {
+function product_extra_field_formatter_settings_summary($entity_type, $bundle, $field_name, $settings) {
+  if (shop_get_info('entity_types', $entity_type, $bundle)) {
     if ($field_name === 'price') {
       $out = array();
       $out[] = '<strong>' . t('Display currency as') . ': </strong>' . money_currency_info(shop_get_info('currency', 'default'), isset($settings['currency_format']) ? $settings['currency_format'] : 'reduction');
@@ -1412,7 +1427,7 @@ function product_extra_field_formatter_settings_summary($entity_type, $bundle, $
       $qty = isset($settings['qty']) ? $settings['qty'] : $field_name == 'buy_button';
       $output = array(
         '<strong>' . t('Button title') . ': </strong>' . (empty($settings['text']) ? t('Buy') : check_plain($settings['text'])),
-        '<strong>' . t('Action when you click "buy" button') . ': </strong>' . (empty($settings['purchase_action']) || $settings['purchase_action'] == 'stay' ? t('Continue shopping') : t('Go to shopping cart')),
+        '<strong>' . t('Action when you click "buy" button') . ': </strong>' . (empty($settings['purchase_action']) || $settings['purchase_action'] === 'stay' ? t('Continue shopping') : t('Go to shopping cart')),
         '<strong>' . ($qty ? t('With qty text field') : t('Without qty text field')) . '</strong>',
       );
       if (!empty($settings['qty_buttons'])) {
@@ -1526,15 +1541,23 @@ function product_user_update(&$edit, $account, $category) {
  * Helper function
  * Get image field from product node and render it
  */
-function product_get_image($entity, $entity_type) {
-  foreach (field_read_fields(array('type' => 'image', 'field_name' => array_keys((array) $entity))) as $field_name => $field) {
-    if (!empty($entity->$field_name) && ($view = field_view_field($entity_type, $entity, $field_name, 'default')) && !empty($view[0]['#item']['uri'])) {
-      return theme('image_style', array(
-        'style_name' => module_exists('features') /* @see features_image_default_styles() */ ? '128x96' : 'thumbnail',
-        'path' => $view[0]['#item']['uri'],
-      ));
+function product_get_image($entity, $entity_type, $style_name = NULL) {
+  list($id,, $bundle) = entity_extract_ids($entity_type, $entity);
+  $style_name = $style_name ? $style_name : (module_exists('features') /* @see features_image_default_styles() */ ? '128x96' : 'thumbnail');
+  $cached = &drupal_static(__FUNCTION__, array());
+  if (!isset($cached[$entity_type][$style_name]) || !array_key_exists($id, $cached[$entity_type][$style_name])) {
+    $cached[$entity_type][$style_name][$id] = NULL;
+    foreach (field_read_fields(array('entity_type' => $entity_type, 'bundle' => $bundle, 'type' => 'image')) as $field_name => $field) {
+      if (!empty($entity->{$field_name}) && ($view = field_view_field($entity_type, $entity, $field_name)) && !empty($view[0]['#item']['uri'])) {
+        $cached[$entity_type][$style_name][$id] = theme('image_style', array(
+          'style_name' => $style_name,
+          'path' => $view[0]['#item']['uri'],
+        ));
+        break;
+      }
     }
   }
+  return $cached[$entity_type][$style_name][$id];
 }
 
 
@@ -1560,28 +1583,26 @@ function product_snapshot_info() {
  */
 function product_snapshot_data($snapshot_bundle, $type, $id, $context) {
   if ($snapshot_bundle == 'cart_item_snapshot') {
-    $entity = entity_load($type, array($id), array(), TRUE);
-    $entity = reset($entity);
     $data = array('type' => $type, 'id' => $id,);
     return $data;
   }
 
 
   if ($snapshot_bundle == 'cart_item_ordered_snapshot') {
-    global $user;
-    $entity = entity_load($type, array($id), array(), TRUE);
-    $entity = reset($entity);
-    list(, , $bundle) = entity_extract_ids($type, $entity);
+    if ($entities = entity_load($type, array($id), array(), TRUE)) {
+      $entity = clone $entities[$id];
+      $entity->old_snapshot = $context['old_snapshot'] ?? NULL; // WORKAROUND
+      list(, , $bundle) = entity_extract_ids($type, $entity);
+      $data = array('type' => $type, 'id' => $id,);
 
-    $data = array('type' => $type, 'id' => $id,);
+      foreach (field_info_instances($type, $bundle) as $field_name => $instance) {
+        $data[$field_name] = $entity->{$field_name};
+      }
 
-    foreach (field_info_instances($type, $bundle) as $field_name => $instance) {
-      $data[$field_name] = $entity->{$field_name};
+      $data['price'] = shop_build_price('shop_cart_item', $entity);
+
+      return $data;
     }
-
-    $data['price'] = shop_build_price('shop_cart_item', $entity, user_load($user->uid));
-
-    return $data;
   }
 }
 
@@ -1595,21 +1616,23 @@ function product_snapshot_render($snapshot_bundle, $type, $id, $context) {
   }
 
   if ($snapshot_bundle == 'cart_item_ordered_snapshot') {
-    $node = node_load($id);
+    if ($node = node_load($id)) { // TODO: bug on online-alina.ru at multiple node deletion (admin/content) - $node is FALSE
+      list(, , $bundle) = entity_extract_ids($type, $node);
 
-    list(, , $bundle) = entity_extract_ids($type, $node);
+      $bundle_settings = field_bundle_settings($type, $bundle);
+      $bundle_settings_backup = $bundle_settings;
+      $bundle_settings['extra_fields']['display']['buy_button']['full']['visible'] = FALSE;
+      $bundle_settings['extra_fields']['display']['buy_button2']['full']['visible'] = FALSE;
+      field_bundle_settings('node', $bundle, $bundle_settings);
 
-    $bundle_settings = field_bundle_settings($type, $bundle);
-    $bundle_settings_backup = $bundle_settings;
-    $bundle_settings['extra_fields']['display']['buy_button']['full']['visible'] = FALSE;
-    $bundle_settings['extra_fields']['display']['buy_button2']['full']['visible'] = FALSE;
-    field_bundle_settings('node', $bundle, $bundle_settings);
+      $render = node_view($node, 'full');
 
-    $render = node_view($node, 'full');
+      field_bundle_settings('node', $bundle, $bundle_settings_backup);
 
-    field_bundle_settings('node', $bundle, $bundle_settings_backup);
+      return drupal_render($render);      
+    }
 
-    return drupal_render($render);
+
   }
 }
 
@@ -1624,9 +1647,7 @@ function product_cron() {
   $query->leftJoin('shop_cart_items', 'sci', 's.sid = sci.snapshot_id');
   $query->condition('s.bundle', 'cart_item_snapshot');
   $query->isNull('sci.snapshot_id');
-  $sids = $query->execute()->fetchCol();
-
-  if ($sids) {
+  if ($sids = $query->execute()->fetchCol()) {
     snapshot_delete_multiple($sids);
   }
 }
@@ -1672,9 +1693,9 @@ function _product_get_supply_time($entity, $desired_qty = 1) {
 
 function _product_get_delivery_time($entity, $qty, $method, $variant, $variant_id, $start_time = REQUEST_TIME, $human_readable = TRUE) {
   $minimal_time = $start_time
-    + shop_delivery_calc_required_time($method, array('variant' => $variant_id))
+    + shop_delivery_required_time($entity, $method, array('variant' => $variant_id))
     + _product_get_supply_time($entity, $qty) * 24 * 3600;
-    
+
   $window = array(
     $minimal_time,
     strtotime('tomorrow', $minimal_time),

@@ -81,10 +81,6 @@
   font-size: 100%;
 }
 
-.catalog-object.table-view div.node.node-teaser {
-  display: none;
-}
-
 .catalog-table.centered.table-view .node,
 .catalog-table.table-view.nodes.centered td.td-title,
 .catalog-table.table-view.nodes.centered th.th-title {
@@ -245,7 +241,7 @@ div.catalog-table.cols-10 .catalog-cell-wrapper, div.catalog-table.cols-10 .cata
 
 
 div.catalog-table .catalog-col-wrapper .catalog-cell-wrapper {
-  width:100%;!important;
+  width:100% !important;
 }
 
 .catalog-admin-links {

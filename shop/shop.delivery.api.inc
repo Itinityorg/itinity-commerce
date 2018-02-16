@@ -2,21 +2,23 @@
 
 /**
 * Main function for gather information about existsing delivery methods and it properties.
-* Returns full array or nested value if passed some params (key names)
+* Returns full array or nested value if passed some params (key names after $node param)
+* @param $node - context object. May be empty, or good, or organisation
 * Accepts any count and of variables (key names)
 * Usage example:
 *  shop_delivery_info()  - get full information about delivery methods
 *  Every item includes these options:
-*   name  - real name of delivery method, needed for administratyive interfaces;
+*   name  - real name of delivery method, needed for administration interfaces;
 *   title - admin specified name of method, used for users. If this empty - name will used.
 *   description - custom text for more information;
 *   settings - system settings for method;
 *   enabled - boolean indicates that method is enabled or not;
 *   settings callback - name of function that returns settings form for delivery method;
-*   widget callback - name of function that returns widget sub-form for user. In this form user can adjust selected method - specify address, select self delivery variant, and other;
-*   summary callback - name of function that returns renderable array which contains information about selected delivery method and user specified options;
+*   settings summary callback - summary information about delivery method settings
+*   user widget callback - name of function that returns widget sub-form for user. In this form user can adjust selected method - specify address, select self delivery variant, and other;
+*   user summary callback - name of function that returns renderable array which contains information about selected delivery method and user specified options;
 *   cost callback - name of function that returns price for delivery method.
-*   required_time callback - name of function that calculates required time for delivery method
+*   required time callback - name of function that calculates required time for delivery method
 *
 * Other examples:
 *    shop_delivery_info('courier', 'enabled') - returns enabled/disabled status for courier delivery method
@@ -25,8 +27,8 @@
 *    shop_delivery_info('self', 'settings', 'variants') - get all pickup variants of self-delivery
 *
 */
-function shop_delivery_info() {
-  $result = &drupal_static(__FUNCTION__);
+function shop_delivery_info($node = NULL) {
+  //$result = &drupal_static(__FUNCTION__);
   if (!isset($result)) {
     $result = array();
     $shop_delivery_info = variable_get('shop_delivery_info', array());
@@ -51,29 +53,54 @@ function shop_delivery_info() {
             'settings' => array(),
             'enabled' => FALSE,
             'settings callback' => NULL,
-            'widget callback' => NULL,
-            'summary callback' => NULL,
+            'settings summary callback' => NULL,
+            'user widget callback' => NULL,
+            'user summary callback' => NULL,
             'cost callback' => NULL,
-            'required_time callback' => NULL,
+            'required time callback' => NULL,
           );
           $result[$key]['title'] = !empty($result[$key]['title']) ? $result[$key]['title'] : $result[$key]['name'];
         }
       }
     }
-    drupal_alter(__FUNCTION__, $result); // Invoke global hook_shop_delivery_info_alter(&$info)
-    $result = array_filter($result);    
   }
-  return drupal_array_get_nested_value($result, func_get_args());
+  drupal_alter(__FUNCTION__, $result, $node); // Invoke global hook_shop_delivery_info_alter($node, &$info)
+  $result = array_filter($result);    
+  $args = func_get_args();
+  unset($args[0]);
+  return drupal_array_get_nested_value($result, $args);
 }
 
+
+/**
+* Save shop_delivery_info configuration into database.
+*/
+function shop_delivery_info_save($node, &$shop_delivery_info) {
+  foreach (module_implements('shop_delivery_info_presave') as $m) {
+    $fn = $m . '_shop_delivery_info_presave';
+    $fn($node, $shop_delivery_info);
+  }
+  drupal_static_reset('shop_delivery_info');
+  if (!$node) { // save as global settings @see 
+    variable_set('shop_delivery_info', $shop_delivery_info);
+  }
+  foreach (module_implements('shop_delivery_info_save') as $m) {
+    $fn = $m . '_shop_delivery_info_save';
+    $fn($node, $shop_delivery_info);
+  }
+  drupal_static_reset('shop_delivery_info');
+}
 
 
 /**
  * Calculates required time for selected delivery method by user choosed parameters
  */
-function shop_delivery_calc_required_time($delivery_method, $delivery_params = array()) {
-  if ($callback = shop_delivery_info($delivery_method, 'required_time callback')) {
-    return $callback($delivery_params);
+function shop_delivery_required_time($node = NULL, $delivery_method, $delivery_params = array()) {
+  if ($fn = shop_delivery_info($node, $delivery_method, 'required time callback')) {
+    $time = $fn($node, $delivery_params, shop_delivery_info($node, $delivery_method, 'settings'));
+    // Invoke hook_shop_delivery_required_time_alter()
+    drupal_alter(__FUNCTION__, $time, $node, $delivery_method, $delivery_params);
+    return $time;
   }
 }
 
@@ -82,50 +109,88 @@ function shop_delivery_calc_required_time($delivery_method, $delivery_params = a
  * Calculates cost of specified delivery method
  * Invokes delivery method 'cost callback' and returns price
  */
-function shop_delivery_cost($delivery_method, $delivery_params, $order_sum) {
-  if ($fn = shop_delivery_info($delivery_method, 'cost callback')) {
-    $cost = $fn($delivery_params, $order_sum);
-    drupal_alter(__FUNCTION__, $cost, $delivery_method, $delivery_params, $order_sum);
-    return $cost;
+function shop_delivery_cost($node = NULL, $delivery_method, $delivery_params, $order_sum) {
+  $cost = 0;
+  if ($fn = shop_delivery_info($node, $delivery_method, 'cost callback')) {
+    $cost = $fn($node, $delivery_params, $order_sum, shop_delivery_info($node, $delivery_method, 'settings'));
+    // Invoke hook_shop_delivery_cost_alter()
+    
+    //drupal_alter(__FUNCTION__, $cost, $node, $delivery_method, $delivery_params, $order_sum);
+    
+    // We calls drupal_alter() not directly here because drupal_alter() accepts only 4 variables maximum.
+    foreach (module_implements($hook = __FUNCTION__ . '_alter') as $m) {
+      $fn = $m . '_' . $hook;
+      $c = $cost;
+      $fn($cost, $node, $delivery_method, $delivery_params, $order_sum);
+    }
   }
+  return $cost;
 }
 
 
 /**
 * Returns administrative settings form for needed delivery method
 */
-function shop_delivery_settings_form($delivery_method) {
+function shop_delivery_settings_form($node = NULL, $delivery_method) {
   $form = NULL;
-  if ($fn = shop_delivery_info($delivery_method, 'settings callback')) {
-    $form = $fn(shop_delivery_info($delivery_method, 'settings'));
-    drupal_alter(__FUNCTION__, $form, $delivery_method);
+  if ($fn = shop_delivery_info($node, $delivery_method, 'settings callback')) {
+    $form = $fn($node, shop_delivery_info($node, $delivery_method, 'settings'));
+    // Invoke hook_shop_delivery_settings_form_alter()
+    drupal_alter(__FUNCTION__, $form, $node, $delivery_method);
   }
+
   return $form ? $form : array();
+}
+
+
+
+/**
+* Returns summary informationform about administrative settings of specified delivery method
+*/
+function shop_delivery_settings_summary($node, $delivery_method) {
+  $build = NULL;
+  if ($fn = shop_delivery_info($node, $delivery_method, 'settings summary callback')) {
+    $build = $fn($node, shop_delivery_info($node, $delivery_method, 'settings'));
+    // Invoke hook_shop_delivery_settings_summary_alter()
+    drupal_alter(__FUNCTION__, $build, $node, $delivery_method);
+  }
+  return $build ? $build : array();  
 }
 
 
 /**
 * Build summary information about user-chosen delivery method and params
-* Invokes delivery method 'summary callback' and returns renderable array for given params with complete information
+* Invokes delivery method 'user summary callback' and returns renderable array for given params with complete information
 */
-function shop_delivery_summary($delivery_method, $delivery_params = NULL) {
-  if ($fn = shop_delivery_info($delivery_method, 'summary callback')) {
-    $summary = $fn($delivery_params);
-    drupal_alter(__FUNCTION__, $summary, $delivery_method, $delivery_params);
-    return $summary;
+function shop_delivery_user_summary($node, $delivery_method, $delivery_params = NULL) {
+  $build = NULL;
+  if ($fn = shop_delivery_info($node, $delivery_method, 'user summary callback')) {
+    $build = $fn($node, $delivery_params, shop_delivery_info($node, $delivery_method, 'settings'));
+    // Invoke hook_shop_delivery_user_summary_alter()
+    drupal_alter(__FUNCTION__, $build, $node, $delivery_method, $delivery_params);
   }
+  return $build ?: array();
 }
 
 
 /**
 * Build form widget for user-chosen delivery method.
-* Invokes delivery method 'widget callback' and returns array of form elements
+* Invokes delivery method 'user widget callback' and returns array of form elements
 */
-function shop_delivery_form_widget($delivery_method, $delivery_params = NULL, &$complete_form = NULL, &$form_state = NULL) {
+function shop_delivery_user_widget($node, $delivery_method, $delivery_params = NULL, &$complete_form = NULL, &$form_state = NULL) {
   $form = array();
-  if ($fn = shop_delivery_info($delivery_method, 'widget callback')) {
-    $form = $fn($delivery_params, $complete_form, $form_state);
-    drupal_alter(__FUNCTION__, $form, $delivery_method, $delivery_params, $complete_form, $form_state);
+  if ($fn = shop_delivery_info($node, $delivery_method, 'user widget callback')) {
+    $form = $fn($node, $delivery_params, shop_delivery_info($node, $delivery_method, 'settings'), $complete_form, $form_state);
+    if ($form) {
+      $form['#node'] = $node;
+      // Invoke hook_shop_delivery_user_widget_alter()
+      // We calls drupal_alter() not directly here because drupal_alter() accepts only 4 variables maximum.
+      foreach (module_implements($hook = __FUNCTION__ . '_alter') as $m) {
+        $fn = $m . '_' . $hook;
+        $fn($form, $node, $delivery_method, $delivery_params, $complete_form, $form_state);
+      }
+    }
+
   }
   return $form;
 }
@@ -135,6 +200,7 @@ function shop_delivery_form_widget($delivery_method, $delivery_params = NULL, &$
 
 /**
 * Implements hook_shop_delivery_info()
+* Define two own basic delivery methods - courier & self (pickup points)
 */
 function shop_shop_delivery_info() {
 
@@ -150,10 +216,11 @@ function shop_shop_delivery_info() {
       ),
     ),
     'settings callback' => '_shop_delivery_courier_settings_form',
-    'widget callback' => '_shop_delivery_courier_widget_form',
-    'summary callback' => '_shop_delivery_courier_summary',
+    'settings summary callback' =>  '_shop_delivery_courier_settings_summary',
+    'user widget callback' => '_shop_delivery_courier_user_widget',
+    'user summary callback' => '_shop_delivery_courier_user_summary',
     'cost callback' => '_shop_delivery_courier_calc_cost',  
-    'required_time callback' => '_shop_delivery_courier_calc_required_time',
+    'required time callback' => '_shop_delivery_courier_required_time',
   );
 
 
@@ -176,14 +243,15 @@ function shop_shop_delivery_info() {
       'variants' => array(
         'default' => array(
           'name' => t('From store'),
-          'description' => isset($self_default_variant_description) ? $self_default_variant_description : NULL,
+          'description' => $self_default_variant_description ?? NULL,
         ),
       ),
     ),
     'settings callback' => '_shop_delivery_self_settings_form',
-    'widget callback' => '_shop_delivery_self_widget_form',
-    'summary callback' => '_shop_delivery_self_summary',  
-    'required_time callback' => '_shop_delivery_self_calc_required_time',
+    'settings summary callback' =>  '_shop_delivery_self_settings_summary',
+    'user widget callback' => '_shop_delivery_self_user_widget',
+    'user summary callback' => '_shop_delivery_self_user_summary',  
+    'required time callback' => '_shop_delivery_self_required_time',
   );
   return $result;
 }
@@ -191,9 +259,11 @@ function shop_shop_delivery_info() {
 
 /**
 * Implements hook_shop_delivery_info_alter()
+* 
 */
-function shop_shop_delivery_info_alter(&$info) {
+function shop_shop_delivery_info_alter(&$info, $node) {
   if ($info['courier']['enabled']) {
+    // Automatically disable courier delivery method if he not contains variants with name
     $info['courier']['enabled'] = FALSE;
     if (!empty($info['courier']['settings']['variants'])) {
       foreach ($info['courier']['settings']['variants'] as $v) {
@@ -206,6 +276,7 @@ function shop_shop_delivery_info_alter(&$info) {
   }
 
   if ($info['self']['enabled']) {
+    // Automatically disable self delivery method if he not contains variants with name and description
     $info['self']['enabled'] = FALSE;
     if (!empty($info['self']['settings']['variants'])) {
       foreach ($info['self']['settings']['variants'] as $v) {
@@ -216,21 +287,21 @@ function shop_shop_delivery_info_alter(&$info) {
       }
     }
   }
-
 }
 
 
 /**
 * Settings callback for courier delivery method @see shop_shop_delivery_info()
 */
-function _shop_delivery_courier_settings_form($settings) {
- // m($settings['variants']);
+function _shop_delivery_courier_settings_form($node, $delivery_method_settings) {
+ // m($delivery_method_settings['variants']);
   $form['variants'] = array(
     '#type' => 'multifield_wrapper',
     '#elements_to_cells' => FALSE,
-    '#title' => t('Variants'),
-    '#default_value' => !empty($settings['variants']) ? $settings['variants'] : array(),
+    '#title' => t('Delivery region'),
+    '#default_value' => !empty($delivery_method_settings['variants']) ? $delivery_method_settings['variants'] : array(),
     '#visible_type' => 'item',
+    '#add_button' => t('Add region'),
     'name' => array(
       '#title' => t('Name'),
       '#type' => 'textfield',
@@ -239,10 +310,12 @@ function _shop_delivery_courier_settings_form($settings) {
     'price' => array(
       '#title' => t('Cost of delivery'),
       '#type' => 'digit',
+      '#min' => 0,
     ),
     'threshold' => array(
       '#title' => t('To the order sum'),
       '#type' => 'digit',
+      '#min' => 0,
     ),
     'm1' => array('#markup' => '</div>',),
     'required_time' => array(
@@ -261,6 +334,7 @@ function _shop_delivery_courier_settings_form($settings) {
       '#resizable' => FALSE,
     ),*/
   );
+
   if (module_exists('timetables')) {
     $form['variants']['timetable'] = array(
       '#title' => t('Delivery hours'),
@@ -271,11 +345,61 @@ function _shop_delivery_courier_settings_form($settings) {
 }
 
 
+
 /**
-* Callback for 'required_time callback' property, @see hook_shop_delivery_info(), @see shop_delivery_calc_required_time()
+* 'settings summary callback' for courier delivery method. @see shop_delivery_settings_summary()
 */
-function _shop_delivery_courier_calc_required_time($delivery_params) {
-  if ($required_time = isset($delivery_params['variant']) ? shop_delivery_info('courier', 'settings', 'variants', $delivery_params['variant'], 'required_time') : NULL) {
+function _shop_delivery_courier_settings_summary($node, $delivery_method_settings) {
+  $build = array();
+  if (!empty($delivery_method_settings['variants'])) {
+    foreach ($delivery_method_settings['variants'] as $idx => $item) {
+      $build[$idx] = array(
+        '#type' => 'container',
+        '#inline' => TRUE,
+        'name' => array(
+          '#type' => 'html_tag',
+          '#tag' => 'strong',
+          '#value' => !empty($item['name']) ? check_plain($item['name']) : NULL,
+          '#access' => !empty($item['name']),        
+        ),
+        'price' => array(
+          '#type' => 'item',
+          '#title' => t('Price'),
+          '#inline' => TRUE,
+          '#title_display' => 'invisible',
+          'price' => array(
+            '#theme' => 'price',
+            '#price' => $item['price'] ?? NULL,
+          ),        
+        ),
+        'threshold' => array(
+          '#type' => 'conainer',
+          '#inline' => TRUE,
+          'price' => array(
+            '#theme' => 'price',
+            '#prefix' => drupal_strtolower(t('To the order sum')) . ' ' ,
+            '#price' => $item['threshold'] ?? NULL,
+          ),
+          '#access' => !empty($item['threshold']),        
+        ),
+        'required_time' => array(
+          '#type' => 'item',
+          '#title' => t('Required time, hours'),
+          '#markup' => $item['required_time'] ?? NULL,
+          '#access' => !empty($item['required_time']),        
+        ),
+      );
+    }    
+  }
+
+  return $build;
+}
+
+/**
+* Callback for 'required time callback' property, @see hook_shop_delivery_info(), @see shop_delivery_required_time()
+*/
+function _shop_delivery_courier_required_time($node, $delivery_params, $delivery_method_settings) {
+  if ($required_time = isset($delivery_params['variant']) ? ($delivery_method_settings['variants'][$delivery_params['variant']]['required_time'] ?? NULL) : NULL) {
     return $required_time * 3600;
   }
   
@@ -283,17 +407,17 @@ function _shop_delivery_courier_calc_required_time($delivery_params) {
 
 
 /**
-* Widget callback for courier delivery method @see shop_shop_delivery_info()
+* user widget callback for courier delivery method @see shop_shop_delivery_info()
 */
-function _shop_delivery_courier_widget_form($delivery_params, &$complete_form, &$form_state) {
-  $total_sum = isset($complete_form['#total_sum']['total_sum']) ? $complete_form['#total_sum']['total_sum'] : NULL;
+function _shop_delivery_courier_user_widget($node, $delivery_params, $delivery_method_settings, &$complete_form, &$form_state) {
+  $total_sum = $complete_form['#total_sum']['total_sum'] ?? NULL;
 
-  if ($variants = shop_delivery_info('courier', 'settings', 'variants')) {
+  if ($variants = $delivery_method_settings['variants'] ?? NULL) {//shop_delivery_info('courier', 'settings', 'variants')) {
     $opts = array_filter($variants, function($item) {
       return !empty($item['name']);
     });
     if ($opts) {
-      $radios_limit = 5;
+      $radios_limit = 0;
       if (count($opts) > $radios_limit) {
         foreach ($opts as $idx => $data) {
           $opts[$idx] = $data['name'];
@@ -357,12 +481,15 @@ function _shop_delivery_courier_widget_form($delivery_params, &$complete_form, &
           '#default_value' => isset($delivery_params['variant']) && isset($opts[$delivery_params['variant']]) ? $delivery_params['variant'] : key($opts),
         ),
         'address' => array(
-          '#type' => 'textarea',
-          '#rows' => 3,
-          '#resizable' => FALSE,
+          '#type' => 'textfield', //'textarea',
+          '#inline' => TRUE,
+          '#maxlength' => 255,
+          '#size' => 90,
+          //'#rows' => 3,
+          //'#resizable' => FALSE,
           '#title' => t('Address'),
           '#required' => TRUE,
-          '#default_value' => isset($delivery_params['address']) ? $delivery_params['address'] : NULL,
+          '#default_value' => $delivery_params['address'] ?? NULL,
           '#states' => array(
             'invisible' => array(
               'input[name="shop_cart[delivery][params][courier][variant]"]' => array('empty' => TRUE,),
@@ -376,38 +503,65 @@ function _shop_delivery_courier_widget_form($delivery_params, &$complete_form, &
 }
 
 /**
-* Summary callback for courier delivery method @see shop_shop_delivery_info()
+* user summary callback for courier delivery method @see shop_shop_delivery_info()
 */
-function _shop_delivery_courier_summary($delivery_params) {
-  $text = array();
-  if (isset($delivery_params['variant']) && $n = shop_delivery_info('courier', 'settings', 'variants' , $delivery_params['variant'], 'name')) {
-    $text[] = check_plain(shop_delivery_info('courier', 'settings', 'variants' , $delivery_params['variant'], 'name'));
+function _shop_delivery_courier_user_summary($node, $delivery_params, $delivery_method_settings) {
+  $build = array();
+  if (isset($delivery_params['variant']) && ($n = $delivery_method_settings['variants'][$delivery_params['variant']]['name'] ?? NULL)) {//shop_delivery_info('courier', 'settings', 'variants' , $delivery_params['variant'], 'name'))) {
+    $build['name'] = array(
+      '#type' => 'container',
+      '#children' => check_plain($n),
+    );
   }
   if (!empty($delivery_params['address'])) {
-    $text[] = t('Address') . ': ' . check_plain($delivery_params['address']);
+    if (is_array($delivery_params['address']) && module_exists('geo2_delivery')) {
+      $delivery_params['address'] = geo2_delivery_address_format($delivery_params);
+    }
+    $build['address'] = array(
+      '#type' => 'item',
+      //IKW: remove 'Address' title from delivery summary in checkout order steps.
+      '#title' => node_is_page($node) ? t('Address') : NULL,
+      '#inline' => TRUE,
+      '#markup' => check_plain($delivery_params['address']),
+    );
   }
 
-  if(!empty($delivery_params['delivery_time'])) {
-    $text[] = t('Delivery date') . ': ' . format_date($delivery_params['delivery_time'], 'custom', 'd.m.Y');
+  if (!empty($delivery_params['delivery_time'])) { // 'delivery_time' defined only order_shop_cart_form()
+    $build['delivery_date'] = array(
+      '#type' => 'item',
+      '#title' => t('Delivery date'),
+      '#inline' => TRUE,
+      '#markup' => format_date($delivery_params['delivery_time'], 'custom', 'd.m.Y'),
+    );
   }
 
-  return implode('<br />', $text);
+  return $build;
 }
 
 
 /**
 * Cost callback for courier delivery method @see shop_shop_delivery_info()
 */
-function _shop_delivery_courier_calc_cost($delivery_params, $required_sum) {
-  
-  if (isset($delivery_params['variant']) && shop_delivery_info('courier', 'settings', 'variants', $delivery_params['variant'], 'name')) {
-    if ($price = shop_delivery_info('courier', 'settings', 'variants', $delivery_params['variant'], 'price')) {
-      $def_curr = shop_get_info('currency', 'default');
-      $threshold = shop_delivery_info('courier', 'settings', 'variants', $delivery_params['variant'], 'threshold');
-      if (!$threshold || !$required_sum || $required_sum < $threshold) {
+function _shop_delivery_courier_calc_cost($node, $delivery_params, $required_sum, $delivery_method_settings) {
+  //m(func_get_args());
+  if (isset($delivery_params['variant'])) {// && shop_delivery_info('courier', 'settings', 'variants', $delivery_params['variant'], 'name')) {
+    $price = $delivery_method_settings['variants'][$delivery_params['variant']]['price'] ?? NULL;
+
+    if ($price === NULL || $price === 0) {
+      return $price;
+    }
+
+    $threshold = $delivery_method_settings['variants'][$delivery_params['variant']]['threshold'] ?? NULL;//shop_delivery_info('courier', 'settings', 'variants', $delivery_params['variant'], 'threshold');
+
+    if (isset($delivery_method_settings['variants'][$delivery_params['variant']]['threshold'])) {
+      if ($required_sum < $threshold) {
         return $price;
       }
+
+      return 0;
     }
+
+    return $price;
   }
 }
 
@@ -415,12 +569,14 @@ function _shop_delivery_courier_calc_cost($delivery_params, $required_sum) {
 /**
 * Settings callback for self-delivery method @see shop_shop_delivery_info()
 */
-function _shop_delivery_self_settings_form($settings) {
+function _shop_delivery_self_settings_form($node, $settings) {
+  
   $form['variants'] = array(
     '#type' => 'multifield_wrapper',
     '#title' => t('Points of self-delivery'),
     '#default_value' => (!empty($settings['variants']) ? $settings['variants'] : array()),
     '#visible_type' => 'item',
+    '#add_button' => t('Add issuing point'),
     '#elements_to_cells' => FALSE,
     'm0' => array('#markup' => '<div class="container-inline">'),
     'name' => array(
@@ -458,62 +614,141 @@ function _shop_delivery_self_settings_form($settings) {
 }
 
 
+
 /**
-* Widget callback for self-delivery method @see shop_shop_delivery_info()
+* 'settings summary callback' for self delivery method. @see shop_delivery_settings_summary()
 */
-function _shop_delivery_self_widget_form($delivery_params, &$complete_form, &$form_state) {
+function _shop_delivery_self_settings_summary($node, $delivery_method_settings) {
+  $build = array();
+  if (!empty($delivery_method_settings['variants'])) {
+    foreach ($delivery_method_settings['variants'] as $idx => $item) {
+      if (!empty($item['name']) || !empty($item['description']) || !empty($item['required_time']) || (module_exists('timetables') && !empty($item['timetable']))) {
+        $build['#access'] = TRUE;
+      }
+      elseif (!isset($build['#access'])) {
+        $build['#access'] = FALSE;
+      }
+      $build[$idx] = array(
+        '#type' => 'container',
+        '#inline' => TRUE,
+      );
+      $build[$idx]['name'] = array(
+        '#type' => 'html_tag',
+        '#tag' => 'strong',
+        '#inline' => TRUE,
+        '#value' => !empty($item['name']) ? check_plain($item['name']) : NULL,
+        '#access' => !empty($item['name']),
+      );
+      $build[$idx]['description'] = array(
+        '#type' => 'html_tag',
+        '#tag' => 'div',
+        '#inline' => TRUE,
+        '#value' => !empty($item['description']) ? check_plain($item['description']) : NULL,
+        '#access' => !empty($item['description']),
+      );
+      /*
+      ITW: POKA VREMYA DOSTAVKI NERABOTAIT NE ZAMORACHIVAISA S CHASAMI
+      $build[$idx]['required_time'] = array(
+        '#type' => 'html_tag',
+        '#tag' => 'div',
+        '#inline' => TRUE,
+        '#value' => !empty($item['required_time']) ? ' - ' . format_plural($item['required_time'], '1 hour', '@count hours') : NULL,
+        '#access' => !empty($item['required_time']),
+      );*/
+      if (module_exists('timetables')) {
+        $build[$idx]['timetable'] = array(
+          '#theme' => 'week_timetable',
+          '#timetable' => $item['timetable'],
+          '#skip_holidays' => FALSE,
+          '#aggregate_days' => TRUE,
+          '#access' => !empty($item['timetable']),
+        );
+      }
+    }    
+  }
+
+  return $build;
+}
+
+/**
+* user widget callback for self-delivery method @see shop_shop_delivery_info()
+*/
+function _shop_delivery_self_user_widget($node, $delivery_params, $delivery_method_settings, &$complete_form, &$form_state) {
   $opts = array();
-  foreach (shop_delivery_info('self', 'settings', 'variants') as $idx => $data) {
-    if (!empty($data['name']) || !empty($data['description'])) {
-      $opts[$idx] = !empty($data['name']) ? $data['name'] : $data['description'];
-      if (!empty($data['name']) && !empty($data['description'])) {
-        $opts[$idx] .= '<br /><small class="description">' . $data['description'] . '</small>';
+  if (!empty($delivery_method_settings['variants'])) {
+    foreach ($delivery_method_settings['variants'] as $idx => $data) {
+      if (!empty($data['name']) || !empty($data['description'])) {
+        $opts[$idx] = !empty($data['name']) ? $data['name'] : $data['description'];
+        if (!empty($data['name']) && !empty($data['description'])) {
+          $opts[$idx] .= '<br /><small class="description">' . $data['description'] . '</small>';
+        }
       }
     }
   }
-  if ($opts) {
+
+  //if ($opts) {
     return array(
       'variant' => array(
         '#type' => 'radios',
         '#title' => '',
         '#options' => $opts,
+        '#access' => !!$opts,
         '#default_value' => isset($delivery_params['variant']) ? $delivery_params['variant'] : key($opts),
       ),
     );
-  }
+  //}
 }
 
 /**
-* Callback for 'required_time callback' property, @see hook_shop_delivery_info(), @see shop_delivery_calc_required_time()
+* Callback for 'required time callback' property, @see hook_shop_delivery_info(), @see shop_delivery_required_time()
 */
-function _shop_delivery_self_calc_required_time($delivery_params) {
-  if ($required_time = isset($delivery_params['variant']) ? shop_delivery_info('self', 'settings', 'variants', $delivery_params['variant'], 'required_time') : NULL) {
+function _shop_delivery_self_required_time($node, $delivery_params, $delivery_method_settings) {
+  if ($required_time = isset($delivery_params['variant']) ? ($delivery_method_settings['variants'][$delivery_params['variant']]['required_time'] ?? NULL) : NULL) {
     return $required_time * 3600;
   }
 }
 
 /**
- * Summary callback for self-delivery method @see shop_shop_delivery_info()
+ * user summary callback for self-delivery method @see shop_shop_delivery_info()
  */
-function _shop_delivery_self_summary($delivery_params) {
-  $text = array();
-
-  $text[] = check_plain(shop_delivery_info('self', 'settings', 'variants', $delivery_params['variant'], 'name'));
+function _shop_delivery_self_user_summary($node, $delivery_params, $delivery_method_settings) {
+ // $text = array();
+  $build = array();
+  if ($name = $delivery_method_settings['variants'][$delivery_params['variant']]['name'] ?? NULL) {//shop_delivery_info('self', 'settings', 'variants', $delivery_params['variant'], 'name')) {
+    $build['name'] = array(
+      '#type' => 'container',
+      '#children' => check_plain($name),
+    );
+  }
+  $address = NULL;
 
   if ($delivery_params['variant'] === 'default') {
     if ($site_contacts = contacts_load_settings('site_contacts')) {
-      $text[] = t('Address') . ': ' . theme('contacts_address', array('address_elements' => $site_contacts['address'], 'separator' => ', '));
+      $address = theme('contacts_address', array('address_elements' => $site_contacts['address'], 'separator' => ', '));
     }
   }
   else {
-    $text[] = t('Address') . ': ' . check_plain(shop_delivery_info('self', 'settings', 'variants', $delivery_params['variant'], 'description'));
+    $address = $delivery_method_settings['variants'][$delivery_params['variant']]['description'] ?? NULL;//shop_delivery_info('self', 'settings', 'variants', $delivery_params['variant'], 'description');
+  }
+  if ($address) {
+    $build['address'] = array(
+      '#type' => 'item',
+      '#title' => t('Address'),
+      '#inline' => TRUE,
+      '#markup' => check_plain($address),
+    );
   }
 
-  if (!empty($delivery_params['delivery_time'])) {
-    $text[] = t('Date') . ': ' . format_date($delivery_params['delivery_time'], 'custom', 'd.m.Y');
+  if (!empty($delivery_params['delivery_time'])) { // 'delivery_time' defined only order_shop_cart_form()
+    $build['delivery_date'] = array(
+      '#type' => 'item',
+      '#title' => t('Ready date'),
+      '#inline' => TRUE,
+      '#markup' => format_date($delivery_params['delivery_time'], 'custom', 'd.m.Y'),
+    );
   }
-
-  return implode('<br />', $text);
+  
+  return $build;
 }
 
 

@@ -77,6 +77,7 @@ function _adv_elements_process_fileupload($element) {
 		$upload_max_filesize_bytes = '2M';
 		$upload_max_filesize_bytes = ini_get('upload_max_filesize');
 		$last = strtolower($upload_max_filesize_bytes[strlen($upload_max_filesize_bytes)-1]);
+    $upload_max_filesize_bytes = preg_replace('/[^\d]+$/', '', $upload_max_filesize_bytes);
 		switch($last) {
 			case 'g':
 				$upload_max_filesize_bytes *= 1024;

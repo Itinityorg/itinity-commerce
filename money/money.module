@@ -9,6 +9,7 @@
  */
 
 
+require_once dirname(__FILE__) . '/money.currencies.inc';
 require_once dirname(__FILE__) . '/money.transaction.inc';
 require_once dirname(__FILE__) . '/money.theme.inc';
 require_once dirname(__FILE__) . '/money.pages.inc';
@@ -57,8 +58,10 @@ function money_menu() {
     'title' => 'Money transactions',
     'page callback' => 'money_transactions_overview_page',
     'page arguments' => array(4),
+    'load arguments' => array(5),
     'access arguments' => array('administer moneys'),
     'file' => 'money.pages.inc',
+//    'type' => MENU_LOCAL_TASK,
     'type' => MENU_CALLBACK,
   );
 
@@ -69,6 +72,28 @@ function money_menu() {
     'page arguments' => array('money_payment_form', 2, 3, 4, 5, 6,),
     //'access callback' => 'money_execute_access',
     'access arguments' => array('access content'),//array(2, 3, 4, 5, 6,),
+    'type' => MENU_CALLBACK,
+    'file' => 'money.forms.inc',
+  );
+
+  // money/hold/operation/operation_key/sum/source/source_key
+  $items['money/hold/%/%/%/%/%'] = array(
+    'title' => 'Payment',
+    'page callback' => '_money_hold_page',
+    'page arguments' => array(2, 3, 4, 5, 6,),
+    //'access callback' => 'money_execute_access',
+    'access arguments' => array('access content'),//array(2, 3, 4, 5, 6,),
+    'type' => MENU_CALLBACK,
+    'file' => 'money.forms.inc',
+  );
+
+  // money/unhold/operation/operation_key/source/source_key -- NO 'sum' PARAMETER HERE
+  $items['money/unhold/%/%/%/%'] = array(
+    'title' => 'Payment',
+    'page callback' => '_money_unhold_page',
+    'page arguments' => array(2, 3, 4, 5, 6,),
+    //'access callback' => 'money_execute_access',
+    'access arguments' => array('administer moneys'),//array(2, 3, 4, 5, 6,),
     'type' => MENU_CALLBACK,
     'file' => 'money.forms.inc',
   );
@@ -250,9 +275,10 @@ function money_payment_widget($operation, $operation_key, $sum = NULL, $source =
     $args = array(
       'money/payment/' . $operation . '/' . $operation_key,
     );
+
     if ($sources) {
       if (count($sources) == 1) {
-        $args[] = ($sum ? $sum : '') . '/' . $sources[0]['source'] . ($sources[0]['key'] ? '/' . $sources[0]['key'] : '');
+        $args[] = ($sum ?? '') . '/' . $sources[0]['source'] . ($sources[0]['key'] ? '/' . $sources[0]['key'] : '');
       }
       elseif ($sum) {
         $args[] = $sum;
@@ -294,6 +320,76 @@ function money_payment_widget($operation, $operation_key, $sum = NULL, $source =
 
   return $build;
 }
+
+
+/**
+ * Renderable link(button) for goto payment page
+ */
+function money_hold_widget($operation, $operation_key, $sum, $source) {
+  $build = array();
+
+  if (money_execute_access($operation, $operation_key, $sum, is_array($source) ? $source : NULL, TRUE, $m)) {
+    $sources = is_array($source) ? array($source) : array();
+
+    if (!$sources) {
+      foreach (money_sources_info() as $source_info) {
+        if (!$source || $source_info['source'] === $source) {
+          if (money_execute_access($operation, $operation_key, $sum, $source_info, TRUE, $m)) {
+            $sources[] = $source_info;
+          }
+        }
+      }
+    }
+
+    $args = array(
+      'money/hold/' . $operation . '/' . $operation_key,
+    );
+
+    if ($sources) {
+      if (count($sources) == 1) {
+        $args[] = ($sum ?? '') . '/' . $sources[0]['source'] . ($sources[0]['key'] ? '/' . $sources[0]['key'] : '');
+      }
+      elseif ($sum) {
+        $args[] = $sum;
+      }
+
+      $build = array(
+        '#operation' => $operation,
+        '#operation_key' => $operation_key,
+        '#sum' => $sum,
+        '#source' => count($sources) == 1 ? $sources[0] : NULL,
+        '#type' => 'link',
+        '#title' => money_operations_info($operation, $operation_key, 'title'),
+        '#href' => implode('/', $args),
+        '#options' => array(
+          'query' => drupal_get_destination(),
+          'html' => TRUE,
+        ),
+        '#attributes' => array(
+          'class' => array('form-submit',),
+        ),
+        '#id' => "$operation-$operation_key-hold-widget",
+      );
+    }
+  }
+  else {
+//   uncomment line below for debug
+//    dpm($m);
+  }
+
+  $context = array(
+    'operation' => $operation,
+    'operation_key' => $operation_key,
+    'sum' => $sum,
+    'source' => $source,
+    'error_messages' => $m,
+  );
+
+  drupal_alter('money_hold_widget', $build, $context);
+
+  return $build;
+}
+
 
 /**
  * Clear money internal static caches
@@ -349,14 +445,22 @@ function money_get_balance($source_info, $operation = NULL, $operation_key = NUL
 /**
  * Get summary holded money by cash account($source) or(and) specific operation
  */
-function money_get_holded($source_info, $operation = NULL, $operation_key = NULL) {
+function money_get_holded($source_info = NULL, $operation = NULL, $operation_key = NULL) {
   $results = &drupal_static(__FUNCTION__, array());
+
+  $source_info = $source_info ?? array('source' => NULL, 'key' => NULL);
   $key = $source_info['source'] . ':' . $source_info['key'] . ':op-' . $operation . ':key-' . $operation_key;
+
   if (!array_key_exists($key, $results)) {
     $query = db_select('money_hold', 'mh');
+
     $query->addExpression('SUM(mh.sum)', 'sum');
-    $query->condition('mh.source', $source_info['source']);
-    $query->condition('mh.source_key', $source_info['key']);
+
+    if ($source_info['source'] && $source_info['source']) {
+      $query->condition('mh.source', $source_info['source']);
+      $query->condition('mh.source_key', $source_info['key']);
+    }
+
     if ($operation) {
       $query->condition('mh.operation', $operation);
       if ($operation_key) {
@@ -461,19 +565,28 @@ function money_money_operation_get_recipient($operation, $operation_key) {
 
 
 /**
- * Find money recipient cash account that can recieve the moneys by specified operation
+ * Find money recipient cash account that can receive the moneys by specified operation
  */
 function money_operation_get_recipient($operation, $operation_key) {
-  $recipient = NULL;
-  if (($module = money_operations_info($operation, $operation_key, 'module')) && function_exists($fn = $module . '_money_operation_get_recipient')) {
-    if ($recipient = $fn($operation, $operation_key)) {
-      $recipient = array_values((array) $recipient);
-      $recipient += array(1 => NULL);
-      // @todo delete never used invocation of hook_money_operation_get_recipient_alter() ?
-      drupal_alter('money_operation_get_recipient', $recipient[0], $recipient[1]); // hook_money_operation_get_recipient_alter($recipient, $recipient_key);
-      return money_sources_info($recipient[0], $recipient[1]);
+  $source_info = NULL;
+
+  if ($module = money_operations_info($operation, $operation_key, 'module')) {
+    if (module_hook($module, 'money_operation_get_recipient')) {
+      if ($recipient = module_invoke($module, 'money_operation_get_recipient', $operation, $operation_key)) {
+        $recipient = array_values((array) $recipient);
+        $recipient += array(1 => NULL);
+        $source_info = money_sources_info($recipient[0], $recipient[1]);
+      }
     }
   }
+
+  $context = array(
+    'operation' => $operation,
+    'operation_key' => $operation_key,
+  );
+
+  drupal_alter('money_operation_get_recipient', $source_info, $context);
+  return $source_info;
 }
 
 
@@ -560,8 +673,34 @@ function money_money_sources_info($source = NULL, $source_key = NULL) {
       'title' => t('Site'),
       'description' => variable_get('site_name'),
       'enabled' => TRUE,
+      'overview' => array(
+        'title' => user_access('administer moneys') ? l(t('Site'), 'admin/config/money/transactions/site') : t('Site'),
+        'description' => '',
+      )
     ),
   );
+}
+
+
+/**
+ * Implements hook_payment_form_callback()
+ */
+function money_payment_form_callback($operation, $operation_key, $sum, $source_info) {
+  if ($source_info['source'] === 'site') {
+    $form = array(
+      'info' => array(
+        '#type' => 'container',
+        '#inline' => TRUE,
+        '#parents' => array('data'),
+        'comment' => array(
+          '#title' => t('Comment'),
+          '#type' => 'textarea',
+          '#rows' => 3,
+        ),
+      ),
+    );
+    return $form;
+  }
 }
 
 
@@ -587,6 +726,7 @@ function money_sources_info($source = NULL, $source_key = NULL, $property = NULL
           'external' => FALSE,
           'online' => TRUE,
           'icon_url' => NULL,
+          'currency' => variable_get('money_default_currency', 'RUB'),
         );
 
 
@@ -602,7 +742,7 @@ function money_sources_info($source = NULL, $source_key = NULL, $property = NULL
         if ($item['icon_url']) {
           $item['icon_url'] = drupal_get_path('module', $module) . '/' . $item['icon_url'];
         }
-        
+
 
 //        if ($item['external']) { // is payment system
         $item['enabled'] = !isset($money_payment_systems_settings[$id]['enabled']) || $money_payment_systems_settings[$id]['enabled'];
@@ -703,7 +843,7 @@ function money_execute_access($operation, $operation_key, $sum = NULL, $source_i
     return FALSE;
   }
   // Deny operation if recipient is external (is payment system)
-  if (money_sources_info($recipient['source'], $recipient['key'], 'external')) {
+  if (!module_exists('withdraw') && money_sources_info($recipient['source'], $recipient['key'], 'external')) {
     $error_messages[] = t('Payout is denied');
     return FALSE;
   }
@@ -788,8 +928,39 @@ function money_execute_access($operation, $operation_key, $sum = NULL, $source_i
  *  Return list of currencies contains only required property; or returns only required property of specified $currency
  */
 function money_currency_info($currency = NULL, $property = NULL) {
-  module_load_include('inc', 'money', 'money.currencies');
-  return _money_currency_info($currency, $property);
+  $cached = &drupal_static(__FUNCTION__);
+  if (!isset($cached)) {
+    $cached = module_invoke_all('money_currency_info');
+    drupal_alter('money_currency_info', $cached);
+  }
+  $result = $cached;
+  if ($property) {
+    foreach ($result as $key => $data) {
+      $result[$key] = $result[$key][$property] ?? NULL;
+    }
+  }
+
+  if ($currency) {
+    $currency = drupal_strtoupper($currency);
+
+    if (!isset($result[$currency])) {
+      if (module_exists('transliteration') && preg_match('/[^A-Z]/u', $currency)) {
+        $currency = transliteration_get($currency);
+      }
+      else {
+        $currency = preg_replace('/[^A-Z]/u', '', $currency);
+      }
+
+      $currency = $currency ? drupal_substr($currency, 0, 3) : '-';
+      $currency = $currency === 'RUR' ? 'RUB' : $currency;
+    }
+
+    return $currency && isset($result[$currency]) ? $result[$currency] : NULL;
+  }
+  else {
+    return $result;
+  }
+
 }
 
 
@@ -861,17 +1032,25 @@ function money_balance_widget($source_info) {
   $holded = money_get_holded($source_info) * 1;
   $available = money_get_available($source_info) * 1;
 
+  if (module_exists('multicurrency')) {
+    $from_currency = variable_get('money_default_currency', 'RUB');
+    $balance = multicurrency_convert($balance, $from_currency, $source_info['currency']);
+    $holded = multicurrency_convert($holded, $from_currency, $source_info['currency']);
+    $available = multicurrency_convert($available, $from_currency, $source_info['currency']);
+  }
+
+
   if ($balance != $available) { // show 'balance' only if if $balance != $available
     $build['balance'] = array(
       '#type' => 'item',
-      '#title' => t('Balance'),
+      '#title' => t('Balance', array(), array('context' => 'accounting')),
       '#inline' => TRUE,
-      '#markup' => theme('price', array('price' => $balance)),
+      '#markup' => theme('price', array('price' => $balance, 'currency' => $source_info['currency'])),
     );
   }
 
   if ($holded) { // don't show 'holded' if $holded == 0
-    $price_holded = theme('price', array('price' => $holded));
+    $price_holded = theme('price', array('price' => $holded, 'currency' => $source_info['currency']));
 
     $markup = ($source_info['source'] === 'user' && $source_info['key'])
       ? l($price_holded, 'user/' . $source_info['key'] . '/money/holded', array('html' => TRUE,))
@@ -889,7 +1068,7 @@ function money_balance_widget($source_info) {
     '#type' => 'item',
     '#title' => t('Available funds'),
     '#inline' => TRUE,
-    '#markup' => theme('price', array('price' => $available)),
+    '#markup' => theme('price', array('price' => $available, 'currency' => $source_info['currency'])),
   );
 
   return $build;
@@ -904,7 +1083,7 @@ function money_balance_widget($source_info) {
  */
 function _money_available_sources($operation, $operation_key, $sum = NULL, $before_insert = FALSE) {
   $available_sources = array();
-  
+
   foreach (money_sources_info() as $idx => $info) {
     if ($info['enabled'] && money_execute_access($operation, $operation_key, $sum, $info, $before_insert, $msgs)) {
       $available_sources[$idx] = $info;
@@ -915,6 +1094,11 @@ function _money_available_sources($operation, $operation_key, $sum = NULL, $befo
 }
 
 
+function money_payment_systems_settings() {
+  $money_payment_systems_settings = variable_get('money_payment_systems_settings', array());
+  $result = drupal_array_get_nested_value($money_payment_systems_settings, func_get_args());
+  return !empty($result) ? $result : NULL;
+}
 
 
 

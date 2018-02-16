@@ -21,9 +21,6 @@ form.buy-button-form div.messages:before {
   background-color: #F8FFF0;
 }
 
-html.js .block .shop-cart-wrapper input.default-submit.form-submit {
-  display: none;
-}
 
 .shop-price {
   white-space: pre-line;
@@ -66,7 +63,7 @@ see shop_cart.block.js
   vertical-align: middle;
 }
 
-h2.shop-cart-block-caption {
+.shop-cart-block-caption {
   color: inherit;
 }
 
@@ -80,7 +77,7 @@ h2.shop-cart-block-caption {
 }
 
 
-.shop-cart-wrapper.cart-horizontal-mode h2 {
+.shop-cart-wrapper.cart-horizontal-mode .shop-cart-block-caption {
   margin-top: 0;
   margin-bottom: 0;
 }

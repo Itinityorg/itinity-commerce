@@ -1,13 +1,13 @@
 <?php
 
 /**
-* This file always included by money.module
-*/
+ * This file always included by money.module
+ */
 
 
 /**
-* Implements hook_entity_info()
-*/
+ * Implements hook_entity_info()
+ */
 function money_entity_info() {
   return array(
     'money_transaction' => array(
@@ -27,49 +27,50 @@ function money_entity_info() {
 
 
 /**
-* Controller class for money_transaction entity
-* @see money_entity_info()
-*/
-class MoneyTransactionController extends DrupalDefaultEntityController {
-    function attachLoad(&$queried_transactions, $revision_id = FALSE) {
-        foreach ($queried_transactions as &$transaction) {
-          $transaction->data = $transaction->data ? unserialize($transaction->data) : array();
-          foreach ($transaction->data as $key => $value) {
-            if ($key && !isset($transaction->$key)) {
-              $transaction->$key = $value;
-            }
-          }
-          //unset($transaction->data);
-          // ^^^ @TODO: Why i comment this line ???
+ * Controller class for money_transaction entity
+ * @see money_entity_info()
+ */
+class MoneyTransactionController extends DrupalDefaultEntityController
+{
+  function attachLoad(&$queried_transactions, $revision_id = FALSE) {
+    foreach ($queried_transactions as &$transaction) {
+      $transaction->data = $transaction->data ? unserialize($transaction->data) : array();
+      foreach ($transaction->data as $key => $value) {
+        if ($key && !property_exists($transaction, $key)) {
+          $transaction->$key = $value;
         }
-        parent::attachLoad($queried_transactions, $revision_id);
+      }
+      //unset($transaction->data);
+      // ^^^ @TODO: Why i comment this line ???
     }
+    parent::attachLoad($queried_transactions, $revision_id);
+  }
 }
 
 
 /**
-* label callback for money_transaction entity type
-* @see money_entity_info()
-*/
+ * label callback for money_transaction entity type
+ * @see money_entity_info()
+ */
 function money_transaction_label($money_transaction, $entity_type) {
-    return t('Money transaction #@num', array('@num' => $money_transaction->id));
+  return t('Money transaction #@num', array('@num' => $money_transaction->id));
 }
 
 
 /**
-* URI callback for money_transaction entity type
-* @see money_entity_info()
-*/
+ * URI callback for money_transaction entity type
+ * @see money_entity_info()
+ */
 function money_transaction_uri($money_transaction) {
   return array('path' => 'money/transaction/' . $money_transaction->id);
 }
 
 
 /**
-* Add missing fields to money_transaction object before saving
-*/
+ * Add missing fields to money_transaction object before saving
+ */
 function money_transaction_fill_defaults(&$money_transaction) {
-  $money_transaction = $money_transaction ? (array)$money_transaction : array();
+  $money_transaction = $money_transaction ? (array) $money_transaction : array();
   if (empty($money_transaction['#defaults_filled'])) {
     $query = $_GET;
     unset($query['q'], $query['destination']);
@@ -84,30 +85,31 @@ function money_transaction_fill_defaults(&$money_transaction) {
       'operation_key' => NULL,
       'mail' => NULL,
       'source_key' => NULL,
+      'currency' => variable_get('money_default_currency', 'RUB'),
     );
     if ((!isset($money_transaction['recipient']) && !isset($money_transaction['recipient_key'])) && ($recipient = money_operation_get_recipient($money_transaction['operation'], $money_transaction['operation_key']))) {
       if ($recipient = money_operation_get_recipient($money_transaction['operation'], $money_transaction['operation_key'])) {
         $money_transaction['recipient'] = $recipient['source'];
-        $money_transaction['recipient_key'] = $recipient['key'];      
+        $money_transaction['recipient_key'] = $recipient['key'];
       }
       else {
         $money_transaction['recipient'] = NULL;
         $money_transaction['recipient_key'] = NULL;
       }
     }
-    
+
     $money_transaction['#defaults_filled'] = TRUE;
   }
-  $money_transaction = (object)$money_transaction;
+  $money_transaction = (object) $money_transaction;
 }
 
 
 /**
-* Create new money_transaction object in memory (without saving in database). 
-* You can pass to this function any array of fields.
-*/
+ * Create new money_transaction object in memory (without saving in database).
+ * You can pass to this function any array of fields.
+ */
 function money_new_transaction($money_transaction = NULL) {
-  $money_transaction = (object)($money_transaction ? $money_transaction : NULL);
+  $money_transaction = (object) ($money_transaction ? $money_transaction : NULL);
   module_invoke_all('money_transaction_prepare', $money_transaction);
   $money_transaction->{'#prepared'} = TRUE;
   money_transaction_fill_defaults($money_transaction);
@@ -116,28 +118,26 @@ function money_new_transaction($money_transaction = NULL) {
 
 
 /**
-* Helper function
-* Optional db lock that may called before money_transaction_save()
-* Use it for manually lock database before money operations.
-* Recomended for money hold and other multiple operations or check for existsing transactions before call money_transaction_save()
-* example:
-  
-  // 0 sec passed:
-  // Set database lock
-  money_transaction_begin();
-  // parallel thread will wait while this block executes
-  if (!entity_load('money_transaction', FALSE, array('internal_document_id' => $internal_document_id, 'source' => 'robokassa',))) {
-    // 0.01 sec passed:
-    money_transaction_save($money_transaction);
-  }
-  // 0.02 sec passed:
-  // release lock
-  money_transaction_finish();
-
-  
-* @see money_transaction_save()
-* @see money_transaction_finish()
-*/
+ * Helper function
+ * Optional db lock that may called before money_transaction_save()
+ * Use it for manually lock database before money operations.
+ * Recomended for money hold and other multiple operations or check for existsing transactions before call money_transaction_save()
+ * example:
+ *
+ * // 0 sec passed:
+ * // Set database lock
+ * money_transaction_begin();
+ * // parallel thread will wait while this block executes
+ * if (!entity_load('money_transaction', FALSE, array('internal_document_id' => $internal_document_id, 'source' => 'robokassa',))) {
+ * // 0.01 sec passed:
+ * money_transaction_save($money_transaction);
+ * }
+ * // 0.02 sec passed:
+ * // release lock
+ * money_transaction_finish();
+ * @see money_transaction_save()
+ * @see money_transaction_finish()
+ */
 function money_transaction_begin() {
   $money_transaction_begin = &drupal_static(__FUNCTION__);
   if ($money_transaction_begin) {
@@ -152,9 +152,9 @@ function money_transaction_begin() {
 
 
 /**
-* Helper function
-* Unlock database locked in money_transaction_begin() context
-*/
+ * Helper function
+ * Unlock database locked in money_transaction_begin() context
+ */
 function money_transaction_finish() {
   $money_transaction_begin = &drupal_static('money_transaction_begin');
   if ($money_transaction_begin) {
@@ -165,19 +165,19 @@ function money_transaction_finish() {
 
 
 /**
-* Create (or update existsing) money transaction entity
-* Return TRUE|FALSE;
-* You can use passed &$messages reference for display errors or successful result message
-*/
+ * Create (or update existsing) money transaction entity
+ * Return TRUE|FALSE;
+ * You can use passed &$messages reference for display errors or successful result message
+ */
 function money_transaction_save($money_transaction, &$messages = NULL) {
   $result = FALSE;
   $messages = $messages ? $messages : array();
   $money_transaction_begin = &drupal_static('money_transaction_begin');
-  
+
   // If we not in money_transaction_begin() context, try to lock database here:
   if (!$money_transaction_begin) {
     if (!lock_acquire('money_transaction_begin')) {
-      // Another request is execute money transaction.
+      // Another request is executes money transaction.
       lock_wait('money_transaction_begin');
       return money_transaction_save($money_transaction, $messages);
     }
@@ -215,7 +215,7 @@ function money_transaction_save($money_transaction, &$messages = NULL) {
     }
     else {
       // Pack unknown fields into data array
-      $data = isset($money_transaction->data) ? (array)$money_transaction->data : array();
+      $data = isset($money_transaction->data) ? (array) $money_transaction->data : array();
       unset($money_transaction->data);
       $known_fields = drupal_schema_fields_sql('money_transactions');
       $known_fields[] = 'is_new';
@@ -241,28 +241,35 @@ function money_transaction_save($money_transaction, &$messages = NULL) {
       }
       money_reset_static();
       $result = drupal_write_record('money_transactions', $money_transaction, $money_transaction->is_new ? array() : 'id');
-      unset($money_transaction->data);
+      $money_transaction->data = $money_transaction->data ? unserialize($money_transaction->data) : NULL;
       if (!$result) {
-        $messages[] = t('Can not save into database');
-       
+        $messages[] = t('Can not save money transaction into database');
+        watchdog_exception('money_transaction', new Exception('Can not save money transaction into database - drupal_write_record() error.'));
+        if (!$money_transaction_begin) {
+          lock_release('money_transaction_begin');
+        }
+        return FALSE;
       }
-      elseif ($money_transaction->is_new && $source_info) {
-        money_unhold($money_transaction->operation, $money_transaction->operation_key, $source_info);       
+      else {
+        if ($money_transaction->is_new && $source_info) {
+          money_unhold($money_transaction->operation, $money_transaction->operation_key, $source_info);
+        }
+        // Clear the static loading cache.
+        
+        entity_get_controller('money_transaction')->resetCache(array($money_transaction->id));
+
+        $op = $money_transaction->is_new ? 'insert' : 'update';
+        // Tell the other modules a money_transaction has been submitted.
+        module_invoke_all('money_transaction_' . $op, $money_transaction); 
+        module_invoke_all('entity_' . $op, $money_transaction, 'money_transaction');
+        _money_transaction_trigger($money_transaction, 'money_transaction_' . $money_transaction->operation . '_' . $op);
+        
+        // Ignore slave server temporarily to give time for the
+        // saved money_transaction to be propagated to the slave.
+        db_ignore_slave();
+        unset($money_transaction->original);
       }
-      // Clear the static loading cache.
-      entity_get_controller('money_transaction')->resetCache(array($money_transaction->id));
-
-      // Ignore slave server temporarily to give time for the
-      // saved money_transaction to be propagated to the slave.
-      db_ignore_slave();
-
-      $op = $money_transaction->is_new ? 'insert' : 'update';
-      // Tell the other modules a money_transaction has been submitted.
-      module_invoke_all('money_transaction_' . $op, $money_transaction, $result);
-      module_invoke_all('entity_' . $op, $money_transaction, 'money_transaction');
-      _money_transaction_trigger($money_transaction, 'money_transaction_' . $money_transaction->operation . '_' . $op);
     }
-    unset($money_transaction->original);
   }
   catch (Exception $e) {
     $transaction->rollback();
@@ -282,15 +289,15 @@ function money_transaction_save($money_transaction, &$messages = NULL) {
   }
   if (!$result) {
     watchdog('money', 'Money transaction can not be executed. <br />Transaction: !transaction <br />Error messages: !errors', array(
-    '!transaction' => '<pre>' . var_export((array)$money_transaction, TRUE) . '</pre>',
-    '!errors' => $messages ? '<br />' . implode('<br />', array_map('check_plain', $messages)) : '-',
+      '!transaction' => '<pre>' . var_export((array) $money_transaction, TRUE) . '</pre>',
+      '!errors' => $messages ? '<br />' . implode('<br />', array_map('check_plain', $messages)) : '-',
     ), WATCHDOG_ALERT);
   }
   elseif ($money_transaction->is_new && $money_transaction->operation) {
     if ($title = money_operations_info($money_transaction->operation, $money_transaction->operation_key, 'title')) {
       $messages[] = t('Operation <strong>"!op"</strong> for the sum <strong>!sum</strong> successfully completed.', array(
-        '!op' => l(filter_xss_admin($title), entity_uri('money_transaction', $money_transaction)['path'], array('html' => TRUE, 'attributes' => array('class' => array('ajax-popup')))), 
-        '!sum' => theme('price', array('price' => $money_transaction->sum,))));
+        '!op' => l(filter_xss_admin($title), entity_uri('money_transaction', $money_transaction)['path'], array('html' => TRUE, 'attributes' => array('class' => array('ajax-popup')))),
+        '!sum' => theme('price', array('price' => $money_transaction->sum, 'currency' => $money_transaction->currency))));
     }
   }
 
@@ -299,8 +306,8 @@ function money_transaction_save($money_transaction, &$messages = NULL) {
 
 
 /**
-* Load single money transaction object from database by id
-*/
+ * Load single money transaction object from database by id
+ */
 function money_transaction_load($id, $reset = FALSE) {
   $money_transactions = money_transaction_load_multiple(array($id), array(), $reset);
   return $money_transactions ? $money_transactions[$id] : FALSE;
@@ -308,47 +315,48 @@ function money_transaction_load($id, $reset = FALSE) {
 
 
 /**
-* Load array of money transaction objects from database by passed ids or/and conditiions
-*/
+ * Load array of money transaction objects from database by passed ids or/and conditiions
+ */
 function money_transaction_load_multiple($ids = array(), $conditions = array(), $reset = FALSE) {
   return entity_load('money_transaction', $ids, $conditions, $reset);
 }
 
 
 /**
-* Build renderable array for view money_transaction object
-*/
+ * Build renderable array for view money_transaction object
+ */
 function money_transaction_view($money_transaction) {
-  
+
   // Remove previously built content, if exists.
   $money_transaction->content = array();
 
   entity_prepare_view('money_transaction', array($money_transaction->id => $money_transaction));
   $money_transaction->content += field_attach_view('money_transaction', $money_transaction, 'full');
 
-  
-  $money_transaction->content['id'] = array(
-    '#type' => 'item',
-    '#title' => t('Num'),
-    '#markup' => $money_transaction->id,
-    '#inline' => TRUE,
+  $money_transaction->content['header'] = array(
+    '#type' => 'fieldset',
   );
-  $money_transaction->content['timestamp'] = array(
+
+  $money_transaction->content['header']['timestamp'] = array(
     '#type' => 'item',
     '#title' => t('Date, time'),
+    '#title_display' => 'invisible',
     '#markup' => format_date($money_transaction->timestamp),
     '#inline' => TRUE,
   );
 
   $txt = money_operations_info($money_transaction->operation, $money_transaction->operation_key, 'title');
   $txt = $txt ? filter_xss($txt) : $money_transaction->operation;
-  $money_transaction->content['operation'] = array(
+
+  $money_transaction->content['header']['operation'] = array(
     '#type' => 'item',
     '#title' => t('Operation'),
+    '#title_display' => 'invisible',
     '#markup' => $txt,
     '#inline' => TRUE,
   );
-  
+
+  /*
   if ($money_transaction->uri) {
     $title = $money_transaction->uri;
     if (!preg_match('/^[a-z]+:/i', $money_transaction->uri) && ($menu_item = menu_get_item($money_transaction->uri))) {
@@ -361,64 +369,122 @@ function money_transaction_view($money_transaction) {
       '#inline' => TRUE,
     );
   }
+  */
 
-  
-  
+  $money_transaction->content['info'] = array(
+    '#type' => 'fieldset',
+  );
+
   $txt = money_sources_info($money_transaction->source, $money_transaction->source_key, 'title');
-  $money_transaction->content['source'] = array(
+  $money_transaction->content['info']['source'] = array(
     '#type' => 'item',
     '#title' => t('Source'),
-    '#markup' => $txt ? $txt : $money_transaction->source,
+    '#markup' => $txt ?? $money_transaction->source,
     '#inline' => TRUE,
   );
+
   $txt = money_sources_info($money_transaction->recipient, $money_transaction->recipient_key, 'title');
-  $money_transaction->content['recipient'] = array(
+  $money_transaction->content['info']['recipient'] = array(
     '#type' => 'item',
     '#title' => t('Recipient'),
-    '#markup' => $txt ? $txt : $money_transaction->recipient,
+    '#markup' => $txt ?? $money_transaction->recipient,
     '#inline' => TRUE,
   );
-  $money_transaction->content['sum'] = array(
+  $money_transaction->content['info']['sum'] = array(
     '#type' => 'item',
     '#title' => t('Sum'),
-    '#markup' => $money_transaction->sum,
+    '#markup' => theme('price', array('price' => $money_transaction->sum, 'currency' => $money_transaction->currency)),
     '#inline' => TRUE,
   );
-  
+
   $acc = $money_transaction->uid ? user_load($money_transaction->uid) : NULL;
   $txt = $acc ? theme('username', array('account' => $acc)) : theme('email', array('email' => $money_transaction->mail));
-  $money_transaction->content['user'] = array(
+  $money_transaction->content['info']['user'] = array(
     '#type' => 'item',
-    '#title' => t('User'),
+    '#title' => t('Proceeded by'),
     '#markup' => $txt,
     '#inline' => TRUE,
   );
-  
+
   if (user_access('administer moneys')) {
-    $money_transaction->content['admin-data'] = array(
+    $source_info = money_sources_info($money_transaction->source, $money_transaction->source_key);
+
+    $source_balance_rows = empty($source_info['external'])
+      ? array(
+        array(
+          theme('form_element_label', array('element' => array('#title' => t('Source balance before operation'), '#title_display' => 'visible'))),
+          array('data' => theme('price', array('price' => $money_transaction->source_balance_snapshot + $money_transaction->sum)), 'class' => array('rteright'),),
+        ),
+        array(
+          theme('form_element_label', array('element' => array('#title' => t('Transaction'), '#title_display' => 'visible'))),
+          array('data' => theme('price', array('price' => $money_transaction->sum, 'currency' => $money_transaction->currency)), 'class' => array('rteright'),),
+        ),
+        array(
+          theme('form_element_label', array('element' => array('#title' => t('Source balance after operation'), '#title_display' => 'visible'))),
+          array('data' => theme('price', array('price' => $money_transaction->source_balance_snapshot, 'currency' => $money_transaction->currency)), 'class' => array('rteright'),),
+        ),
+      ) : array();
+
+    $recipient_info = money_sources_info($money_transaction->recipient, $money_transaction->recipient_key);
+
+    $recipient_balance_rows = empty($recipient_info['external'])
+      ? array(
+        array(
+          theme('form_element_label', array('element' => array('#title' => t('Recipient balance before operation'), '#title_display' => 'visible'))),
+          array('data' => theme('price', array('price' => $money_transaction->recipient_balance_snapshot - $money_transaction->sum)), 'class' => array('rteright'),),
+        ),
+        array(
+          theme('form_element_label', array('element' => array('#title' => t('Transaction'), '#title_display' => 'visible'))),
+          array('data' => theme('price', array('price' => $money_transaction->sum, 'currency' => $money_transaction->currency)), 'class' => array('rteright'),),
+        ),
+        array(
+          theme('form_element_label', array('element' => array('#title' => t('Recipient balance after operation'), '#title_display' => 'visible'))),
+          array('data' => theme('price', array('price' => $money_transaction->recipient_balance_snapshot, 'currency' => $money_transaction->currency)), 'class' => array('rteright'),),
+        ),
+      ) : array();
+
+    $money_transaction->content['additional-data'] = array(
       '#type' => 'fieldset',
-      '#title' => 'Service data',
+      '#title' => t('Additional data'),
       '#collapsible' => TRUE,
+      '#collapsed' => TRUE,
       '#attributes' => array(
-        'class' => array('collapsible'),
+        'class' => array('collapsible', 'collapsed'),
       ),
       '#attached' => array(
         'library' => array(
           array('system', 'drupal.collapse'),
         ),
       ),
-      'source_balance_snapshot' => array(
+      'source_balance' => array(
         '#type' => 'item',
-        '#title' => t('Source balance after operation'),
-        '#inline' => TRUE,
-        '#markup' => theme('price', array('price' => $money_transaction->source_balance_snapshot,)),
+        '#theme' => 'table',
+        '#rows' => $source_balance_rows,
       ),
-      'recipient_balance_snapshot' => array(
+      'recipient_balance' => array(
         '#type' => 'item',
-        '#title' => t('Recipient balance after operation'),
-        '#inline' => TRUE,
-        '#markup' => theme('price', array('price' => $money_transaction->recipient_balance_snapshot,)),
+        '#theme' => 'table',
+        '#rows' => $recipient_balance_rows,
       ),
+    );
+
+
+    $money_transaction->content['admin-data'] = array(
+      '#type' => 'fieldset',
+      '#title' => t('Service data'),
+      '#collapsible' => TRUE,
+      '#collapsed' => TRUE,
+      '#attributes' => array(
+        'class' => array('collapsible', 'collapsed'),
+      ),
+      '#attached' => array(
+        'library' => array(
+          array('system', 'drupal.collapse'),
+        ),
+      ),
+    );
+
+    $money_transaction->content['admin-data'] += array(
       'ip' => array(
         '#type' => 'item',
         '#inline' => TRUE,
@@ -447,33 +513,51 @@ function money_transaction_view($money_transaction) {
         '#title' => t('Additional data'),
       );
     }
+
+
+    /*
+if ($money_transaction->uri) {
+  $title = $money_transaction->uri;
+  if (!preg_match('/^[a-z]+:/i', $money_transaction->uri) && ($menu_item = menu_get_item($money_transaction->uri))) {
+    $title = $menu_item['title'];
   }
-  
-  
+  $money_transaction->content['uri'] = array(
+    '#type' => 'item',
+    '#title' => t('Page'),
+    '#markup' => l($title, $money_transaction->uri),
+    '#inline' => TRUE,
+  );
+}
+*/
+
+
+  }
+
+
   // Allow modules to make their own additions to the money_transaction.
   module_invoke_all('money_transaction_view', $money_transaction);
   module_invoke_all('entity_view', $money_transaction, 'money_transaction', 'full', NULL);
-  
+
   $build = $money_transaction->content;
   // We don't need duplicate rendering info in node->content.
   unset($money_transaction->content);
-  
+
   $build += array(
     '#money_transaction' => $money_transaction,
   );
 
-  
+
   // Allow modules to modify the structured node.
   $type = 'money_transaction';
   drupal_alter(array('money_transaction_view', 'entity_view'), $build, $type);
-  
+
   return $build;
 }
 
 
 function _money_transaction_render_data($data, $reset = TRUE) {
   $result = array();
-  foreach ((array)$data as $key => $val) {
+  foreach ((array) $data as $key => $val) {
     $result[$key] = array(
       '#type' => 'item',
       '#title' => check_plain($key),

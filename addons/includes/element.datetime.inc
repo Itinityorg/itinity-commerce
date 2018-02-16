@@ -46,7 +46,7 @@ function addons_process_datetime($element, &$form_state) {
   }
   
   if (is_array($element['#value']) && (isset($element['#value']['date']) || isset($element['#value']['time']))) {
-    $element['#value'] = (isset($element['#value']['date']) ? strtotime($element['#value']['date']) : 0) + (isset($element['#value']['time']) ? (preg_replace('/^\s*(\d\d?):/',  '$1', $element['#value']['time']) * 3600) + (preg_replace('/:(\d\d?)\s*$/', '', $element['#value']['time']) * 60) : 0);
+    $element['#value'] = (!empty($element['#value']['date']) ? strtotime($element['#value']['date']) : 0) + (!empty($element['#value']['time']) ? (preg_replace('/^\s*(\d\d?):/',  '$1', $element['#value']['time']) * 3600) + (preg_replace('/:(\d\d?)\s*$/', '', $element['#value']['time']) * 60) : 0);
   }
   $element['date'] += array(
     '#size' => 10,

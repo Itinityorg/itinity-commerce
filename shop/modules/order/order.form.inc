@@ -4,14 +4,14 @@
 /**
 * Shopping cart form.
 * Can be used as independent form on special pages (shop/cart), and as part of parent form (e.g. order_form)
-* Contains googs controls and delivery method radios.
+* Contains goods controls and delivery method radios.
 */
 function order_shop_cart_form($form, &$form_state, $shop_cart, $order = NULL) {
-  $use_ajax = TRUE; // for test
 
+  $use_ajax = TRUE; // for test
   $no_commit = $shop_cart->no_commit; // temporary suppress commit shopping cart
   $shop_cart->no_commit = TRUE;
-
+  $form['#shop_cart'] = $shop_cart;
   if ($use_ajax) {
     // Ajax crutches
     if (!empty($form_state['values']['shop_cart']['add']) && isset($form_state['triggering_element']['#name']) && $form_state['triggering_element']['#name'] === 'shop_cart:save') {
@@ -37,29 +37,36 @@ function order_shop_cart_form($form, &$form_state, $shop_cart, $order = NULL) {
   $readonly = !empty($order->is_complete);
   static $form_idx = 0;
   $form_idx ++;
-  $wrapper_id = 'order-shop-cart-form-wrapper-' . $shop_cart->uid . '-' . $form_idx . (!empty($order->nid) ? '-' . $order->nid : '');
+  $wrapper_id = 'order-shop-cart-form-wrapper-' . str_replace(':', '-', $shop_cart->currentKey()) . '-' . $form_idx . (!empty($order->nid) ? '-' . $order->nid : '');
 
   $form['#wrapper_id'] = $wrapper_id;
 
 	///$form['#attached']['js'][] = array('type' => 'setting', 'data' => array('currencyFormat' => shop_currency_format(), 'currencyDefault' => shop_get_info('currency', 'default')));
 	///$form['#attached']['js'][] = drupal_get_path('module', 'order') . '/js/order.shop-cart.form.js';
 	$form['#attached']['css'][] = drupal_get_path('module', 'order') . '/css/order.shop-cart.form.css';
-
   $form = array(
-		'#tree' => TRUE,
+    '#tree' => TRUE,
+    'shop_name' => array(
+      '#markup' => '<h4 class="shop-name">' . t('Seller') . ': ' . l(shop_list_shops($shop_cart->shop_id)['name'], shop_list_shops($shop_cart->shop_id)['uri']) . '</h4>',
+      '#access' => FALSE,
+    ),
     '#parents' => array('shop_cart',), // force set parents because this form can be used in other forms
-		'items' => array(),
-		'#readonly' => $readonly,
-		'#theme' => 'shop_cart_form',
+    'items' => array(),
+    '#readonly' => $readonly,
+    '#theme' => 'shop_cart_form',
     '#type' => 'container', // needed where cart rendered in other form context e.g. order node form
-		'uid' => array(
-			'#type' => 'hidden',
-			'#value' => $shop_cart->uid,
-		),
-		'order' => array(
-			'#type' => 'hidden',
-			'#value' => !empty($order->nid) ? $order->nid : NULL,
-		),
+    'shop_id' => array(
+      '#type' => 'hidden',
+      '#value' => $shop_cart->shop_id,
+    ),
+    'uid' => array(
+      '#type' => 'hidden',
+      '#value' => $shop_cart->uid,
+    ),
+    'order' => array(
+      '#type' => 'hidden',
+      '#value' => !empty($order->nid) ? $order->nid : NULL,
+    ),
   ) + $form;
 
   $form += array(
@@ -73,6 +80,8 @@ function order_shop_cart_form($form, &$form_state, $shop_cart, $order = NULL) {
   $qtys = shop_units_options();
 
   foreach ($shop_cart->items as $idx => $item) {
+    $entities = entity_load($item->entity_type, array($item->entity_id));
+    $entity = $entities[$item->entity_id] ?? NULL;
     $original_price = NULL;
 
     /**
@@ -81,66 +90,61 @@ function order_shop_cart_form($form, &$form_state, $shop_cart, $order = NULL) {
      */
     if ($shop_cart->frozen) {
       $item_snapshot = snapshot_load($item->snapshot_id);
-      $original_price = isset($item_snapshot->data['price']['price']) ? $item_snapshot->data['price']['price'] : NULL;
+      $original_price = $item_snapshot->data['price']['price'] ?? NULL;
     }
 
-    if ($e = entity_load($item->entity_type, array($item->entity_id))) {
-      $entity = $e[$item->entity_id];
-      $image = product_get_image($entity, $item->entity_type);
-      $original_price = !is_null($original_price) ? $original_price : $entity->price;
-    }
-    else {
-      $image = '';
-      $original_price = !is_null($original_price) ? $original_price : $item->price;
-    }
+    $image = $entity ? product_get_image($entity, $item->entity_type) : '';
+    $original_price = $original_price ?? $item->price_array['price'] ?? NULL;
 
 //		$item_buy_allowed = !isset($entity->qty) || !shop_get_info('balances', 'settings', 'track') || $entity->goods_on_request || $entity->qty > 0;
 
     $form['items'][$idx] = array(
-			'entity_type' => array(
-				'#type' => 'hidden',
-				'#value' => $item->entity_type,
-			),
-			'entity_id' => array(
-				'#type' => 'hidden',
-				'#value' => $item->entity_id,
-			),
+      'entity_type' => array(
+        '#type' => 'hidden',
+        '#value' => $item->entity_type,
+      ),
+      'entity_id' => array(
+        '#type' => 'hidden',
+        '#value' => $item->entity_id,
+      ),
       'snapshot_id' => array(
         '#type' => 'hidden',
         '#value' => $item->snapshot_id,
       ),
-			'currency' => array(
-				'#type' => 'hidden',
-				'#value' => $item->currency ? $item->currency : shop_get_info('currency', 'default'),
-			),
+      'currency' => array(
+        '#type' => 'hidden',
+        '#value' => $item->currency ? $item->currency : shop_get_info('currency',
+          'default'),
+      ),
       'original_price' => array(
         '#type' => 'hidden',
         '#value' => $original_price,
       ),
-			'price' => array(
-				'#type' => 'hidden',
-				'#value' => $item->price,
-			),
-			'qty_type' => array(
-				'#type' => 'hidden',
-				'#value' => $item->qty_type,
-			),
+      'price' => array(
+        '#type' => 'hidden',
+        '#value' => $item->price,
+      ),
+      'qty_type' => array(
+        '#type' => 'hidden',
+        '#value' => $item->qty_type,
+      ),
       'qty' => array(),
-			'image' => array(
-				'#markup' => $image ? l($image,  $item->entity_uri, array('html' => TRUE)) : '&nbsp;',
-			),
-			'title' => array(
-			  '#type' => 'value',
+      'image' => array(
+        '#markup' => $image ? l($image, $item->entity_uri,
+          array('html' => TRUE)) : '&nbsp;',
+      ),
+      'title' => array(
+        '#type' => 'value',
         '#value' => $item->title,
-				'#prefix' => l($item->title, $item->entity_uri),
+        '#prefix' => l($item->title, $item->entity_uri),
         '#suffix' => '',
-			),
+      ),
     );
     if ($readonly) {
       $form['items'][$idx]['qty'] = array(
         '#type' => 'value',
         '#value' =>  $item->qty,
-        '#suffix' => $item->qty . ' ' . (isset($qtys[$item->qty_type]) ? $qtys[$item->qty_type] : $item->qty_type),
+        '#suffix' => $item->qty . ' ' . ($qtys[$item->qty_type] ?? $item->qty_type),
       );
     }
     else {
@@ -148,10 +152,9 @@ function order_shop_cart_form($form, &$form_state, $shop_cart, $order = NULL) {
       if ($use_ajax && isset($form_state['values']['shop_cart']['items'][$idx]['qty'])) {
         $qty = $form_state['values']['shop_cart']['items'][$idx]['qty'];
       }
-
       $in_stock_qty = !isset($entity->qty) ? PHP_INT_MAX : max($entity->qty, 0);
       $max = !shop_get_info('balances', 'settings', 'track') || $entity->goods_on_request ? PHP_INT_MAX : $in_stock_qty;
-
+      
       $form['items'][$idx]['qty'] = array(
         '#type' => 'digit',
         '#buttons' => TRUE,
@@ -159,14 +162,14 @@ function order_shop_cart_form($form, &$form_state, $shop_cart, $order = NULL) {
 // old: '#' . ($item_buy_allowed ? 'default_' : '') . 'value' => $qty,
         '#default_value' => $qty,
         '#step' => shop_get_info('balances', 'settings', 'qty_fraction') && !empty($item->qty_fraction) && $item->qty_fraction * 1 ? $item->qty_fraction * 1 : 1,
-        '#min' => shop_get_info('balances', 'settings', 'qty_fraction') && !empty($item->qty_fraction) && $item->qty_fraction * 1 ? $item->qty_fraction * 1 : 1,
-				'#max' => $max,
-				'#description' => '',
-				'#size' => 3,
-				'#field_suffix' => isset($qtys[$item->qty_type]) ? $qtys[$item->qty_type] : $item->qty_type,
+        '#min' => $max ? shop_get_info('balances', 'settings', 'qty_fraction') && !empty($item->qty_fraction) && $item->qty_fraction * 1 ? $item->qty_fraction * 1 : 1 : 0,
+          '#max' => $max,
+          '#description' => '',
+          '#size' => 3,
+          '#field_suffix' => $qtys[$item->qty_type] ?? $item->qty_type,
         '#suffix' => ($qty > $in_stock_qty && $entity->goods_on_request) ? t('Available on request') : '',
-				'#title' => t('Quantity'),
-				'#title_display' => 'invisible',
+        '#title' => t('Quantity'),
+        '#title_display' => 'invisible',
         '#ajax' => $use_ajax ? array(
           'wrapper' => $wrapper_id,
           'callback' => 'order_shop_cart_form_ajax',
@@ -194,12 +197,15 @@ function order_shop_cart_form($form, &$form_state, $shop_cart, $order = NULL) {
       );
     }
   }
-	if (!$readonly && user_access('administer moneys')) {
+  if (!$readonly && user_access('administer moneys')) {
     $form['add'] = array(
-			'#type' => 'entity_selector',
-			'#selector_entity_type' => 'node',
-			'#selector_bundles' => array_keys(array_filter(shop_get_info('entity_types', 'node'))),
-			'#title' => t('Add new product'),
+      '#type' => 'entity_selector',
+      '#selector_entity_type' => 'node',
+      '#selector_bundles' => array_keys(array_filter(shop_get_info('entity_types', 'node'))),
+      '#selector_shop_cart_shop_id' => $shop_cart->shop_id,
+      '#selector_shop_cart_uid' => $shop_cart->uid,
+      '#selector_shop_cart_order' => $shop_cart->order_node->nid ?? NULL,
+      '#title' => t('Add new product'),
       '#ajax' => $use_ajax ? array(
         'wrapper' => $wrapper_id,
         'callback' => 'order_shop_cart_form_ajax',
@@ -207,29 +213,21 @@ function order_shop_cart_form($form, &$form_state, $shop_cart, $order = NULL) {
         'trigger_as' => array('name' => 'shop_cart:save',),
         'progress' => array(),
       ) : array(),
-		);
-	}
+    );
+  }
 
-
-  $order_discount = isset($form_state['values']['shop_cart']['order_discount']['order_discount'])
-    ? $form_state['values']['shop_cart']['order_discount']['order_discount']
-    : (isset($order->order_discount) ? $order->order_discount : 0);
+  
+  $order_discount = $form_state['values']['shop_cart']['order_discount']['order_discount'] ?? $order->order_discount ?? 0;
   $shop_cart->data('order_discount', $order_discount);
 
-  $order_discount_text = isset($form_state['values']['shop_cart']['order_discount']['order_discount_text'])
-    ? $form_state['values']['shop_cart']['order_discount']['order_discount_text']
-    : (isset($order->order_discount_text) ? $order->order_discount_text : NULL);
+  $order_discount_text = $form_state['values']['shop_cart']['order_discount']['order_discount_text'] ?? $order->order_discount_text ?? NULL;
   $shop_cart->data('order_discount_text', $order_discount_text);
 
   // shop_bonus CRUTCH
-  $debit_bonus = isset($form_state['values']['shop_cart']['debit_bonus'])
-    ? $form_state['values']['shop_cart']['debit_bonus'] * $form_state['values']['shop_cart']['debit_bonus_qty']
-    : (isset($order->debit_bonus) ? $order->debit_bonus : NULL);
+  $debit_bonus = $form_state['values']['shop_cart']['debit_bonus'] ?? $order->debit_bonus ?? NULL;
   $shop_cart->data('debit_bonus', $debit_bonus);
 
-  $shop_cart_delivery_method = $order
-    ? (isset($order->delivery_method) ? $order->delivery_method : NULL)
-    : $shop_cart->data('delivery_method');
+  $shop_cart_delivery_method = $shop_cart->data('delivery_method');
 
   $shop_cart_delivery_params = (!empty($order->nid) && $shop_cart_delivery_method)
     ? array($shop_cart_delivery_method => $order->delivery_params)
@@ -237,7 +235,7 @@ function order_shop_cart_form($form, &$form_state, $shop_cart, $order = NULL) {
 
 
   $delivery_options = array();
-  foreach (shop_delivery_info() as $key => $info) {
+  foreach (shop_delivery_info(order_shop_delivery_get_entity($order, $shop_cart)) as $key => $info) {
     if ($info['enabled']) {
       $delivery_options[$key] = $info['title'];
     }
@@ -246,7 +244,7 @@ function order_shop_cart_form($form, &$form_state, $shop_cart, $order = NULL) {
   if (isset($form_state['values']['shop_cart']['delivery']['method'])) {
     $delivery_options_default = $form_state['values']['shop_cart']['delivery']['method'];
   }
-  elseif (empty($order->nid) && $shop_cart_delivery_method && shop_delivery_info($shop_cart_delivery_method, 'enabled')) {
+  elseif (empty($order->nid) && $shop_cart_delivery_method && shop_delivery_info(order_shop_delivery_get_entity($order, $shop_cart), $shop_cart_delivery_method, 'enabled')) {
     $delivery_options_default = $shop_cart_delivery_method;
   }
   else {
@@ -260,7 +258,7 @@ function order_shop_cart_form($form, &$form_state, $shop_cart, $order = NULL) {
   elseif (isset($shop_cart_delivery_params[$delivery_options_default])) {
     $delivery_params = $shop_cart_delivery_params[$delivery_options_default];
   }
-  elseif ($variants = shop_delivery_info($delivery_options_default, 'settings', 'variants')) {
+  elseif ($variants = shop_delivery_info(order_shop_delivery_get_entity($order, $shop_cart), $delivery_options_default, 'settings', 'variants')) {
     $delivery_params['variant'] = key($variants);
   }
   else {
@@ -270,7 +268,9 @@ function order_shop_cart_form($form, &$form_state, $shop_cart, $order = NULL) {
   /*
   $delivery_options_default = !empty($order->nid) ? $order->delivery_method : key($delivery_options);
 
-  if (empty($order->nid) && $shop_cart_delivery_method && shop_delivery_info($shop_cart_delivery_method, 'enabled')) {
+  /*
+
+  if (empty($order->nid) && $shop_cart_delivery_method && shop_delivery_info($order, $shop_cart_delivery_method, 'enabled')) {
     $delivery_options_default = $shop_cart_delivery_method;
   }
 
@@ -285,11 +285,12 @@ function order_shop_cart_form($form, &$form_state, $shop_cart, $order = NULL) {
   $shop_cart->data('delivery_method', $delivery_options_default);
   $shop_cart->data('delivery_params', array($delivery_options_default => $delivery_params));
 
-  $o = $shop_cart->order;
-  $shop_cart->order = NULL; // ajax CRUTCHES! @see order_shop_build_price() -->> if ($context_object->order...
+  $o = $shop_cart->order_node;
+  $shop_cart->order_node = NULL; // ajax CRUTCHES! @see order_shop_build_price() -->> if ($context_object->order_node...
   $shop_cart->frozen = FALSE; // crutch
+  
   $total_sum = shop_build_price('shop_cart', $shop_cart, $shop_cart->uid);
-  $shop_cart->order = $o;
+  $shop_cart->order_node = $o;
 
   $form['#total_sum'] = $total_sum;
   $form['total_sum'] = array(
@@ -337,7 +338,7 @@ function order_shop_cart_form($form, &$form_state, $shop_cart, $order = NULL) {
       }
       elseif ($delivery_options_default) {
         $form['delivery']['#collapsed'] = TRUE;
-        if ($t = shop_delivery_info($delivery_options_default, 'title')) {
+        if ($t = shop_delivery_info(order_shop_delivery_get_entity($order, $shop_cart), $delivery_options_default, 'title')) {
           $form['delivery']['#title'] .= ': ' . $t;
         }
       }
@@ -346,13 +347,12 @@ function order_shop_cart_form($form, &$form_state, $shop_cart, $order = NULL) {
         $form['delivery']['#collapsible'] = FALSE;
       }
     }
-
     $max_delivery_time = 0;
 
-    $order_created = isset($order->created) ? $order->created : REQUEST_TIME;
-    $variant_id = isset($delivery_params['variant']) ? $delivery_params['variant'] : NULL;
-    $variant = isset($variant_id) ? shop_delivery_info($delivery_options_default, 'settings', 'variants', $variant_id) : NULL;
-
+    $order_created = $order->created ?? REQUEST_TIME;
+    $variant_id = $delivery_params['variant'] ?? NULL;
+   
+    $variant = isset($variant_id) ? shop_delivery_info(order_shop_delivery_get_entity($order, $shop_cart), $delivery_options_default, 'settings', 'variants', $variant_id) : NULL;
     if ($variant && $variant_id) {
       foreach ($shop_cart->items as $idx => $item) {
         if ($e = entity_load($item->entity_type, array($item->entity_id))) {
@@ -361,7 +361,7 @@ function order_shop_cart_form($form, &$form_state, $shop_cart, $order = NULL) {
           $max_delivery_time = max($max_delivery_time, $delivery_time);
         }
       }
-      $delivery_params['delivery_time'] = $max_delivery_time; // for passing to summary callback
+      $delivery_params['delivery_time'] = $max_delivery_time; // for passing to user summary callback
     }
 
 //    $form['delivery']['delivery_time'] = array(
@@ -372,19 +372,19 @@ function order_shop_cart_form($form, &$form_state, $shop_cart, $order = NULL) {
 //      '#access' => $max_delivery_time,
 //    );
 
-    foreach (shop_delivery_info() as $key => $item) {
+    foreach (shop_delivery_info(order_shop_delivery_get_entity($order, $shop_cart)) as $delivery_method => $item) {
       if ($item['enabled']) {
-        $form['delivery']['descriptions'][$key] = array(
+        $form['delivery']['descriptions'][$delivery_method] = array(
           '#type' => 'item',
           '#title' => '',
           '#markup' => '<small>' . filter_xss_admin($item['description']) . '</small>',
           '#states' => array(
             'visible' => array(
-              'input[name="shop_cart[delivery][method]"]' => array('value' => $key),
+              'input[name="shop_cart[delivery][method]"]' => array('value' => $delivery_method),
             ),
           ),
         );
-        if ($subform = shop_delivery_form_widget($key, isset($shop_cart_delivery_params[$key]) ? $shop_cart_delivery_params[$key] : NULL, $form, $form_state)) {
+        if ($subform = shop_delivery_user_widget(order_shop_delivery_get_entity($order, $shop_cart), $delivery_method, $delivery_params, $form, $form_state)) {
           if ($use_ajax) {
             // Apply ajax to every element in sub form
             $f = function($e) use (&$f, $wrapper_id) {
@@ -406,16 +406,16 @@ function order_shop_cart_form($form, &$form_state, $shop_cart, $order = NULL) {
             $subform = $f($subform);
           }
 
-          $form['delivery']['params'][$key] = array(
+          $form['delivery']['params'][$delivery_method] = array(
             '#type' => 'container',
           ) + $subform;
 
-          if ($key !== $delivery_options_default) {
-            $form['delivery']['params'][$key]['#attributes']['class'][] = 'element-hidden';
+          if ($delivery_method !== $delivery_options_default) {
+            $form['delivery']['params'][$delivery_method]['#attributes']['class'][] = 'element-hidden';
           }
           if (!$use_ajax) {
             $form['delivery']['params'][$key]['#states']['visible'] = array(
-              'input[name="shop_cart[delivery][method]"]' => array('value' => $key),
+              'input[name="shop_cart[delivery][method]"]' => array('value' => $delivery_method),
             );
           }
         }
@@ -423,22 +423,33 @@ function order_shop_cart_form($form, &$form_state, $shop_cart, $order = NULL) {
     }
 
     $form['delivery_summary'] = array(
-      '#type' => 'container',
-      '#children' => $delivery_options_default ? shop_delivery_summary($delivery_options_default, $delivery_params) : NULL,
+      '#type' => 'item',
+      //IKW: remove 'Delivery information' title
+      '#title' => node_is_page($order) ? t('Delivery information') : NULL,
+      'summary' => $delivery_options_default ? shop_delivery_user_summary($order, $delivery_options_default, $delivery_params) : NULL,
     );
+    $form['delivery_summary']['#access'] = !!$form['delivery_summary']['summary'];
 
-    if (!empty($total_sum['delivery'])) {
-      $form['order_delivery_sum'] = array(
-        '#type' => 'html_tag',
-        '#tag' => 'h4',
-        '#attributes' => array(
-          'class' => array(
-            'order-price-delivery',
-          ),
-        ),
-        '#value' => t('Delivery') . ': ' . theme('price', array('price' => $total_sum['delivery'])),
-      );
+    $d = $total_sum['delivery'] ?? NULL;
+
+    if ($d === 0) {
+      $value = t('Free', array(), array('context' => 'order'));
+    } elseif ($d === NULL) {
+      $value = t('Unknown');
+    } else {
+      $value = theme('price', array('price' => $total_sum['delivery']));
     }
+
+    $form['order_delivery_sum'] = array(
+      '#type' => 'html_tag',
+      '#tag' => 'h4',
+      '#attributes' => array(
+        'class' => array(
+          'order-price-delivery',
+        ),
+      ),
+      '#value' => t('Delivery') . ': ' . $value,
+    );
   }
 
   $form['order_total_sum'] = array(
@@ -453,10 +464,11 @@ function order_shop_cart_form($form, &$form_state, $shop_cart, $order = NULL) {
     '#weight' => 100,
   );
 
-  // Ajax issue fix @see also order_shop_cart_form_submit()
+  // Ajax issues fix 
+  // @see also order_shop_cart_form_submit(); organisations_shop_form_order_node_form_alter()
   $form['current_uri'] = array(
     '#type' => 'value',
-    '#value' => isset($form_state['values']['shop_cart']['current_uri']) ? $form_state['values']['shop_cart']['current_uri'] : $_GET,
+    '#value' => $form_state['values']['shop_cart']['current_uri'] ?? $_GET,
   );
 
 
@@ -510,6 +522,7 @@ function order_shop_cart_form_ajax($form, &$form_state) {
     }
   }
   $shop_cart_form = array('messages' => array('#theme' => 'status_messages')) + drupal_array_get_nested_value($form, array_reverse($parents));
+
   return $shop_cart_form;
 }
 
@@ -546,18 +559,25 @@ function shop_cart_delivery_element_validate($element, &$form_state) {
 
   $shop_cart = $form_state['values']['shop_cart'];
 
-  $method = isset($shop_cart['delivery']['method']) ? $shop_cart['delivery']['method'] : NULL;
-  $variant_id = isset($shop_cart['delivery']['params'][$method]['variant']) ? $shop_cart['delivery']['params'][$method]['variant'] : NULL;
-  $variant = isset($variant_id) ? shop_delivery_info($method, 'settings', 'variants', $variant_id) : NULL;
-
+  $method = $shop_cart['delivery']['method'] ?? NULL;
+  $variant_id = $shop_cart['delivery']['params'][$method]['variant'] ?? NULL;
+  $variant = isset($variant_id) ? shop_delivery_info(NULL/* < fix it*/, $method, 'settings', 'variants', $variant_id) : NULL;
+  if (isset($form_state['values']['shop_cart']['delivery']['params'][$method])) {
+    drupal_alter('shop_delivery_params', $method, $form_state['values']['shop_cart']['delivery']['params'][$method]);
+  }
+  if (isset($form_state['input']['shop_cart']['delivery']['params'][$method])) {
+    drupal_alter('shop_delivery_params', $method, $form_state['input']['shop_cart']['delivery']['params'][$method]);
+  }
+  
   if ($method && $variant_id && $variant) {
     $max_delivery_time = 0;
-
-    foreach ($shop_cart['items'] as $idx => $item) {
-      if ($e = entity_load($item['entity_type'], array($item['entity_id']))) {
-        $entity = $e[$item['entity_id']];
-        $delivery_time = _product_get_delivery_time($entity, $item['qty'], $method, $variant, $variant_id, $order_created, FALSE);
-        $max_delivery_time = max($max_delivery_time, $delivery_time);
+    if (!empty($shop_cart['items'])) {
+      foreach ($shop_cart['items'] as $idx => $item) {
+        if ($e = entity_load($item['entity_type'], array($item['entity_id']))) {
+          $entity = $e[$item['entity_id']];
+          $delivery_time = _product_get_delivery_time($entity, $item['qty'], $method, $variant, $variant_id, $order_created, FALSE);
+          $max_delivery_time = max($max_delivery_time, $delivery_time);
+        }
       }
     }
 
@@ -571,7 +591,7 @@ function shop_cart_delivery_element_validate($element, &$form_state) {
 * Submit callback for shopping cart form.
 */
 function order_shop_cart_form_submit($form, &$form_state) {
-  $shop_cart = shop_cart($form_state['values']['shop_cart']['uid'], $form_state['values']['shop_cart']['order'], NULL, TRUE);
+  $shop_cart = shop_cart($form_state['values']['shop_cart']['shop_id'], $form_state['values']['shop_cart']['uid'], $form_state['values']['shop_cart']['order'], TRUE);
   if (isset($form_state['values']['shop_cart']['delivery']['method'])) {
     $method = $form_state['values']['shop_cart']['delivery']['method'];
     if ($shop_cart->data('delivery_method') !== $method) {
@@ -579,18 +599,17 @@ function order_shop_cart_form_submit($form, &$form_state) {
     }
     $shop_cart_delivery_params = $shop_cart->data('delivery_params');
     $shop_cart_delivery_params ? $shop_cart_delivery_params : array();
-    $old_params = isset($shop_cart_delivery_params[$method]) ? $shop_cart_delivery_params[$method] : NULL;
-    $new_params = isset($form_state['values']['shop_cart']['delivery']['params'][$method]) ? $form_state['values']['shop_cart']['delivery']['params'][$method] : NULL;
-
+    $old_params = $shop_cart_delivery_params[$method] ?? NULL;
+    $new_params = $form_state['values']['shop_cart']['delivery']['params'][$method] ?? NULL;
+    
+    //drupal_alter('shop_delivery_params', $method, $new_params);
+    
     if (serialize($old_params) !== serialize($new_params)) {
       $shop_cart_delivery_params[$method] = $new_params;
       $shop_cart->data('delivery_params', $shop_cart_delivery_params);
     }
   }
-
-
-
-
+  
   if (!empty($form_state['values']['shop_cart']['add']) && ($n = node_load($form_state['values']['shop_cart']['add']))) {
     $shop_cart->add('node', $n->nid);
     if ($shop_cart->item('node', $n->nid)) {
@@ -633,7 +652,6 @@ function order_shop_cart_form_submit($form, &$form_state) {
     $form_state['input']['shop_cart']['add'] = '';
     $form_state['input']['shop_cart']['items'] = array();
   }
-
   elseif (!empty($form_state['values']['shop_cart:save'])) {
     // Stay on current page when 'save' button clicked in non-ajax context
     $get = $form_state['values']['shop_cart']['current_uri'];//$_GET;
@@ -641,14 +659,19 @@ function order_shop_cart_form_submit($form, &$form_state) {
     $_GET['destination'] = $_GET['q'] . '?' . drupal_http_build_query($get);
   }
   elseif (!empty($form_state['values']['shop_cart:order_no_registration'])) {
-    $_GET['destination'] = 'shop/cart/order';
+    $_GET['destination'] = 'shop/cart/' . $shop_cart->shop_id . '/order';
   }
   // Redirect anonymous to login or register page when 'order' button clicked
   elseif (!user_is_logged_in()) {
-    $_GET['destination'] = 'user' . (empty($_COOKIE['Drupal_visitor_mail']) ? '/register' : '') . '?destination=shop/cart/order';
+    $get = $_GET;
+    unset($get['q']);
+    $destination = array('destination' => 'shop/cart/' . $shop_cart->shop_id . '/order' . ($get ? '?' . drupal_http_build_query($get) : ''));
+    $_GET['destination'] = 'user' . (empty($_COOKIE['Drupal_visitor_mail']) ? '/register' : '') . '?' . drupal_http_build_query($destination);
   }
   elseif (!empty($form_state['values']['shop_cart:order'])) {
-    $_GET['destination'] = 'shop/cart/order';
+    $get = $_GET;
+    unset($get['q']);
+    $_GET['destination'] = 'shop/cart/' . $shop_cart->shop_id . '/order' . ($get ? '?' . drupal_http_build_query($get) : '');
   }
 }
 
@@ -662,8 +685,9 @@ function order_form($node, &$form_state) {
 
   $GLOBALS['conf']['cache'] = 0;
 
-  $uid = (arg(0) === 'user' && arg(1) && arg(2) === 'shop') ? arg(1) : NULL;
-  $shop_cart = shop_cart($uid, $node);
+
+  $shop_cart = shop_cart(NULL, NULL, $node);
+
 
   if (isset($form_state['values']['customer'])) {
     $customer = !empty($form_state['values']['customer']) ? user_load($form_state['values']['customer']) : drupal_anonymous_user();
@@ -676,31 +700,31 @@ function order_form($node, &$form_state) {
   $currency_info = money_currency_info($currency);
 
   $form = array();
-	$form['#control_changes'] = FALSE; // @see features_form_alter(), addons_form_alter()
+  $form['#control_changes'] = FALSE; // @see features_form_alter(), addons_form_alter()
 
   form_load_include($form_state, 'inc', 'node', 'node.pages');// Fix AJAX problems with node_form_validate() calls
 
-  if (arg(0) . '/' . arg(1) . '/' . arg(2) . '/' . arg(3) === 'shop/cart/checkout/' . drupal_hmac_base64('shop-cart-checkout', $shop_cart->cart_id . drupal_get_private_key() . drupal_get_hash_salt())) { // @see order_drupal_goto_alter()
-		$form['#attached']['js'][] = array(
-			'data' => array('shop_cart_autosubmit' => TRUE),
-			'type' => 'setting',
-		);
+  if (arg(0) . '/' . arg(1) . '/' . arg(2) . '/' . arg(3) . '/' . arg(4) === 'shop/cart/' . $shop_cart->shop_id . '/checkout/' . drupal_hmac_base64('shop-cart-checkout', $shop_cart->currentKey() . drupal_get_private_key() . drupal_get_hash_salt())) { // @see order_drupal_goto_alter()
+    $form['#attached']['js'][] = array(
+      'data' => array('shop_cart_autosubmit' => TRUE),
+      'type' => 'setting',
+    );
 
-		$form['#attributes']['class'][] = 'js-hide';
-	}
+    $form['#attributes']['class'][] = 'js-hide';
+  }
 
-	if ($is_new) {
-		foreach ($shop_cart->data() as $field_name => $val) {
-			if (!isset($node->{$field_name}) && !in_array($field_name, array('changed', 'created', 'uid', 'nid', 'vid', 'menu', 'shop_cart', 'log', 'date', 'form_build_id', 'form_token', 'form_id', 'path', 'op', 'validated', 'is_new', 'timestamp', 'tnid', 'translate', 'language',), TRUE)) {
-				$node->{$field_name} = $val;
-			}
-		}
-	}
-  elseif (arg(0) . '/' . arg(1) . '/' . arg(2) === 'node/' . $node->nid . '/edit') {
+  if ($is_new) {
+    /*foreach ($shop_cart->data() as $field_name => $val) {
+        if (!isset($node->{$field_name}) && !in_array($field_name, array('changed', 'created', 'uid', 'nid', 'vid', 'menu', 'shop_cart', 'log', 'date', 'form_build_id', 'form_token', 'form_id', 'path', 'op', 'validated', 'is_new', 'timestamp', 'tnid', 'translate', 'language',), TRUE)) {
+            $node->{$field_name} = $val;
+        }
+    }*/
+  }
+  if (!$is_new && arg(0) . '/' . arg(1) . '/' . arg(2) === 'node/' . $node->nid . '/edit') {
     drupal_set_title(t('Edit %title', array('%title' => $node->title)), PASS_THROUGH);
   }
 
-	/////// ORDER_CONTENT extra-field
+  /////// ORDER_CONTENT extra-field
   $form['order_content'] = array(
       '#type' => 'item',
       '#id' => 'order-form-order-content',
@@ -779,7 +803,10 @@ function order_form($node, &$form_state) {
 	);
 
   $required = addons_extra_field_get_settings('node', 'order', 'form', NULL, 'order_information', 'required');
-  $required = $required && array_filter($required) ? $required : drupal_map_assoc(array('phone'));
+  $required = $required ?? drupal_map_assoc(array('phone'));
+
+  $enabled = addons_extra_field_get_settings('node', 'order', 'form', NULL, 'order_information', 'enabled');
+  $enabled = $enabled ?? drupal_map_assoc(array('lfm', 'phone', 'mail'));
 
 	$form['order_information']['recipient_fields'] = array(
 		'#tree' => TRUE,
@@ -789,6 +816,7 @@ function order_form($node, &$form_state) {
 		'lfm' => array(
 			'#type' => 'textfield',
       '#title' => t('Recipient'),
+      '#access' => !empty($enabled['lfm']),
       '#required' => !empty($required['lfm']),
 			'#description' => t('Type first name and last name or organisation name'),
       '#attributes' => array('class' => array('form-text-lfm'))
@@ -796,16 +824,18 @@ function order_form($node, &$form_state) {
 		'mail' => array(
 			'#type' => 'email',
 			'#title' => t('E-mail'),
+      '#access' => !empty($enabled['mail']),
       '#required' => !empty($required['mail']),
 		),
     'phone' => array(
       '#type' => 'phone',
       '#title' => t('Phone'),
+      '#access' => !empty($enabled['phone']),
       '#required' => !empty($required['phone']),
     ),
 	);
 
-  // IKW: При создании заказа пользователем с Ролями: Админ, Агент, Менеджер не заполнять поле получатель по умолчанию
+	// IKW: При создании заказа пользователем с Ролями: Админ, Агент, Менеджер не заполнять поле получатель по умолчанию
   if (empty($node->nid) && !user_access('administer moneys')) {
     foreach (array('lfm', 'phone', 'mail') as $field) {
       if (!empty($node->recipient_fields[$field])) {
@@ -880,30 +910,12 @@ function _order_form_customer_ajax($form, &$form_state) {
   // node.pages.inc.
   $uid = $form_state['values']['customer'];
   $customer = $uid && ctype_digit($uid . '') ? user_load($uid) : NULL;
-//  $node = $form_state['build_info']['args'][0];
 
   $recipient_fields = &$form['order_information']['recipient_fields'];
   $recipient_fields['lfm']['#value'] = $customer ? format_username($customer) : '';
   $recipient_fields['phone']['#value'] = !empty($customer->phone) ? $customer->phone : '';
   $recipient_fields['mail']['#value'] = $customer ? $customer->mail : '';
 
-//  $order_information = drupal_render($form['order_information']);
-//  $order_information_id = $form['order_information']['recipient_fields']['#id'];
-
-//  $shop_cart = shop_cart($uid, $node);
-//  $form['order_content'] = array(
-//    '#type' => 'item',
-//    '#id' => 'order-form-order-content',
-//  ) + order_shop_cart_form(array(), $form_state, $shop_cart, $node);
-//
-//  $order_content = drupal_render($form['order_content']);
-//  $order_content_id = $form['order_content']['#id'];
-
-//  $commands = array();
-//  $commands[] = ajax_command_replace('#' . $order_information_id, $order_information);
-//  $commands[] = ajax_command_replace('#' . $order_content_id, $order_content);
-
-//  return array('#type' => 'ajax', '#commands' => $commands);
   return $form['order_information']['recipient_fields'];
 }
 
@@ -912,16 +924,18 @@ function _order_form_customer_ajax($form, &$form_state) {
 * Implements hook_form_alter().
 */
 function order_form_alter(&$form, &$form_state, $form_id) {
-	if ($form_id == 'order_node_form') {
-		if (!isset($form['actions']['delete']['#access']) || $form['actions']['delete']['#access']) {
-			$form['actions']['delete']['#access'] = user_access('administer moneys');
-		}
-		$form['language'] = array(
-			'#type' => 'value',
-			'#value' => LANGUAGE_NONE,
-		);
-		if (empty($form['#node']->nid)) {
-			$form['actions']['submit']['#value'] = t('Confirm order');
+  if ($form_id == 'order_node_form') {
+    if (!isset($form['actions']['delete']['#access']) || $form['actions']['delete']['#access']) {
+      $form['actions']['delete']['#access'] = user_access('administer moneys');
+    }
+    $form['language'] = array(
+      '#type' => 'value',
+      '#value' => LANGUAGE_NONE,
+    );
+    if (empty($form['#node']->nid)) {
+      $form['actions']['submit']['#value'] = t('Confirm order');
+      //@see personal_data_agreement module
+      $form['#personal_data_agreement'] = array('group_name' => 'actions', 'button_name' => 'submit');
       /* IKW: $form['actions']['cancel'] = array(
         '#type' => 'link',
         '#title' => t('Cancel'),
@@ -930,7 +944,7 @@ function order_form_alter(&$form, &$form_state, $form_id) {
           'class' => array('form-submit',),
         ),
       );*/
-		}
+    }
 
     if (($idx = array_search('node_form_submit', $form['actions']['submit']['#submit'], TRUE)) === FALSE) {
       array_unshift($form['actions']['submit']['#submit'], '_order_node_form_submit');
@@ -938,7 +952,7 @@ function order_form_alter(&$form, &$form_state, $form_id) {
     else {
       $form['actions']['submit']['#submit'][$idx] = '_order_node_form_submit';
     }
-	}
+  }
 }
 
 
@@ -946,25 +960,22 @@ function order_form_alter(&$form, &$form_state, $form_id) {
 * Wrapper for standard node_form_submit() overriden in order_form_alter()
 */
 function _order_node_form_submit($form, &$form_state) {
-  $uid = arg(0) === 'user' && arg(1) && arg(2) === 'shop' ? arg(1) : NULL;
-
-	$shop_cart = shop_cart($uid, !empty($form['#node']) ? $form['#node'] : NULL);
-
-  if ($is_new = empty($form['#node']->nid)) {
+  $is_new = empty($form['#node']->nid);
+	$shop_cart = shop_cart(NULL, NULL, $form['#node']);
+  if ($is_new) {
+    // Do not order items with zero qty, but save it to new cart @see end of function
     $keep_items = $shop_cart->items;
     $shop_cart->items = array();
     foreach ($form_state['values']['shop_cart']['items'] as $key => $item) {
       if ($item['qty']) {
         unset($keep_items[$key]);
-        $shop_cart->items[$key] = (object)$item;
+        $shop_cart->set($item['entity_type'], $item['entity_id'], $item['snapshot_id'], $item['qty']);//items[$key] = (object)$item;
       }
     }
-    $shop_cart->calc_total();
   }
   else {
     order_shop_cart_form_submit($form, $form_state);
   }
-
   if ($shop_cart->is_empty()) {
     form_error($form['order_content'], t('Cart is empty, You can not checkout order without goods.'));
   }
@@ -987,8 +998,14 @@ function _order_node_form_submit($form, &$form_state) {
     $form_state['values']['customer'] = $form_state['values']['customer'] === '' ? NULL : $form_state['values']['customer'];
 
     node_form_submit($form, $form_state);
-
+    
     if ($form_state['nid'] && ($node = node_load($form_state['nid']))) {
+      
+      // bugfix. ['vid'] is NULL here, by this reason with i18n_node module node will re-saved incorrectly
+      $form_state['values']['vid'] = empty($form_state['values']['vid']) ? $node->vid : $form_state['values']['vid'];
+      $form_state['vid'] = empty($form_state['vid']) ? $node->vid : $form_state['vid'];
+      
+      
       //Without cache clear the node field cache will be incorrect (empty).
       cache_clear_all("field:node:{$node->nid}", 'cache_field', TRUE);
       if ($is_new) {
@@ -1026,17 +1043,23 @@ function _order_node_form_submit($form, &$form_state) {
       user_cookie_save(array('mail' => $_COOKIE['Drupal_visitor_mail'] = $form_state['values']['recipient_fields']['mail']));
     }
     if (!user_access('submit orders')) {
-      $_GET['destination'] = 'user' . (empty($_COOKIE['Drupal_visitor_mail']) ? '/register' : '') . '?destination=shop/cart/checkout/' . drupal_hmac_base64('shop-cart-checkout', $shop_cart->cart_id . drupal_get_private_key() . drupal_get_hash_salt());
+      $_GET['destination'] = 'user' . (empty($_COOKIE['Drupal_visitor_mail']) ? '/register' : '') . '?destination=shop/cart/' . $shop_cart->shop_id . '/checkout/' . drupal_hmac_base64('shop-cart-checkout', $shop_cart->currentKey() . drupal_get_private_key() . drupal_get_hash_salt());
     }
   }
 
   if ($is_new && $keep_items) {
-    $new_shop_cart = shop_cart($uid, NULL, NULL, TRUE);
+    $new_shop_cart = shop_cart($form['#node']->shop_id, $shop_cart->uid);
     foreach ($keep_items as $key => $item) {
       $new_shop_cart->set($item->entity_type, $item->entity_id, $item->snapshot_id, $item->qty);
     }
   }
+}
 
-  $form_state['values']['shop-cart-order'] = TRUE;
+function order_shop_delivery_get_entity($order, $shop_cart) {
+  if ($order === NULL && module_exists('organisations_shop') && ($org = organisation_from_shop_id($shop_cart->shop_id, TRUE))) {
+    return $org;
+  }
+
+  return $order;
 }
 

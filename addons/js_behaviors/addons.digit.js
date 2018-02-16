@@ -46,7 +46,7 @@
         */
         function sum($el, val) {
           if (!$el.attr('readonly')) {
-            if ($el.val() != '' || $el.is(':required') || val) {
+            if ($el.val() != '' || val) {
               var result = parseFloat($el.val().replace(/,/g, '.').replace(/[^\d\.\-]/g, '')) + (val * 1);
               if (isNaN(result) || result < min) {
                 result = min;

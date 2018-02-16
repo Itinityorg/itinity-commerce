@@ -13,7 +13,7 @@
 			}
 
 			//colorizing color_field checkboxes
-			$('span.color_me', context).once('color_me', function () {
+			$('form .form-item span.color_me', context).once('color_me', function () {
 				$(this).css({
 					'border-left-color': '#' + $(this).attr('data')
 				});

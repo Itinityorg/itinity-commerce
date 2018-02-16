@@ -81,7 +81,7 @@
 
         $('a.entity-selector-clear-link', $el).bind('click.entity_selector', function (e) {
           if (!$input.attr('disabled') && !$input.attr('readonly')) {
-            $input.focus().val('').blur().change();
+            $input.focus().val('').keyup().blur().change();
           }
           e.preventDefault();
         });

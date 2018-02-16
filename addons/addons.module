@@ -232,12 +232,15 @@ function addons_form_alter(&$form, &$form_state, $form_id) {
       );
       $link_uri = 'admin/structure/field/custom-view-mode/' . $form['#entity_type'] . '/';
       $link_opts = array('query' => $dest, 'attributes' => array('class' => array('ajax-popup',), 'target' => '_blank',),);
-      foreach ($form['modes']['view_modes_custom']['#options'] as $idx => $opt) {
-        if (preg_match('/^addons_/', $idx)) {
-          $form['modes']['view_modes_custom']['#options'][$idx] .= ' <small>' . l(t('edit'), $link_uri . $idx, $link_opts);
-          $form['modes']['view_modes_custom']['#options'][$idx] .= '&nbsp;' . l(t('delete'), $link_uri . $idx . '/delete', $link_opts) . '</small>';
+      if (!empty($form['modes']['view_modes_custom']['#options'])) {
+        foreach ($form['modes']['view_modes_custom']['#options'] as $idx => $opt) {
+          if (preg_match('/^addons_/', $idx)) {
+            $form['modes']['view_modes_custom']['#options'][$idx] .= ' <small>' . l(t('edit'), $link_uri . $idx, $link_opts);
+            $form['modes']['view_modes_custom']['#options'][$idx] .= '&nbsp;' . l(t('delete'), $link_uri . $idx . '/delete', $link_opts) . '</small>';
+          }
         }
       }
+
     }
   }
 
@@ -690,34 +693,30 @@ function addons_field_formatter_prepare_view($entity_type, $entities, $field, $i
 /* Examples:::
 
 // Example hook. Returns settings sub form (if this hook defined, you will see gear in admin/structure/types/manage/~~~/display page)
-function hook_extra_field_formatter_settings_form($entity_type, $bundle, $mode, $field_name, $settings) {
+function hook_extra_field_formatter_settings_form($entity_type, $bundle, $field_name, $settings, $view_mode) {
 	$form = array();
-	if ($mode === 'display') {
-		if ($field_name == 'my_extra_field') {
-			$form = array(
-				'font_size' => array(
-					'#type' => 'textfield',
-					'#title' => t('Font size in my_extra_field field'),
-					'#default_value' => isset($settings['font_size']) ? $settings['font_size'] : NULL,
-				),
-			);
-		}
-	}
+
+  if ($field_name == 'my_extra_field') {
+    $form = array(
+      'font_size' => array(
+        '#type' => 'textfield',
+        '#title' => t('Font size in my_extra_field field'),
+        '#default_value' => isset($settings['font_size']) ? $settings['font_size'] : NULL,
+      ),
+    );
+  }
 	return $form;
 }
 // Example hook. Returns summary information about current settings of extra field in admin/structure/types/manage/~~~/display form
-function hook_extra_field_formatter_settings_summary($entity_type, $bundle, $mode, $field_name, $settings) {
-	if ($mode === 'display') {
-		if ($field_name == 'my_extra_field') {
-			$output = t('Font size in my_extra_field field') . ': ' . (isset($settings['font-size']) ? $settings['font-size'] : t('Default'));
-			return $output;
-		}
-	}
+function hook_extra_field_formatter_settings_summary($entity_type, $bundle, $field_name, $settings) {
+  if ($field_name == 'my_extra_field') {
+    $output = t('Font size in my_extra_field field') . ': ' . (isset($settings['font-size']) ? $settings['font-size'] : t('Default'));
+    return $output;
+  }
 }
 
 
 function hook_extra_field_formatter_settings_form_alter(&$settings_form, $entity_type, $bundle) {
-	m($settings_form['#mode']); // 'display' or 'form'
 	m($settings_form['#view_mode']); // 'teaser', 'default', 'full', etc
 	m($settings_form['#extra_name']); // name of extra field
 	m($settings_form['#extra_settings']); // actual settings of extra field
@@ -1038,12 +1037,12 @@ function addons_form_field_ui_display_overview_form_alter(&$form, &$form_state, 
 				$settings_form = array();
 				foreach (module_implements('extra_field_formatter_settings_form') as $module) {
 					$fn = $module . '_extra_field_formatter_settings_form';
-					if ($subform = $fn($form['#entity_type'], $form['#bundle'], 'display', $name, $settings)) {
+					if ($subform = $fn($form['#entity_type'], $form['#bundle'], $name, $settings, $form['#view_mode'])) {
 						$settings_form += $subform;
 					}
 				}
 				if ($settings_form) {
-					$settings_form += array('#mode' => 'display', '#view_mode' => $form['#view_mode'], '#extra_name' => $name, '#extra_settings' => $settings);
+					$settings_form += array('#view_mode' => $form['#view_mode'], '#extra_name' => $name, '#extra_settings' => $settings);
 					drupal_alter('extra_field_formatter_settings_form', $settings_form, $form['#entity_type'], $form['#bundle']);
 				}
 				if ($settings_form
@@ -1102,12 +1101,12 @@ function addons_form_field_ui_display_overview_form_alter(&$form, &$form_state, 
 					}
           else {
 						// Display a summary of the current formatter settings.
-						//$summary = module_invoke($extra_field_module, 'extra_field_formatter_settings_summary', $form['#entity_type'], $bundle, 'display', $name, $settings);//module_invoke($formatter['module'], 'field_formatter_settings_summary', $field, $instance, $view_mode);
+						//$summary = module_invoke($extra_field_module, 'extra_field_formatter_settings_summary', $form['#entity_type'], $bundle, $name, $settings);//module_invoke($formatter['module'], 'field_formatter_settings_summary', $field, $instance, $view_mode);
 
 
 						$summary = array();
 						foreach (module_implements('extra_field_formatter_settings_summary') as $module) {
-							if ($data = module_invoke($module, 'extra_field_formatter_settings_summary', $form['#entity_type'], $form['#bundle'], 'display', $name, $settings)) {
+							if ($data = module_invoke($module, 'extra_field_formatter_settings_summary', $form['#entity_type'], $form['#bundle'], $name, $settings)) {
 								$summary[] = $data;
 							}
 						}
@@ -1333,9 +1332,12 @@ function addons_entity_view_alter(&$build, $type) {
       if (isset($build[$field_name]['#attributes']['class']) && !is_array($build[$field_name]['#attributes']['class'])) {
         $build[$field_name]['#attributes']['class'] = array($build[$field_name]['#attributes']['class']);
       }
-      $build[$field_name]['#attributes']['class'][] = drupal_html_class('extra-field-' . $field_name);
-      if (!empty($field['label_display']) && !empty($field['label'])) {
-        $build[$field_name]['#title'] = $field['label'];
+      if (isset($build[$field_name])) {
+        $build[$field_name]['#attributes']['class'][] = drupal_html_class('extra-field-' . $field_name);
+
+        if (!empty($field['label_display']) && !empty($field['label'])) {
+          $build[$field_name]['#title'] = $field['label'];
+        }
       }
       if (!empty($field_bundle_settings['extra_fields']['display'][$field_name][$build['#view_mode']]['label'])) {
         $build[$field_name]['#title'] = $field_bundle_settings['extra_fields']['display'][$field_name][$build['#view_mode']]['label'];

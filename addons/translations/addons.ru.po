@@ -80,8 +80,8 @@ msgstr "<БЕЗЫМЯННЫЙ>"
 
 
 #: addons.module:462
-msgid "Invalid value in field !field. Type number of existing material."
-msgstr "Неправильное значение в поле !field. Укажите идентификатор существующего материала."
+msgid "Invalid value in field !field. Type number of existing object."
+msgstr "Неправильное значение в поле !field. Укажите идентификатор существующего объекта."
 
 #: addons.module:466
 msgid "Non existing material in !field field."
@@ -389,4 +389,15 @@ msgstr "--- НЕСУЩЕСТВУЮЩИЙ ОБЪЕКТ #@num ---"
 
 msgid "Custom field name"
 msgstr "Свое название поля"
+
+
+
+msgid "@entity_type \"%name\" does not matches to specified conditions in %field field."
+msgstr "@entity_type \"%name\" не соответствует определенным условиям в поле %field."
+
+
+msgid "%phone is not a mobile phone"
+msgstr "Телефон %phone не является мобильным номером"
+
+
 

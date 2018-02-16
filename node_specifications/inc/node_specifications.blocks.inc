@@ -46,13 +46,42 @@ function node_specifications_filters_block($form, &$form_state, $nids = array(),
     // price
     if (!empty($_GET['p']) || $mode === 'page' || !$d_options || !empty($d_options['price']['show'])) {
       $price = cache_get('product_price_' . sha1(implode('.', $nids)));
+
       if (empty($price) && $nids) {
-        // query max/min values for price
-        $q = db_query('SELECT price FROM {shop_index} WHERE entity_type = \'node\' AND entity_id IN(:nids)', array(':nids' => $nids))->fetchCol();
-        if (!empty($q)) {
-          $price = array('max' => max($q), 'min' => min($q),);
-          cache_set('product_price_' . sha1(implode('.', $nids)), $price);
+        if (module_exists('multicurrency')) {
+          $money_currency_info = money_currency_info();
+          $money_currency_info_enabled = array_filter(array_column($money_currency_info, 'enabled', 'id'));
+
+          $q = db_select('shop_index', 'si')
+            ->fields('si', array('price', 'currency'))
+            ->condition('si.entity_type', 'node')
+            ->condition('si.entity_id', $nids)
+            ->condition('si.currency', array_keys($money_currency_info_enabled))
+            ->execute()->fetchAll();
+
+          $max = NULL;
+          $min = NULL;
+
+          if (!empty($q)) {
+            foreach ($q as $row) {
+              $rate = $money_currency_info[$row->currency]['rate'];
+              $converted_price = $row->price * $rate;
+
+              $max = is_null($max) || ($converted_price > $max) ? $converted_price : $max;
+              $min = is_null($min) || ($converted_price < $min) ? $converted_price : $min;
+            }
+            $price = array('max' => $max, 'min' => $min,);
+            cache_set('product_price_' . sha1(implode('.', $nids)), $price);
+          }
         }
+        else {
+          $q = db_query('SELECT price FROM {shop_index} WHERE entity_type = \'node\' AND entity_id IN(:nids)', array(':nids' => $nids))->fetchCol();
+          if (!empty($q)) {
+            $price = array('max' => max($q), 'min' => min($q),);
+            cache_set('product_price_' . sha1(implode('.', $nids)), $price);
+          }
+        }
+        // query max/min values for price
       }
       elseif (isset($price->data)) {
         $price = $price->data;
@@ -217,13 +246,41 @@ function node_specifications_filters_block($form, &$form_state, $nids = array(),
           }
 
           if ($elements) {
+
+            if ($arg[0] === 'catalog' && isset($arg[1]) && is_numeric($arg[1])) {
+              $url_parts = $arg;
+            } else {
+              $destination = drupal_get_destination()['destination'] ?? null;
+              $url_parts = explode('/', $destination);
+            }
+            $url_parts_count = count($url_parts);
+
+            if ($url_parts_count < 3 && $specification->vid !== null) {
+              unset($form['filters']['f'][$nsid]);
+              continue;
+            }
+
+            if ($url_parts_count > 2) {
+              $tmp = $url_parts;
+              $tid = array_pop($tmp);
+              $term = db_query('SELECT * FROM {taxonomy_term_hierarchy} WHERE tid = :tid',
+                array(':tid' => $tid))->fetchAssoc();
+              if ($term) {
+                if ($specification->vid !== null && !in_array($term['tid'], $specification->tids) && !in_array($term['parent'], $specification->tids)) {
+                  unset($form['filters']['f'][$nsid]);
+                  continue;
+                }
+              }
+            }
+
+
             $form['filters']['f'][$nsid][$delta] = array(
                 '#type' => 'fieldset',
                 '#title' => $field['title'],
                 '#collapsible' => empty($val) && empty($d_options[$nsid . '/' . $delta]['expanded']),
                 '#collapsed' => $mode !== 'page',
                 '#description' => !empty($field['hint']) ? filter_xss_admin($field['hint']) : '',
-              ) + $elements;
+            ) + $elements;
           }
         }
 
@@ -240,6 +297,7 @@ function node_specifications_filters_block($form, &$form_state, $nids = array(),
       $vids[] = $v[1];
     }
   }
+
   $vocabs = taxonomy_vocabulary_load_multiple($vids);
   $current_tid = NULL;
 
@@ -247,12 +305,11 @@ function node_specifications_filters_block($form, &$form_state, $nids = array(),
     $current_term = taxonomy_term_load(end($arg));
     if (is_object($current_term) && !empty($vocabs) && !empty($vocabs[$current_term->vid])) {
       $form['filters']['t'] = array(
-        '#type' => 'fieldset',
-        '#title' => $vocabs[$current_term->vid]->name . ' : ' . $current_term->name,
+        '#type' => 'markup',
       );
     }
   }
-  //elseif  (!empty($vids))  -  заменил элсеиф на иф чтоб показать доп настройки таксономий для greenwest Ruban
+  //elseif  (!empty($vids))  -  заменил elseif на if чтобы показать доп настройки таксономий для greenwest. Ruban
   if (!empty($vids)) {
     foreach ($vids as $vid) {
       $queried_tids = isset($_GET['t']) ? (array) $_GET['t'] : array();
@@ -273,18 +330,41 @@ function node_specifications_filters_block($form, &$form_state, $nids = array(),
             }
           }
         }
-        $form['filters']['t'][$vid] = array(
-          '#type' => 'fieldset',
-          '#title' => $vocabulary->name,
-          '#collapsible' => empty($d_options["t/$vid"]['expanded']) && !$founded_in_queried_tids,
-          '#collapsed' => TRUE,
-        );
-        $form['filters']['t'][$vid]['tid'] = array(
-          '#type' => 'select',
-          '#options' => $options,
-          '#empty_value' => '',
-          '#default_value' => $queried_tids,
-        );
+
+        /**
+         * Check the links of the current vocabulary.
+         * IKW: display these filters only on related vocabularies
+         *
+         * @see features_form_taxonomy_form_vocabulary_alter
+         */
+        $destination = drupal_get_destination()['destination'] ?? NULL;
+        $cid = arg(0, $destination) === 'catalog' ? preg_replace('/^(\d+).*/', '$1', arg(1, $destination)) : NULL; // arg(1, $destination) can be '8?t%5B2%5D=2'
+        $cid = $cid ? $cid : (isset($arg[1]) && $arg[0] === 'catalog' && is_numeric($arg[1]));
+        if ($cid) {
+          if ($catalog_object = catalog_object_load(is_numeric($cid) ? $cid : $arg[1])) {
+            foreach (field_info_fields() as $field) {
+              if (!empty($field['settings']['allowed_values'][0]['vocabulary'])
+                && $field['settings']['allowed_values'][0]['vocabulary'] == $vocabulary->machine_name) {
+                if (in_array($catalog_object->bundle, ($field['bundles']['node'] ?? array()))) {
+                  $form['filters']['t'][$vid] = array(
+                    '#type' => 'fieldset',
+                    '#title' => $vocabulary->name,
+                    '#collapsible' => empty($d_options["t/$vid"]['expanded']) && !$founded_in_queried_tids,
+                    '#collapsed' => TRUE,
+                  );
+                  $form['filters']['t'][$vid]['tid'] = array(
+                    '#type' => 'select',
+                    '#options' => $options,
+                    '#empty_value' => '',
+                    '#default_value' => $queried_tids,
+                  );
+                }
+              }
+            }            
+          }
+
+        }
+
       }
     }
   }
@@ -323,19 +403,44 @@ function node_specifications_filters_block($form, &$form_state, $nids = array(),
         $form['actions']['all_specifications'] = array(
           '#type' => 'submit',
           '#value' => t('All specifications'),
-          '#weight' => 10,
+          '#weight' => 10000,
         );
         break;
       }
     }
   }
 
-  if ($mode === 'block' && isset($d_options['count_col']) && !empty($d_options['count_col'])) {
-    foreach ($form['filters'] as $new => $key) {
-      if (is_array($key) && (count($key) > 1)) {
-        $form['filters'][$new]['#prefix'] = '<div class="inline-block-wrapper-' . $d_options['count_col'] . '">';
-        $form['filters'][$new]['#suffix'] = '</div>';
+  if ($mode === 'block' && !empty($d_options['count_col'])) {
+    if (!empty($form['filters']['f'])) {
+      foreach ($form['filters']['f'] as &$filters) {
+        if (is_array($filters) && (count($filters) > 1)) {
+          foreach ($filters as &$filter) {
+            if (is_array($filter) && (count($filter))) {
+              $filter['#prefix'] = '<div class="inline-block-wrapper-' . $d_options['count_col'] . '">';
+              $filter['#suffix'] = '</div>';
+            }
+          }
+        }
       }
+    }
+
+    if (!empty($form['filters']['t'])) {
+      foreach ($form['filters']['t'] as &$types) {
+        if (is_array($types) && (count($types) > 1)) {
+          $types['#prefix'] = '<div class="inline-block-wrapper-' . $d_options['count_col'] . '">';
+          $types['#suffix'] = '</div>';
+        }
+      }
+    }
+
+    if (!empty($form['filters']['p'])) {
+      $form['filters']['p']['#prefix'] = '<div class="inline-block-wrapper-' . $d_options['count_col'] . '">';
+      $form['filters']['p']['#suffix'] = '</div>';
+    }
+
+    if (!empty($form['filters']['in_stock'])) {
+      $form['filters']['in_stock']['#prefix'] = '<div class="inline-block-wrapper-' . $d_options['count_col'] . '">';
+      $form['filters']['#suffix'] = '</div>';
     }
   }
 

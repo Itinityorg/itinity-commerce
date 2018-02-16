@@ -63,6 +63,13 @@ function order_schema() {
 				'unsigned' => TRUE,
 				'not null' => TRUE,
 			),
+      'shop_id' => array(
+        'description' => 'Shop identifier (int, string, string+int), default is "0"',
+        'type' => 'varchar',
+        'length' => 255,
+        'not null' => TRUE,
+        'default' => '0', 
+      ),
 			'order_status' => array(
 				'description' => 'TODO: please describe this field!',
 				'type' => 'int',
@@ -86,7 +93,7 @@ function order_schema() {
 			'delivery_method' => array(
 				'description' => 'Delivery method',
 				'type' => 'varchar',
-				'length' => '64',
+				'length' => 64,
 				'not null' => FALSE,
 			),
 			'delivery_variant' => array(
@@ -105,10 +112,10 @@ function order_schema() {
       'delivery_price' => array(
         'description' => 'Frozen delivery cost for user chosed delivery method with params (only for completed orders)',
         'type' => 'numeric',
-        'not null' => TRUE,
-        'default' => 0,
-        'precision' => '30',
-        'scale' => '2',
+        'not null' => FALSE,
+        'default' => NULL,
+        'precision' => 30,
+        'scale' => 2,
       ),
       'delivery_params' => array(
         'description' => 'Serialized user data for delivery method (address, courier variant, warehouse point, postomat id, etc)',
@@ -118,7 +125,7 @@ function order_schema() {
 			'payment_method' => array(
 				'description' => 'Payment method',
 				'type' => 'varchar',
-				'length' => '64',
+				'length' => 64,
 				'not null' => FALSE,
 			),
 			'previous_state' => array(
@@ -160,8 +167,8 @@ function order_schema() {
 				'type' => 'numeric',
 				'not null' => TRUE,
 				'default' => 0,
-				'precision' => '30',
-        'scale' => '2',
+				'precision' => 30,
+        'scale' => 2,
       ),
       'order_discount_text' => array(
         'description' => 'Order discount text',
@@ -183,6 +190,7 @@ function order_schema() {
 			'is_paid' => array('is_paid',),
 			'user_ip' => array('user_ip',),
       'customer' => array('customer',),
+      'shop_id' => array('shop_id',),
 	  ),
 	);
 	return $schema;
@@ -284,13 +292,13 @@ function order_update_7029() {
 	db_change_field('shop_orders', 'payment_method', 'payment_method', array(
 		'description' => 'Payment method',
 		'type' => 'varchar',
-		'length' => '64',
+		'length' => 64,
 		'not null' => FALSE,
 	));
 	db_change_field('shop_orders', 'delivery_method', 'delivery_method', array(
 		'description' => 'Delivery method',
 		'type' => 'varchar',
-		'length' => '64',
+		'length' => 64,
 		'not null' => FALSE,
 	));
 	db_drop_index('shop_orders', 'nid');
@@ -381,8 +389,8 @@ function order_update_7035() {
     'type' => 'numeric',
     'not null' => TRUE,
     'default' => 0,
-    'precision' => '30',
-    'scale' => '2',  
+    'precision' => 30,
+    'scale' => 2,  
   ));
   db_add_field('shop_orders', 'delivery_params', array(
     'description' => 'Serialized user data for delivery method (address, courier variant, warehouse point, postomat id, etc)',
@@ -440,8 +448,8 @@ function order_update_7040() {
 			'type' => 'numeric',
 			'not null' => TRUE,
 			'default' => 0,
-			'precision' => '30',
-			'scale' => '2',
+			'precision' => 30,
+			'scale' => 2,
 		));
 	}
 
@@ -498,5 +506,35 @@ function order_update_7043() {
       ));
     }
   }
+}
+
+
+/**
+ * Change {shop_orders}.delivery_price
+ */
+function order_update_7044() {
+  db_change_field('shop_orders', 'delivery_price', 'delivery_price', array(
+    'description' => 'Frozen delivery cost for user chosed delivery method with params (only for completed orders)',
+    'type' => 'numeric',
+    'not null' => FALSE,
+    'default' => NULL,
+    'precision' => 30,
+    'scale' => 2,
+  ));
+}
+
+
+/**
+ * Add {shop_orders}.shop_id
+ */
+function order_update_7045() {
+  db_add_field('shop_orders', 'shop_id', array(
+    'description' => 'Shop identifier (int, string, string+int), default is "0"',
+    'type' => 'varchar',
+    'length' => 255,
+    'not null' => TRUE,
+    'default' => '0',  
+  ));
+  db_add_index('shop_orders', 'shop_id', array('shop_id',));
 }
 

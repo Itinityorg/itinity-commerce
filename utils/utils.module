@@ -33,13 +33,13 @@ function utils_boot() {
     $modules_enable = !empty($_GET['modules_enable']) ? array_filter(explode(',', preg_replace('/[^a-z0-9_,]/', '', strtolower($_GET['modules_enable'])))) : array();
     $modules_disable = !empty($_GET['modules_disable']) ? array_filter(explode(',', preg_replace('/[^a-z0-9_,]/', '', strtolower($_GET['modules_disable'])))) : array();
     if ($modules_enable || $modules_disable) {
-			
+
       // crutches:
 			defined('MAINTENANCE_MODE') || define('MAINTENANCE_MODE', 'update');
 			drupal_bootstrap(DRUPAL_BOOTSTRAP_FULL);
       // Prevent "Notice: Use of undefined constant LOCALE_LANGUAGE_NEGOTIATION_URL - assumed 'LOCALE_LANGUAGE_NEGOTIATION_URL'"
       require_once DRUPAL_ROOT . '/includes/locale.inc';
-      
+
       foreach ($modules_enable as $m) {
         if (module_exists($m)) {
           drupal_set_message('Module ' . $m . ' already enabled.', 'warning');
@@ -76,13 +76,13 @@ function utils_boot() {
       }
       menu_rebuild();
       unset($_GET['modules_enable'], $_GET['modules_disable']);
-      header('Location: ' . $_SERVER['PHP_SELF'] . ($_GET ? '?' . http_build_query($_GET) : ''), TRUE, 307);
+      header('Location: ' . $_SERVER['PHP_SELF'] . (isset($_GET['destination']) ? '?' . http_build_query(array('q' => $_GET['destination']))  : ($_GET ? '?' . http_build_query($_GET) : '')), TRUE, 307);
       exit;
 
 		}
 	}
-  
-  
+
+
 	// Store server http host information for using in other modules if possible
 
 	// Remove redundant information from host url (http protocol and port 80, https protocol and port 443)
@@ -92,7 +92,9 @@ function utils_boot() {
 	// write requested host information once per 24hrs
 	$active_http_hosts = variable_get('active_http_hosts', array());
 	if ($http_host && (empty($active_http_hosts[$http_host]) || ($active_http_hosts[$http_host] < (REQUEST_TIME - (3600 * 24))))) {
-		variable_set('active_http_hosts', array($http_host => REQUEST_TIME) + $active_http_hosts);
+    $active_http_hosts = array($http_host => REQUEST_TIME) + $active_http_hosts;
+    array_splice($active_http_hosts, 50);
+		variable_set('active_http_hosts', $active_http_hosts);
 	}
 
 
@@ -193,7 +195,7 @@ function utils_form_alter(&$form, &$form_state, $form_id) {
 			'#type' => 'select',
 			'#title' => t('Decimal marker'),
 			'#options' => array('.' => t('Decimal point'), ',' => t('Comma')),
-			'#default_value' => variable_get('site_default_decimal_separator', _utils_site_default_decimal_separator()),
+			'#default_value' => utils_get_decimal_separator(),
 			'#description' => t('The character users will input to mark the decimal point in forms.'),
 		);
 	}
@@ -204,7 +206,7 @@ function utils_form_alter(&$form, &$form_state, $form_id) {
 		// @see http://itinity.ru/node/1561
 		foreach (element_children($form['fields']) as $field) {
 			if (isset($form['fields'][$field]['format']['settings_edit_form']['settings']['decimal_separator'])) {
-				$form['fields'][$field]['format']['settings_edit_form']['settings']['decimal_separator']['#default_value'] = variable_get('site_default_decimal_separator', _utils_site_default_decimal_separator());
+				$form['fields'][$field]['format']['settings_edit_form']['settings']['decimal_separator']['#default_value'] = utils_get_decimal_separator();
 				$form['fields'][$field]['format']['settings_edit_form']['settings']['decimal_separator']['#disabled'] = TRUE;
 				$link = l(t('Regional settings'), '/admin/config/regional/settings');
 				$form['fields'][$field]['format']['settings_edit_form']['settings']['decimal_separator']['#description'] = t('This settings can be changed globally on !l page', array('!l' => $link));
@@ -220,7 +222,7 @@ function utils_form_alter(&$form, &$form_state, $form_id) {
 		if ($form['#field']['type'] === 'number_decimal' || $form['#field']['type'] === 'number_float') {
 			$form['field']['settings']['decimal_separator'] = array(
 				'#type' => 'value',
-				'#value' => variable_get('site_default_decimal_separator', _utils_site_default_decimal_separator()),
+				'#value' => utils_get_decimal_separator(),
 			);
 		}
 	}
@@ -235,7 +237,7 @@ function utils_field_display_alter(&$display, $context) {
 	// @see admin/config/regional/settings
 	// @see http://itinity.ru/node/1561
 	if ($display['type'] === 'number_decimal' || $display['type'] === 'number_float') {
-		$display['settings']['decimal_separator'] = variable_get('site_default_decimal_separator', _utils_site_default_decimal_separator());
+		$display['settings']['decimal_separator'] = utils_get_decimal_separator();
 	}
 }
 
@@ -250,7 +252,7 @@ function utils_field_widget_form_alter(&$element, &$form_state, $context) {
 
 	if (isset($context['field']['type'])) {
 		if ($context['field']['type'] === 'number_decimal' || $context['field']['type'] === 'number_float') {
-			$decimal_separator = variable_get('site_default_decimal_separator', _utils_site_default_decimal_separator());
+			$decimal_separator = utils_get_decimal_separator();
 			$delta = $context['delta'];
 			$langcode = $context['langcode'];
 			$field_name = $context['field']['field_name'];
@@ -290,6 +292,10 @@ function _utils_site_default_decimal_separator() {
 	else { // comma
 		return ',';
 	}
+}
+
+function utils_get_decimal_separator() {
+  return variable_get('site_default_decimal_separator', _utils_site_default_decimal_separator());
 }
 
 
@@ -539,40 +545,36 @@ function utils_make_gradient($start_color, $end_color, $count = 2) {
  *		Do not overwrite (default_)values in protected elements contains flag '#access' = FALSE
  */
 function utils_fill_form_defaults(&$form, $defaults = array(), $property_name = 'default_value', $safe = FALSE) {
-	if (!$defaults || !is_array($defaults) || empty($property_name)) {
+	if (!$defaults || !is_array($defaults) || !$property_name) {
 		return;
 	}
-	//$property_name = $property_name == 'default_value' || $property_name == 'value' ? $property_name : 'default_value';
 	foreach ($defaults as $key => $data) {
-		if (isset($form[$key]) && is_array($form[$key])) { // element exists?
-
-			if (!empty($form[$key]['#type']) && ($info = element_info($form[$key]['#type']))) { // this is valid form element?
-
-				if ($property_name == 'default_value' || $property_name == 'value') {
-					if (!$safe || (!isset($form[$key]['#access']) || $form[$key]['#access'])) { // NOT safe mode OR element not protected?
-
-						if (!empty($info['#input']) || in_array($form[$key]['#type'], array('text_format'))) { // element has support #(default_)value ?
-
-							if (!$safe || (!isset($form[$key]['#'.$property_name]))) { // NOT safe OR element allready has value?
-
-								if ($property_name == 'value' || !in_array($form[$key]['#type'], array('button', 'image_button', 'submit', 'value', ))) { // element has support '#default_value' ?
-
-									if (is_array($data) || (!in_array($form[$key]['#type'], array('checkboxes', /*'radios',*/ 'data',)))) {
-
-										$form[$key]['#'.$property_name] = $data;
-										// m($form[$key]);
+    // element exists?
+		if (isset($form[$key]) && is_array($form[$key])) {
+      // this is valid form element?
+			if (!empty($form[$key]['#type']) && ($info = element_info($form[$key]['#type']))) {
+				if ($property_name === 'default_value' || $property_name === 'value') {
+          // NOT safe mode OR element not protected?
+					if (!$safe || (!isset($form[$key]['#access']) || $form[$key]['#access'])) {
+            // element supports #(default_)value ?
+						if (!empty($info['#input']) || in_array($form[$key]['#type'], array('text_format'))) {
+              // NOT safe OR element allready contans [default_]value ?
+							if (!$safe || (!isset($form[$key]['#' . $property_name]))) {
+                // element has supports '#default_value' ?
+								if ($property_name === 'value' || !in_array($form[$key]['#type'], array('button', 'image_button', 'submit', 'value', ), TRUE)) { 
+									if (!$safe || is_array($data) || (!in_array($form[$key]['#type'], array('checkboxes', /*'radios',*/ 'date',)))) {
+										$form[$key]['#' . $property_name] = $data;
 									}
 								}
 							}
 						}
 					}
-				} else {
-					$form[$key]['#'.$property_name] = $data;
+				}
+        else {
+					$form[$key]['#' . $property_name] = $data;
 				}
 			}
-		}
-		if (is_array($data)) {
-			utils_fill_form_defaults($form[$key], $data, $property_name, $safe);
+      utils_fill_form_defaults($form[$key], $data, $property_name, $safe);
 		}
 	}
 }
@@ -759,6 +761,8 @@ function utils_valid_url($url) {
 	$regexp = "/^((?:ftp|https?):\/\/|)
 	(?:
 		(?:([\x{0430}-\x{044F}a-z0-9]+(-[\x{0430}-\x{044F}a-z0-9]+)*\.)+[\x{0430}-\x{044F}a-z]{2,})
+    |localhost
+    |((2(5[0-5]|[0-4]\d)|1\d\d|[1-9]\d|\d)\.){3}((2(5[0-5]|[0-4]\d)|1\d\d|[1-9]\d|\d))
 		|(?:\[(?:[0-9a-f]{0,4}:)*(?:[0-9a-f]{0,4})\])
 	)
 	(?::[0-9]+)?
@@ -1050,9 +1054,9 @@ function utils_process_html(&$variables) {
 }
 
 function utils_minify_js($js) {
-  utils_load_class('Minifier', FALSE);
+
 	//$t = microtime(TRUE);
-	$js = \jShrink\Minifier::minify($js, array(
+	$js = utils_load_class('Minifier', FALSE)::minify($js, array(
 		'flaggedComments' => FALSE,
 	));
 	//m(microtime(TRUE) - $t); // 6.41 sec
@@ -1086,7 +1090,7 @@ function utils_minify_css($css) {
 */
 function utils_module_implements_alter(&$implementations, $hook) {
   if ($hook === 'js_alter') {
-    // Move utils_js_alter() to the end of hooks queue 
+    // Move utils_(js|css)_alter() to the end of hooks queue 
     $group = $implementations['utils'];
     unset($implementations['utils']);
     $implementations['utils'] = $group;
@@ -1099,23 +1103,21 @@ function utils_module_implements_alter(&$implementations, $hook) {
 */
 function utils_js_alter(&$javascript) {
   // Minify js before aggregation by Drupal core.
-  if (variable_get('preprocess_js', FALSE) && variable_get('utils_minify_js', TRUE)) {
-    $new_js = array();
+  $js_dir = 'public://js';
+  if (variable_get('preprocess_js', FALSE) && variable_get('utils_minify_js', TRUE) && (is_dir($js_dir) || drupal_mkdir($js_dir))) {
+    $new_js = array();  
     // try to minify file and place it to public://js directory
     foreach ($javascript as $key => $data) {
-      if ($data['type'] === 'file' &&  $data['preprocess'] && preg_match('/(\.(min|pack(ed)?))?\.js$/i', $data['data'], $m) && empty($m[1]) && is_file($data['data'])) { // skip already minified files (.min.js)
-        $dest = 'public://js';
-        if (!is_file($path = $dest . '/' . md5($data['data']) . '.' . basename(preg_replace('/\.js$/i', '', $data['data'])) . '.min.js')) {
+      if ($data['type'] === 'file' && $data['preprocess'] && preg_match('/(\.(min|pack(ed)?))?\.js$/i', $data['data'], $m) && empty($m[1]) && is_file($data['data'])) { // skip already minified files (.min.js)
+        $dest = $js_dir . '/' . md5($data['data']) . '.' . basename(preg_replace('/\.js$/i', '', $data['data'])) . '.min.js';
+        if (!is_file($dest)) {
           try { // Wrap code into try/catch because jShrink class can throws exception and breaks site execution (e.g. on UTF8+BOM files such as ckeditor.js)
             $min = utils_minify_js(file_get_contents($data['data']));
             if ((defined('DEVMODE') && DEVMODE) || module_exists('programmer') || module_exists('devel')) {
               $min = "\n// This is minified copy of \"" . $data['data'] . "\" file. @See " . __FUNCTION__ . "(), line " . __LINE__ . ":\n$min\n";
             }
-            if (!is_dir($dest)) {
-              drupal_mkdir($dest);
-            }
-            if (file_unmanaged_save_data($min, $path, FILE_EXISTS_REPLACE)) {
-               $key = $data['data'] = $path;
+            if (file_unmanaged_save_data($min, $dest, FILE_EXISTS_REPLACE)) {
+              $key = $data['data'] = $dest;
             }
           }
           catch (Exception $e) {
@@ -1123,12 +1125,12 @@ function utils_js_alter(&$javascript) {
           }
         }
         else {
-          $key = $data['data'] = $path;
+          $key = $data['data'] = $dest;
         }
       }
       $new_js[$key] = $data;
     }
-    $javascript = $new_js;    
+    $javascript = $new_js;
   }
 }
 
@@ -1137,37 +1139,122 @@ function utils_js_alter(&$javascript) {
 * Helper func.
 * Simple load php class form utils/classes directory and optionally create new instance of class
 * returns instance of class or NULL
+* @param $class_name - name of class
+* @param $create_inssance - creates and returns instance of class or return only class name (needed for static classes or methods calls)
+* @another_params - arguments for class constructor
 */
 function utils_load_class($class_name, $create_instance = TRUE) {
+  $path = NULL;
   switch ($class_name) {
     case 'PHPExcel':
-      module_load_include('php', 'utils', 'classes/PHPExcel_1.8.0/PHPExcel');
-      if ($create_instance) {
-        return new PHPExcel();
-      }
+      $path = 'PHPExcel_1.8.0/PHPExcel.php';
     break;
     case 'Mobile_Detect':
-      module_load_include('php', 'utils', 'classes/Mobile_detect/Mobile_Detect');
-      if ($create_instance) {
-        return new Mobile_Detect();
-      }
+     $path = 'Mobile_detect/Mobile_Detect.php';
     break;
     case 'Emogrifier':
-      module_load_include('php', 'utils', 'classes/emogrifier/emogrifier');
-      if ($create_instance) {
-        return new \Pelago\Emogrifier();
-      }
+      $class_name = '\Pelago\Emogrifier';
+      $path = 'emogrifier/emogrifier.php';
     break;
-    case 'Minifier': // jShrink
-      module_load_include('php', 'utils', 'classes/jShrink/Minifier');
+    case 'Minifier':
+      $class_name = '\JShrink\Minifier';
+      $path = 'jShrink/Minifier.php';
+      $create_instance = FALSE;
     break;
-    case 'UtilsCSS': // CSS optimizer
-      module_load_include('inc', 'utils', 'classes/utils.css.class');
-      if ($create_instance) {
-        return new UtilsCSS();
-      }
+    case 'UtilsCSS':
+      $path = 'utils.css.class.inc';
+    break;
+    case 'scss':
+      $class_name = '\Leafo\ScssPhp\Compiler';
+      $path = 'scss/scss.inc.php';
+    break;
+    case 'QRcode':
+      $path = 'phpqrcode/qrlib.php';
+      $create_instance = FALSE;
     break;
   }
+  if ($path) {
+    require_once drupal_get_path('module', 'utils') . '/classes/' . $path;
+    if ($create_instance) {
+      $args = func_get_args();
+      unset($args[0], $args[1]);
+      return new $class_name(...$args);
+    } 
+    else {
+      return $class_name;
+    }    
+  }
+
+}
+
+/**
+* Implements hook_element_info_alter()
+*/
+function utils_element_info_alter(&$type) {
+  $type['styles']['#pre_render'][] = '_utils_pre_render_styles';
+}
+
+/**
+* pre_render callback for styles element type @see utils_element_info_alter()
+*/
+function _utils_pre_render_styles($elements) {
+  // Support scss stylesheets
+  $css_dir = 'public://css';
+  $scss_ext = 'scss';
+  if (is_dir($css_dir) || drupal_mkdir($css_dir)) {
+    static $scss;
+    if (!$scss) {
+      $scss = utils_load_class('scss');
+      $scss->setFormatter('Leafo\ScssPhp\Formatter\Nested');
+      $scss->registerFunction('url', function($args) { // Fix paths in url(abc.png) rules; @see below
+        while (is_array($args)) {
+          $args = end($args);
+        }
+        if (is_scalar($args)) {
+          return preg_replace_callback('/^(?![a-z]+:|\/+)(.+)$/i', '_drupal_build_css_path', $args);
+        }
+      });
+    }
+    foreach ($elements['#items'] as $key => $item) {
+      unset($elements['#items'][$key]);
+      if ($item['type'] === 'file' && $item['preprocess'] && preg_match("/\.$scss_ext$/i", $item['data']) && is_file($item['data'])) {
+        $dest = $css_dir . '/' . basename($item['data']) . '.css';
+        if (!is_file($dest)) {
+          $scss->setImportPaths($item['data']);
+
+          // Fix paths in url() rules. Copypaste from drupal_build_css_cache(); @see also $scss->registerFunction('url') above
+          $css_base_url = file_create_url($item['data']);
+          // Move to the parent.
+          $css_base_url = substr($css_base_url, 0, strrpos($css_base_url, '/'));
+          // Simplify to a relative URL if the stylesheet URL starts with the
+          // base URL of the website.
+          if (substr($css_base_url, 0, strlen($GLOBALS['base_root'])) == $GLOBALS['base_root']) {
+            $css_base_url = substr($css_base_url, strlen($GLOBALS['base_root']));
+          }
+          _drupal_build_css_path(NULL, $css_base_url . '/'); // overwrite static base path before $scss->registerFunction('url') will processed
+
+
+          try {
+            if ($compiled = $scss->compile(file_get_contents($item['data']), $item['data'])) {
+              if (file_unmanaged_save_data($compiled, $dest, FILE_EXISTS_REPLACE)) {
+                $key = $item['data'] = $dest;
+              }
+            }
+
+          }
+          catch (Exception $e) {
+            watchdog_exception('utils', $e, NULL, array(), WATCHDOG_ERROR, l(basename($item['data']), file_create_url($item['data'])));
+          }
+        }
+        else {
+          $key = $item['data'] = $dest;
+        }
+      }
+      $elements['#items'][$key] = $item;
+    }    
+  }
+
+  return $elements;
 }
 
 
@@ -1196,13 +1283,66 @@ function utils_alpha_to_num($alpha, $counter = 0) {
 }
 
 
+/**
+ * Remove emoji symbols from string.
+ */
+function utils_remove_emoji($string) {
+  module_load_include('inc', 'utils', 'utils.emoji');
+  return _utils_remove_emoji($string);
+}
 
 
+/**
+* QR-code generator
+* @param $text - input text
+* @param $format - output image format, 'png|svg|eps', default 'svg'. 
+*                 Hint: You can quickly insert svg content directly into html without <img src="url" /> + hook_menu() implementation.
+* @param $ec_level - Levels of error correction. Default is 'M' (middle). Use integer 0 .. 3 or string [LlMmQqHh] or class consts QR_ECLEVEL_[L|M|Q|H].
+* @param $points_size - size of dots in px. Decimals are supported. Default 4.
+* @param [$back|$fore]_color - output image colors.
+* @param $return - Return image as result or put to server response with headers.
+*/
+function utils_qr_encode($text, $format = 'svg', $ec_level = 'M', $points_size = 4, $back_color = 0xFFFFFF, $fore_color = 0x000000, $return = TRUE) {
 
+  $format = $format ? $format : 'svg';
+  $ec_level = isset($ec_level) ? $ec_level : 'M';
+  $points_size = $points_size ? $points_size : 4;
+  $back_color = isset($back_color) ? $back_color : 0xFFFFFF;
+  $fore_color = isset($fore_color) ? $fore_color : 0x000000;
 
+  if ($return) {
+    // Backup content-type header
+    $content_type_header_sent = NULL;
+    foreach (headers_list() as $h) {
+      if (stripos($h, 'content-type:') === 0) {
+        $content_type_header_sent = $h;
+      }
+    }
+    ob_start();    
+  }
+  $margin = 4; // internal margin, in dots (not px)
+  utils_load_class('QRcode', FALSE)::$format($text, FALSE, $ec_level, $points_size, $margin, FALSE, $back_color, $fore_color);
 
-
-
+  if ($return) {
+    $output = ob_get_contents();
+    ob_end_clean();
+    
+    // Restore allready sent headers or remove headers added by QRcode::svg() "Content-Type: image/svg+xml"
+    if ($content_type_header_sent) {
+      header($content_type_header_sent);
+    }
+    else {
+      header('Content-Type:'); // special crutches
+      header_remove('Content-Type');
+    }
+    if ($format === 'svg') {
+      $output = str_replace('<?xml ', '<!--xml ', $output);
+      $output = str_replace('/svg10.dtd">', '/svg10.dtd"-->', $output);
+      $output .= "\n<!--/xml-->\n";
+    }
+    return $output;
+  }
+}
 
 
 

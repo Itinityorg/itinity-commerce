@@ -12,15 +12,16 @@ function social_profile_admin_terms_of_service_form($form, &$form_state) {
     '#attributes' => array(
       'style' => 'text-align: right;',
     ),
+    //IKW: remove popup
     'link' => array(
       '#type' => 'link',
       '#title' => t('User agreement'),
       '#href' => 'agreement',
-      '#attributes' => array(
-        'class' => array('ajax-popup',),
-        'title' => t('Preview'),
-        'target' => '_blank',
-      ),    
+//      '#attributes' => array(
+//        'class' => array('ajax-popup',),
+//        'title' => t('Preview'),
+//        'target' => '_blank',
+//      ),
     ),
   );
   

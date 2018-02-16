@@ -8,8 +8,8 @@ define('ORDER_DEBUG', 0);
 
 
 /**
-* Definition of order statuses.
-*/
+ * Definition of order statuses.
+ */
 define('ORDER_STATUS_DELIVERY_ISSUED', 0);
 define('ORDER_STATUS_DELIVERY_PREPARED', 0x0001);
 define('ORDER_STATUS_DELIVERED', 0x0004);
@@ -21,93 +21,99 @@ require_once dirname(__FILE__) . '/order.mail.inc';
 
 
 /**
-* Implements hook_menu().
-*/
+ * Implements hook_menu().
+ */
 function order_menu() {
-	$items['shop/cart'] = array(
-		'title' => 'Shopping cart',
-		'page callback' => 'order_shop_cart_page',
-		'access arguments'	=> array('access content',),
-		'type' => MENU_CALLBACK,
-	);
-	$items['shop/order'] = $items['shop/cart']; // Legacy menu item duplicate. Keep it for SEO (e.g. existing settings in google analytics)
+  $items['shop/cart'] = array(
+    'title' => 'Shopping cart',
+    'page callback' => 'order_shop_cart_page',
+    'page arguments' => array(NULL, 2,), // optional shop_id
+    'access arguments' => array('access content',),
+    'type' => MENU_CALLBACK,
+  );
+  $items['shop/order'] = $items['shop/cart']; // Legacy menu item duplicate. Keep it for SEO (e.g. existing settings in google analytics)
 
-	$items['shop/cart/order'] = array(
-		'title' => 'Checkout order',
-		'page callback' => 'order_shop_cart_checkout_page',
-		'access arguments'	=> array('access content',),
-		'type' => MENU_CALLBACK,
-	);
+  $items['shop/cart/%/order'] = array(
+    'title' => 'Checkout order',
+    'page callback' => 'order_shop_cart_checkout_page',
+    'page arguments' => array(NULL, 2,), // shop_id required
+    'access arguments' => array('access content',),
+    'type' => MENU_CALLBACK,
+  );
 
 
-	$items['user/%user/shop']	= array(
-		'title' => 'Purchases and payments',
-		'page callback' => 'drupal_get_form',
-		'page arguments'	=> array('shop_orders_form', 1),
-		'access arguments'	=> array('edit own order content'),
-		'file' => 'order.admin.inc',
-		'type' => MENU_LOCAL_TASK,
-	);
+  $items['user/%user/shop'] = array(
+    'title' => 'Purchases and payments',
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('shop_orders_form', 1),
+    'access callback' => 'user_edit_access',
+    'access arguments' => array(1, ),
+//    'access arguments' => array('edit own order content'),
+    'file' => 'order.admin.inc',
+    'type' => MENU_LOCAL_TASK,
+  );
 
-	$items['user/%user/shop/orders']	= array(
-		'title' => 'Orders',
-		'access arguments'	=> array('edit own order content'),
-		'type' => MENU_DEFAULT_LOCAL_TASK,
-		'weight' => -10,
-	);
+  $items['user/%user/shop/orders'] = array(
+    'title' => 'Orders',
+    'access callback' => 'user_edit_access',
+    'access arguments' => array(1, ),
+//    'access arguments' => array('edit own order content'),
+    'type' => MENU_DEFAULT_LOCAL_TASK,
+    'weight' => -10,
+  );
 
-	$items['user/%user/shop/processed'] = array( // arg(3) == processed, @see shop_orders_form()
-		'title' => 'Processed',
+  $items['user/%user/shop/processed'] = array( // arg(3) == processed, @see shop_orders_form()
+    'title' => 'Processed',
     'title callback' => '_admin_shop_orders_processed_title_callback',
-		'page callback' => 'drupal_get_form',
-		'page arguments'	=> array('shop_orders_form', 1),
-		'access arguments'	=> array('edit own order content'),
-		'file' => 'order.admin.inc',
-		'type' => MENU_LOCAL_TASK,
-		'weight' => -9,
-	);
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('shop_orders_form', 1),
+    'access arguments' => array('edit own order content'),
+    'file' => 'order.admin.inc',
+    'type' => MENU_LOCAL_TASK,
+    'weight' => -9,
+  );
 
-	$items['user/%user/shop/cart']	= array(
-		'title' => 'Shopping cart',
-		'page callback' => 'order_shop_cart_page',
-		'page arguments' => array(1,),
-		'access callback' => 'user_edit_access',
-		'access arguments'	=> array(1,),
-		'type' => MENU_LOCAL_TASK,
-	);
+  $items['user/%user/shop/cart'] = array(
+    'title' => 'Shopping cart',
+    'page callback' => 'order_shop_cart_page',
+    'page arguments' => array(1, 4,), // 4 - optional shop_id
+    'access callback' => 'user_edit_access',
+    'access arguments' => array(1,),
+    'type' => MENU_LOCAL_TASK,
+  );
 
-	$items['user/%user/shop/cart/order']	= array(
-		'title' => 'Checkout order',
-		'page callback' => 'order_shop_cart_checkout_page',
-		'page arguments' => array(1,),
-		'access callback' => 'user_edit_access',
-		'access arguments'	=> array(1,),
-		'type' => MENU_CALLBACK,
-	);
+  $items['user/%user/shop/cart/%/order'] = array(
+    'title' => 'Checkout order',
+    'page callback' => 'order_shop_cart_checkout_page',
+    'page arguments' => array(1, 4,),
+    'access callback' => 'user_edit_access',
+    'access arguments' => array(1, 4,), // shop_id required
+    'type' => MENU_CALLBACK,
+  );
 
-	$items['admin/shop/orders'] = array(
-		'title' => 'Orders',
-		'page callback' => 'drupal_get_form',
-		'page arguments'	=> array('shop_orders_form'),
-		'access arguments'	=> array('bypass node access'),
-		'file' => 'order.admin.inc',
-		'type' => MENU_LOCAL_TASK,
-	);
-	$items['admin/shop/orders/list'] = array(
-		'title' => 'Order list',
-		'access arguments' => array('bypass node access'),
-		'type' => MENU_DEFAULT_LOCAL_TASK,
-		'weight' => -10,
-	);
+  $items['admin/shop/orders'] = array(
+    'title' => 'Orders',
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('shop_orders_form'),
+    'access arguments' => array('bypass node access'),
+    'file' => 'order.admin.inc',
+    'type' => MENU_LOCAL_TASK,
+  );
+  $items['admin/shop/orders/list'] = array(
+    'title' => 'Order list',
+    'access arguments' => array('bypass node access'),
+    'type' => MENU_DEFAULT_LOCAL_TASK,
+    'weight' => -10,
+  );
 
-	if (module_invoke('status', 'get_settings', 'node', 'order')) {
-		$items['admin/shop/orders/list']['title'] = 'In work';
+  if (module_invoke('status', 'get_settings', 'node', 'order')) {
+    $items['admin/shop/orders/list']['title'] = 'In work';
 
     $items['admin/shop/orders/processed'] = array(
       'title callback' => '_admin_shop_orders_processed_title_callback',
       'page callback' => 'drupal_get_form',
-      'page arguments'	=> array('shop_orders_form'),
-      'access arguments'	=> array('bypass node access'),
+      'page arguments' => array('shop_orders_form'),
+      'access arguments' => array('bypass node access'),
       'file' => 'order.admin.inc',
       'type' => MENU_LOCAL_TASK,
       'weight' => -9,
@@ -162,37 +168,37 @@ function order_menu() {
 //			'type' => MENU_LOCAL_TASK,
 //			'weight' => 10,
 //		);
-	}
+  }
 
-	$items['admin/config/shop/messages'] = array(
-		'title' => 'Messages',
-		'page arguments' => array('order_setting_recipients_form'),
-		'access arguments' => array('administer site configuration'),
-		'file' => 'order.mail.inc',
-		'weight' => 5,
-	);
+  $items['admin/config/shop/messages'] = array(
+    'title' => 'Messages',
+    'page arguments' => array('order_setting_recipients_form'),
+    'access arguments' => array('administer site configuration'),
+    'file' => 'order.mail.inc',
+    'weight' => 5,
+  );
 
-	if (!module_invoke('status', 'get_settings', 'node', 'order')) { // @see status.module
-		$items['node/%node/order_status'] = array(
-			'title' => 'Status',
-			'page callback' => 'drupal_get_form',
-			'page arguments' => array('_order_status_change_form', 1),
-			'access arguments' => array('administer moneys'),
-		);
-	}
+  if (!module_invoke('status', 'get_settings', 'node', 'order')) { // @see status.module
+    $items['node/%node/order_status'] = array(
+      'title' => 'Status',
+      'page callback' => 'drupal_get_form',
+      'page arguments' => array('_order_status_change_form', 1),
+      'access arguments' => array('administer moneys'),
+    );
+  }
 
-	$anonymous_perms = user_role_permissions(array(DRUPAL_ANONYMOUS_RID => user_role_load(DRUPAL_ANONYMOUS_RID)));
-	$anonymous_perms = reset($anonymous_perms);
-	if (!empty($anonymous_perms['submit orders'])) {
-		$items['shop/anonymous-auth/%order_by_number/%/%'] = array(
-			'title' => 'Temporary grant access to orders for anonymous users',
-			'page callback' => 'order_anonymous_auth',
-			'page arguments' => array(2, 3, 4),
-			'access callback' => 'user_is_anonymous',
-			'type' => MENU_CALLBACK,
-		);
-	}
-	return $items;
+  $anonymous_perms = user_role_permissions(array(DRUPAL_ANONYMOUS_RID => user_role_load(DRUPAL_ANONYMOUS_RID)));
+  $anonymous_perms = reset($anonymous_perms);
+  if (!empty($anonymous_perms['submit orders'])) {
+    $items['shop/anonymous-auth/%order_by_number/%/%'] = array(
+      'title' => 'Temporary grant access to orders for anonymous users',
+      'page callback' => 'order_anonymous_auth',
+      'page arguments' => array(2, 3, 4),
+      'access callback' => 'user_is_anonymous',
+      'type' => MENU_CALLBACK,
+    );
+  }
+  return $items;
 }
 
 
@@ -202,36 +208,36 @@ function _admin_shop_orders_processed_title_callback() {
 
 
 /**
-* Helper function.
-* Generate order access key for anonymous users. @see order_request_token_form() and order_anonymous_auth()
-*/
+ * Helper function.
+ * Generate order access key for anonymous users. @see order_request_token_form() and order_anonymous_auth()
+ */
 function _order_private_token($order_node, $timestamp = NULL) {
   return drupal_hmac_base64(($timestamp ? $timestamp : REQUEST_TIME) . ':' . $order_node->nid, drupal_get_hash_salt() . drupal_get_private_key());
 }
 
 
 /**
-* Page callback for /shop/anonymous-auth/%order_by_number/%/%
-* Grant temporary order view access using private url and redirect to node/nid
-*/
+ * Page callback for /shop/anonymous-auth/%order_by_number/%/%
+ * Grant temporary order view access using private url and redirect to node/nid
+ */
 function order_anonymous_auth($order_node, $token, $timestamp) {
-	if ($token && $timestamp && user_access('submit orders') && REQUEST_TIME - $timestamp <= ORDER_ANNONYMOUS_ACCESS_TIMEOUT) {
-		if (_order_private_token($order_node, $timestamp) === $token) {
-			if (!isset($_COOKIE['order-auth'][$order_node->nid]['timestamp']) || $_COOKIE['order-auth'][$order_node->nid]['timestamp'] < $timestamp) {
-				order_grant_temporary_access($order_node, $timestamp);
-			}
-		}
-	}
+  if ($token && $timestamp && user_access('submit orders') && REQUEST_TIME - $timestamp <= ORDER_ANNONYMOUS_ACCESS_TIMEOUT) {
+    if (_order_private_token($order_node, $timestamp) === $token) {
+      if (!isset($_COOKIE['order-auth'][$order_node->nid]['timestamp']) || $_COOKIE['order-auth'][$order_node->nid]['timestamp'] < $timestamp) {
+        order_grant_temporary_access($order_node, $timestamp);
+      }
+    }
+  }
   $uri = entity_uri('node', $order_node);
-	if ($_GET['q'] !== $uri['path']) {
-		drupal_goto($uri['path']);
-	}
+  if ($_GET['q'] !== $uri['path']) {
+    drupal_goto($uri['path']);
+  }
 }
 
 
 /**
-* Grant temporary order view access using cookies for anonymous user @see _order_node_form_submit()
-*/
+ * Grant temporary order view access using cookies for anonymous user @see _order_node_form_submit()
+ */
 function order_grant_temporary_access($order_node, $timestamp = NULL, $set_message = TRUE) {
   if ($new_token = _order_private_token($order_node, REQUEST_TIME)) {
     $timestamp = $timestamp ? $timestamp : REQUEST_TIME;
@@ -251,63 +257,66 @@ function order_grant_temporary_access($order_node, $timestamp = NULL, $set_messa
     }
   }
 }
+
 /**
-* Form callback.
-* Request temporary access to order for anonymous user
-*/
+ * Form callback.
+ * Request temporary access to order for anonymous user
+ */
 function order_request_token_form($form, &$form_state, $order_node = NULL) {
-	return array(
-		'#attributes' => array(
-			'class' => array('container-inline',),
-		),
-		'order_num' => array(
-			'#type' => 'textfield',
-			'#title' => t('Order number'),
-			'#required' => TRUE,
-			'#default_value' => $order_node ? $order_node->order_num : NULL,
-			'#size' => 10,
-		),
-		'actions' => array(
-			'#type' => 'actions',
-			'request' => array(
-				'#type' => 'submit',
-				'#value' => t('Get temporary access via e-mail'),
-			),
-		),
-	);
+  return array(
+    '#spam_protect' => TRUE,  // @see _spam_protect_form_needs_protection()
+    '#attributes' => array(
+      'class' => array('container-inline',),
+    ),
+    'order_num' => array(
+      '#type' => 'textfield',
+      '#title' => t('Order number'),
+      '#required' => TRUE,
+      '#default_value' => $order_node ? $order_node->order_num : NULL,
+      '#size' => 10,
+    ),
+    'actions' => array(
+      '#type' => 'actions',
+      'request' => array(
+        '#type' => 'submit',
+        '#value' => t('Get temporary access via e-mail'),
+      ),
+    ),
+  );
 
 }
 
 
 /**
-* Validate order_request_token_form
-*/
+ * Validate order_request_token_form
+ */
 function order_request_token_form_validate($form, &$form_state) {
-	if (user_is_logged_in()) {
-		form_error($form['actions']['request'], t('You already logged in'));
-	}
-	else {
-		if ($order_node = order_by_number_load($form_state['values']['order_num'])) {
+  if (user_is_logged_in()) {
+    form_error($form['actions']['request'], t('You already logged in'));
+  }
+  else {
+    if ($order_node = order_by_number_load($form_state['values']['order_num'])) {
       // IKW: DONT WANT IT:
-			// Do not allow request orders with registered owners or orders without recipient email.
-			/*if ($order_node->uid && user_load($order_node->uid)) {
-				form_error($form['order_num'], t('This order is attached to registered account. If you are is owner of this order, please go to !log-in-link', array('!log-in-link' => l(t('Log in'), 'user', array(
-					'query' => drupal_get_destination(),
-					'attributes' => array('class' => array('form-submit',)),
-				)))));
-			}
-			else*/if (empty($order_node->recipient_fields['mail'])) {
+      // Do not allow request orders with registered owners or orders without recipient email.
+      /*if ($order_node->uid && user_load($order_node->uid)) {
+        form_error($form['order_num'], t('This order is attached to registered account. If you are is owner of this order, please go to !log-in-link', array('!log-in-link' => l(t('Log in'), 'user', array(
+          'query' => drupal_get_destination(),
+          'attributes' => array('class' => array('form-submit',)),
+        )))));
+      }
+      else*/
+      if (empty($order_node->recipient_fields['mail'])) {
         form_error($form['order_num'], t('Order #@num not contains information about recipient email address.', array('@num' => $order_node->order_num)));
       }
       // Flood protection (5 requests per hour)
       elseif (!flood_is_allowed('order_view_request', 5, 3600)) {
         form_error($form['actions']['request'], t('You cannot submit request more than %limit orders in @interval. Try again later.', array('%limit' => 5, '@interval' => format_interval(3600))));
       }
-		}
-		else {
-			form_error($form['order_num'], t('Order #@num not found', array('@num' => $form_state['values']['order_num'],)));
-		}
-	}
+    }
+    else {
+      form_error($form['order_num'], t('Order #@num not found', array('@num' => $form_state['values']['order_num'],)));
+    }
+  }
 }
 
 
@@ -316,33 +325,33 @@ function order_request_token_form_validate($form, &$form_state) {
  * Send temporary private access link to anonymous owner of order node.
  */
 function order_request_token_form_submit($form, &$form_state) {
-	if (($order_node = order_by_number_load($form_state['values']['order_num'])) && !empty($order_node->recipient_fields['mail'])) {
-		flood_register_event('order_view_request', 3600);
-		drupal_mail('order', 'request_anonymous_link', $order_node->recipient_fields['mail'], $GLOBALS['language'], array(
-			'order' => $order_node,
-			'url' => url('shop/anonymous-auth/' . $order_node->order_num . '/' . _order_private_token($order_node) . '/' . REQUEST_TIME, array('absolute' => TRUE, 'alias' => TRUE,)),
-		));
-		drupal_set_message(t('Message with instructions for access to order #@num was sent to your e-mail address.', array('@num' => $order_node->order_num,)));
-		$_GET['destination'] = '';
-	}
+  if (($order_node = order_by_number_load($form_state['values']['order_num'])) && !empty($order_node->recipient_fields['mail'])) {
+    flood_register_event('order_view_request', 3600);
+    drupal_mail('order', 'request_anonymous_link', $order_node->recipient_fields['mail'], $GLOBALS['language'], array(
+      'order' => $order_node,
+      'url' => url('shop/anonymous-auth/' . $order_node->order_num . '/' . _order_private_token($order_node) . '/' . REQUEST_TIME, array('absolute' => TRUE, 'alias' => TRUE,)),
+    ));
+    drupal_set_message(t('Message with instructions for access to order #@num was sent to your e-mail address.', array('@num' => $order_node->order_num,)));
+    $_GET['destination'] = '';
+  }
 }
 
 
 /**
-* Implements hook_block_view_alter()
-*/
+ * Implements hook_block_view_alter()
+ */
 function order_block_view_alter(&$data, $block) {
-	// Inject request temporary access form for order into main content Only for anonymous users on forbidden "node/123" order view pages
-	if ($block->module === 'system' && $block->delta === 'main') {
-		if (!user_is_logged_in()) {
-			$menu_item = menu_get_item();
-			if (isset($menu_item['access']) && !$menu_item['access'] && $menu_item['path'] === 'node/%') {
-				if (($nid = preg_replace('/^node\/(\d+)$/', '$1', $menu_item['href'])) && user_access('submit orders') && ($node = node_load($nid)) && $node->type === 'order') {
-					$data['content']['order_request_token_form'] = drupal_get_form('order_request_token_form', $node);
-				}
-			}
-		}
-	}
+  // Inject request temporary access form for order into main content Only for anonymous users on forbidden "node/123" order view pages
+  if ($block->module === 'system' && $block->delta === 'main') {
+    if (!user_is_logged_in()) {
+      $menu_item = menu_get_item();
+      if (isset($menu_item['access']) && !$menu_item['access'] && $menu_item['path'] === 'node/%') {
+        if (($nid = preg_replace('/^node\/(\d+)$/', '$1', $menu_item['href'])) && user_access('submit orders') && ($node = node_load($nid)) && $node->type === 'order') {
+          $data['content']['order_request_token_form'] = drupal_get_form('order_request_token_form', $node);
+        }
+      }
+    }
+  }
 }
 
 
@@ -350,43 +359,43 @@ function order_block_view_alter(&$data, $block) {
  * Implements hook_menu_alter().
  */
 function order_menu_alter(&$items) {
-	$items['node/add/order']['access callback'] = '_order_node_add_access';
-	unset($items['user/%user/content/order']); // @see social_profile.module
+  $items['node/add/order']['access callback'] = '_order_node_add_access';
+  unset($items['user/%user/content/order']); // @see social_profile.module
 }
 
 
 /**
-* Access callback for /node/add/order @see order_menu_alter()
-*/
+ * Access callback for /node/add/order @see order_menu_alter()
+ */
 function _order_node_add_access() {
-	return user_access('administer moneys');// || node_access('create', 'order');
+  return user_access('administer moneys');// || node_access('create', 'order');
 }
 
 
 /**
-* Implements hook_admin_menu_output_alter()
-*/
+ * Implements hook_admin_menu_output_alter()
+ */
 function order_admin_menu_output_alter(&$content) {
-	if (!user_access('administer moneys')) {
-		unset($content['menu']['node/add']['node/add/order']);
-	}
+  if (!user_access('administer moneys')) {
+    unset($content['menu']['node/add']['node/add/order']);
+  }
 }
 
 
 /**
-* Implements hook_theme()
-*/
+ * Implements hook_theme()
+ */
 function order_theme($existing, $type, $theme, $path) {
-	return array(
-		'shop_cart_form' => array(
-			'render element' => 'shop_cart_form',
-			'file' => 'order.theme.inc',
-		),
-		'shop_orders_form' => array(
-			'render element' => 'form',
-			'file' => 'order.admin.inc',
-		),
-	);
+  return array(
+    'shop_cart_form' => array(
+      'render element' => 'shop_cart_form',
+      'file' => 'order.theme.inc',
+    ),
+    'shop_orders_form' => array(
+      'render element' => 'form',
+      'file' => 'order.admin.inc',
+    ),
+  );
 }
 
 
@@ -395,73 +404,116 @@ function order_theme($existing, $type, $theme, $path) {
  * Suppress order type in sellable node types in admin setup
  */
 function order_shop_get_info_alter(&$info) {
-	unset($info['entity_types']['node']['order']);
+  unset($info['entity_types']['node']['order']);
 }
 
 
 /**
-* Implements hook_seo_entity_supported()
-*/
+ * Implements hook_seo_entity_supported()
+ */
 function order_seo_entity_supported($entity_type, $entity = NULL, $bundle = NULL, $bundle_info = NULL) {
-	if ($entity_type === 'node' && ((isset($entity->type) && $entity->type === 'order') || ($bundle === 'order'))) {
-		return FALSE;
-	}
+  if ($entity_type === 'node' && ((isset($entity->type) && $entity->type === 'order') || ($bundle === 'order'))) {
+    return FALSE;
+  }
 }
 
 
 /**
-* Callback for /shop/cart
-* Shopping cart pages.
-*/
-function order_shop_cart_page($account = NULL) {
-	if ($_GET['q'] === 'shop/order') { // google analytics legacy @see also order_menu()
-		$get = $_GET;
-		unset($get['q']);
+ * Callback for /shop/cart[/%]
+ * Shopping cart pages.
+ */
+function order_shop_cart_page($account = NULL, $shop_id = NULL) {
+  if (arg(0) . '/' . arg(1) === 'shop/order') { // google analytics legacy @see also order_menu()
+    $get = $_GET;
+    unset($get['q']);
     unset($_GET['destination']); // fix problem where drupal_goto() ignores passed url and get to 'destination' param if exists
-		drupal_goto('shop/cart', array('query' => $get), 301); // "document moved permanently"
-	}
-	if (shop_cart($account)->is_empty(FALSE)) {
-		return array(
-			array('#markup' => t('Cart is empty')),
-		);
-	}
-  return drupal_get_form('order_shop_cart_form', shop_cart($account));
+    drupal_goto('shop/cart' . (isset($shop_id) ? '/' . $shop_id : ''), array('query' => $get), 301); // "document moved permanently"
+  }
+
+  $build = array();
+  foreach (shop_cart_multiple($account, $shop_id) as $sid => $shop_cart) {
+    if (!$shop_cart->is_empty()) {
+      $build[$sid]['form'] = drupal_get_form('order_shop_cart_form', $shop_cart);
+    }
+  }
+  if (count($build) > 1 && !isset($build[$sid]['form']['shop_cart']['shop_name']['#access'])) {
+    $build[$sid]['form']['shop_cart']['shop_name']['#access'] = TRUE;
+  }
+  if (!$build) {
+    $build[]['#markup'] = t('Cart is empty');
+  }
+  return $build;
 }
 
-function order_shop_cart_checkout_page($account = NULL) {
-	module_load_include('inc', 'node', 'node.pages');
-	return node_add('order');
+
+/**
+ * Implements hook_query_TAG_alter()
+ */
+function order_query_entity_selector_alter(QueryAlterableInterface $query) {
+  if ($params = $query->getMetaData('selector_params')) {
+    if (isset($params['shop_cart_shop_id'])) { // @see order_shop_cart_form()
+      $query->innerJoin('shop_index', 'si', 'si.entity_type = :t AND si.entity_id = base.nid', array(':t' => $params['entity_type'])); // TODO: get 'nid' column name using entity API
+      $query->condition('si.shop_id', $params['shop_cart_shop_id']);
+    }
+  }
 }
 
 /**
-* Implements hook_node_info().
-*/
+ * Page callback for /shop/cart/%/order and /user/%user/shop/cart/%/order
+ */
+function order_shop_cart_checkout_page($account = NULL, $shop_id = NULL) {
+  if (!isset($shop_id) || !shop_list_shops($shop_id)) {
+    drupal_not_found();
+    drupal_exit();
+  }
+  if (shop_cart($shop_id, $account)->is_empty(FALSE)) {
+    unset($_GET['destination']);
+    drupal_goto('shop/cart/' . $shop_id);
+  }
+
+  module_load_include('inc', 'node', 'node.pages');
+  // Modified node_add():
+  $account = $account ? $account : $GLOBALS['user'];
+  $types = node_type_get_types();
+  $node = (object) array('uid' => $account->uid, 'name' => (isset($account->name) ? $account->name : ''), 'type' => 'order', 'language' => LANGUAGE_NONE);
+  drupal_set_title(t('Create @name', array('@name' => $types['order']->name)), PASS_THROUGH);
+  $node->shop_id = $shop_id;
+  return drupal_get_form('order_node_form', $node); // @see order_form()
+
+  // old: 
+  // old: module_load_include('inc', 'node', 'node.pages');
+  // old: return node_add('order');
+}
+
+/**
+ * Implements hook_node_info().
+ */
 function order_node_info() {
   $t = get_t();
-	return array(
-		'order' => array(
-			'name' => $t('Order'),
-			'base' => 'order',
-			'description'	=> $t('Order content type for shop orders.'),
-			'has_title' => FALSE,
-			'modified' => FALSE,
-			'custom' => FALSE,
-			'type' => 'order',
-			'locked' => TRUE,
-		),
-	);
+  return array(
+    'order' => array(
+      'name' => $t('Order'),
+      'base' => 'order',
+      'description' => $t('Order content type for shop orders.'),
+      'has_title' => FALSE,
+      'modified' => FALSE,
+      'custom' => FALSE,
+      'type' => 'order',
+      'locked' => TRUE,
+    ),
+  );
 }
 
 /**
-* Implements hook_node_access
-*/
+ * Implements hook_node_access
+ */
 function order_node_access($node, $op, $account) {
-	$type = is_string($node) ? $node : $node->type;
+  $type = is_string($node) ? $node : $node->type;
   global $user;
 
-	if ($type === 'order') {
-		if ($op === 'view') {
-			$customer = shop_get_customer($node);
+  if ($type === 'order') {
+    if ($op === 'view') {
+      $customer = shop_get_customer($node);
 
       $access = (user_access('edit any order content', $account) || ($account->uid && $node->uid == $account->uid)
         || ($customer->uid && $customer->uid == $account->uid)) ? NODE_ACCESS_ALLOW : NODE_ACCESS_DENY;
@@ -471,342 +523,366 @@ function order_node_access($node, $op, $account) {
 //				 @TODO: validate href token and grant access (like user password reset)
 //			}
 
-			 // Grant view access by cookies for anonymous users
-			if ($access === NODE_ACCESS_DENY && !$user->uid && !$account->uid) {
-				if (
-						node_access('create', 'order')
-						&&
-            !empty($_COOKIE['order-auth'][$node->nid]['token'])
-						&& !empty($_COOKIE['order-auth'][$node->nid]['timestamp'])
-						&& REQUEST_TIME - ORDER_ANNONYMOUS_ACCESS_TIMEOUT < $_COOKIE['order-auth'][$node->nid]['timestamp']
-						&& $_COOKIE['order-auth'][$node->nid]['token'] === _order_private_token($node, $_COOKIE['order-auth'][$node->nid]['timestamp'])
-						) {
-					$access = NODE_ACCESS_ALLOW;
-				}
-			}
+      // Grant view access by cookies for anonymous users
+      if ($access === NODE_ACCESS_DENY && !$user->uid && !$account->uid) {
+        if (
+          node_access('create', 'order')
+          &&
+          !empty($_COOKIE['order-auth'][$node->nid]['token'])
+          && !empty($_COOKIE['order-auth'][$node->nid]['timestamp'])
+          && REQUEST_TIME - ORDER_ANNONYMOUS_ACCESS_TIMEOUT < $_COOKIE['order-auth'][$node->nid]['timestamp']
+          && $_COOKIE['order-auth'][$node->nid]['token'] === _order_private_token($node, $_COOKIE['order-auth'][$node->nid]['timestamp'])
+        ) {
+          $access = NODE_ACCESS_ALLOW;
+        }
+      }
 
-			return $access;
-		}
-		if ($op === 'create') {
-			return user_access('submit orders', $account) || user_access('administer moneys', $account) ? NODE_ACCESS_ALLOW : NODE_ACCESS_DENY;
-		}
-		if ($op === 'update') {
-			if (user_access('edit any order content', $account) ||
-				($account->uid && $account->uid == $node->uid && user_access('edit own order content', $account) && $node->status && !$node->is_complete && !$node->is_paid)
-			) {
-				return NODE_ACCESS_ALLOW;
-			}
-			else {
-				return NODE_ACCESS_DENY;
-			}
-		}
+      return $access;
+    }
+    if ($op === 'create') {
+      return user_access('submit orders', $account) || user_access('administer moneys', $account) ? NODE_ACCESS_ALLOW : NODE_ACCESS_DENY;
+    }
+    if ($op === 'update') {
+      if (user_access('edit any order content', $account) ||
+        ($account->uid && $account->uid == $node->uid && user_access('edit own order content', $account) && $node->status && !$node->is_complete && !$node->is_paid)
+      ) {
+        return NODE_ACCESS_ALLOW;
+      }
+      else {
+        return NODE_ACCESS_DENY;
+      }
+    }
 
-		if($op === 'delete') {
-			if (user_access('edit any order content', $account) ||
-				($account->uid && $account->uid == $node->uid && user_access('delete own order content', $account) && $node->status && !$node->is_complete)
-			) {
-				return NODE_ACCESS_ALLOW;
-			}
-			else {
-				return NODE_ACCESS_DENY;
-			}
-		}
-		return NODE_ACCESS_DENY;
-	}
-	return NODE_ACCESS_IGNORE;
+    if ($op === 'delete') {
+      if (user_access('edit any order content', $account) ||
+        ($account->uid && $account->uid == $node->uid && user_access('delete own order content', $account) && $node->status && !$node->is_complete)
+      ) {
+        return NODE_ACCESS_ALLOW;
+      }
+      else {
+        return NODE_ACCESS_DENY;
+      }
+    }
+    return NODE_ACCESS_DENY;
+  }
+  return NODE_ACCESS_IGNORE;
 }
 
 
-
-
 /**
-* Callback for /node/%node/order_status
-*/
+ * Callback for /node/%node/order_status
+ */
 
 function _order_status_change_form($form, &$form_state, $node) {
-	$form['status'] = array(
-		'#type' => 'checkbox',
-		'#title' => t('Accepted'),
-		'#default_value' => $node->status,
-	);
-	$form['order_status'] = array(
-		'#type' => 'select',
-		'#title' => t('Order current status'),
-		'#options' => _order_statuses(),
-		'#default_value' => !empty($node->order_status) ? $node->order_status : array(),
-	);
-	$form['#node'] = $node;
-	$form['actions'] = array(
-		'#type' => 'actions',
-		'submit' => array(
-			'#type' => 'submit',
-			'#value' => t('Apply'),
-		),
-	);
-	return $form;
+  $form['status'] = array(
+    '#type' => 'checkbox',
+    '#title' => t('Accepted'),
+    '#default_value' => $node->status,
+  );
+  $form['order_status'] = array(
+    '#type' => 'select',
+    '#title' => t('Order current status'),
+    '#options' => _order_statuses(),
+    '#default_value' => !empty($node->order_status) ? $node->order_status : array(),
+  );
+  $form['#node'] = $node;
+  $form['actions'] = array(
+    '#type' => 'actions',
+    'submit' => array(
+      '#type' => 'submit',
+      '#value' => t('Apply'),
+    ),
+  );
+  return $form;
 }
 
 
 function _order_status_change_form_submit($form, &$form_state) {
-	if ($node = node_load($form['#node']->nid)) {
-		$need_update = FALSE;
-		if ((bool)$node->status !== (bool)$form_state['values']['status']) {
-			$node->status = $form_state['values']['status'];
-			$need_update = TRUE;
-		}
-		if (array_sum($node->order_status) != $form_state['values']['order_status']) {
-			$node->order_status = $form_state['values']['order_status'];
-			$need_update = TRUE;
-			if (module_exists('changelog')) {
-				$options = _order_statuses();
-				changelog_add($node, 'node', 'order', 'Status changed to <b>@status</b>', array('@status' => $options[$form_state['values']['order_status']]));
-			}
-		}
-		if ($need_update) {
-			node_save($node);
-		}
-	}
+  if ($node = node_load($form['#node']->nid)) {
+    $need_update = FALSE;
+    if ((bool) $node->status !== (bool) $form_state['values']['status']) {
+      $node->status = $form_state['values']['status'];
+      $need_update = TRUE;
+    }
+    if (array_sum($node->order_status) != $form_state['values']['order_status']) {
+      $node->order_status = $form_state['values']['order_status'];
+      $need_update = TRUE;
+      if (module_exists('changelog')) {
+        $options = _order_statuses();
+        changelog_add($node, 'node', 'order', 'Status changed to <b>@status</b>', array('@status' => $options[$form_state['values']['order_status']]));
+      }
+    }
+    if ($need_update) {
+      node_save($node);
+    }
+  }
 }
 
 
 /**
-* Helper function - return array for #options key in select.
-*/
+ * Helper function - return array for #options key in select.
+ */
 function _order_statuses() {
-	return array(
-		ORDER_STATUS_DELIVERY_ISSUED => t('Issued'),
-		ORDER_STATUS_DELIVERY_PREPARED => t('Prepared to delivery'),
-		ORDER_STATUS_DELIVERED => t('Delivered'),
-	);
+  return array(
+    ORDER_STATUS_DELIVERY_ISSUED => t('Issued'),
+    ORDER_STATUS_DELIVERY_PREPARED => t('Prepared to delivery'),
+    ORDER_STATUS_DELIVERED => t('Delivered'),
+  );
 }
 
 /**
-* Implements hook_module_implements_alter()
-*/
+ * Implements hook_module_implements_alter()
+ */
 function order_module_implements_alter(&$implementations, $hook) {
-	if ($hook === 'form_alter') {
-		// Put order_form_alter() into the end of hooks queue.
-		$bool = $implementations['order'];
-		unset($implementations['order']);
-		$implementations['order'] = $bool;
-	}
-	if ($hook === 'node_load') {
-			// Put order_node_load() into the end of hooks queue.
-			$bool = $implementations['order'];
-			unset($implementations['order']);
-			$implementations['order'] = $bool;
-	}
+  if ($hook === 'form_alter') {
+    // Put order_form_alter() into the end of hooks queue.
+    $bool = $implementations['order'];
+    unset($implementations['order']);
+    $implementations['order'] = $bool;
+  }
+  if ($hook === 'node_load') {
+    // Put order_node_load() into the end of hooks queue.
+    $bool = $implementations['order'];
+    unset($implementations['order']);
+    $implementations['order'] = $bool;
+  }
 }
 
+
+function order_entity_load($entities, $entity_type) {
+  if ($entity_type === 'node') {
+    $orders = array();
+    foreach ($entities as $n) {
+      if ($n->type === 'order') {
+        $orders[$n->nid] = $n;
+      }
+    }
+
+    if ($orders) {
+      foreach (db_query('SELECT * FROM {shop_orders} so WHERE so.nid IN(:nids)', array(':nids' => array_keys($orders))) as $result) {
+        $nid = $result->nid;
+        foreach ($result as $key => $val) {
+          $orders[$nid]->{$key} = $val;
+        }
+        _order_extract_status($orders[$nid]);
+        $orders[$nid]->delivery_params = $result->delivery_params ? unserialize($result->delivery_params) : NULL;
+        $orders[$nid]->previous_state = $result->previous_state ? unserialize($result->previous_state) : NULL;
+        unset($orders[$nid]->previous_state->previous_state);
+        $orders[$nid]->recipient_fields = $result->recipient_fields ? unserialize($result->recipient_fields) : array();
+
+        $orders[$nid]->shop_id = $result->shop_id;
+      }
+    }    
+  }
+}
+
+
 /**
-* Implements hook_node_load().
-*/
+ * Implements hook_node_load().
+ */
 function order_node_load($nodes, $types) {
-	$orders = array();
-	foreach ($nodes as $n) {
-		if ($n->type === 'order') {
-			$orders[$n->nid] = $n;
-		}
-	}
-	if ($orders) {
-		foreach (db_query('SELECT * FROM {shop_orders} so WHERE so.nid IN(:nids)', array(':nids' => array_keys($orders))) as $result) {
-			$nid = $result->nid;
-			$orders[$nid]->order_num = $result->order_num;
-			$orders[$nid]->order_status = $result->order_status;
-			$orders[$nid]->delivery_method = $result->delivery_method;
-      // OLD:
-			// $orders[$nid]->delivery_variant = $result->delivery_variant;
-      // NEW:
-      $orders[$nid]->delivery_params = $result->delivery_params ? unserialize($result->delivery_params) : NULL;
-
-      $orders[$nid]->delivery_price = $result->delivery_price; // Load frozen cost of delivery (actual only for completed orders)
-
-			$orders[$nid]->payment_method = $result->payment_method;
-			$orders[$nid]->payment_timestamp = $result->payment_timestamp;
-      $orders[$nid]->customer = $result->customer;
-			// OLD:
-      // $orders[$nid]->delivery_address = $result->delivery_address; // moved to delivery_params
-			$orders[$nid]->is_paid = $result->is_paid;
-			$orders[$nid]->user_ip = $result->user_ip;
-			$orders[$nid]->tracking_id = $result->tracking_id;
-
-			$orders[$nid]->previous_state = $result->previous_state ? unserialize($result->previous_state) : NULL;
-			unset($orders[$nid]->previous_state->previous_state);
-
-			_order_extract_status($orders[$nid]);
-
-			$orders[$nid]->recipient_fields = $result->recipient_fields ? unserialize($result->recipient_fields) : array();
-
-			$orders[$nid]->is_complete = order_is_complete($orders[$nid]);
-			$orders[$nid]->frozen = order_is_frozen($orders[$nid]);
-
-			$orders[$nid]->order_discount = $result->order_discount;
-			$orders[$nid]->order_discount_text = isset($result->order_discount_text) ? $result->order_discount_text : NULL;
-
-      $shop_cart = shop_cart(NULL, $orders[$nid]);
-		//	$orders[$nid]->order_required_sum = array_sum(order_calculate_required_sum($shop_cart, $orders[$nid]->delivery_method, $orders[$nid]->delivery_params, $orders[$nid]));
-		}
-	}
-
+  foreach ($nodes as $n) {
+    if ($n->type === 'order') {
+      $n->is_complete = order_is_complete($n);
+      $n->frozen = order_is_frozen($n);      
+    }
+  }
 }
 
 /**
-* Load order node by order_num field
-*/
+ * Load order node by order_num field
+ */
 function order_by_number_load($order_num) {
-	if ($nid = db_query('SELECT nid FROM {shop_orders} WHERE order_num = :n', array(':n' => $order_num))->fetchField()) {
-		return node_load($nid);
-	}
+  if ($nid = db_query('SELECT nid FROM {shop_orders} WHERE order_num = :n', array(':n' => $order_num))->fetchField()) {
+    return node_load($nid);
+  }
 }
 
 /**
-* Implements hook_prepare().
-*/
+ * Implements hook_prepare().
+ */
 function order_prepare($node) {
-	$node->language = LANGUAGE_NONE;
-	if (empty($node->nid)) {
-		$node->is_paid = FALSE;
-		$node->is_complete = FALSE;
-		$node->frozen = FALSE;
-		if (!isset($node->user_ip)) {
-			$node->user_ip = ip_address();
-		}
-	}
+  $node->language = LANGUAGE_NONE;
+  if (empty($node->nid)) {
+    $node->is_paid = FALSE;
+    $node->is_complete = FALSE;
+    $node->frozen = FALSE;
+    $node->shop_id = isset($node->shop_id) ? $node->shop_id : 0;
+    if (!isset($node->user_ip)) {
+      $node->user_ip = ip_address();
+    }
+  }
 }
 
 
 /**
-* Implements hook_field_extra_fields().
-*/
+ * Implements hook_field_extra_fields().
+ */
 function order_field_extra_fields() {
-	$extra['node']['order'] = array(
-		'form' => array(
-			'order_content' => array(
-				'label' => t('Content of order'),
-				'description' => t('Content of shop cart and delivery method'),
-				'weight' => 0.0001,
-			),
-			'order_discount' => array(
-				'label' => t('Order discount'),
-				'description' => t('Order discount'),
-				'weight' => 0.0002,
-			),
-			'customer' => array(
-				'label' => t('Customer'),
-				'description' => t('Customer'),
-				'weight' => 0.0003,
-			),
-			'order_information' => array(
-				'label' => t('Recipient data'),
-				'description' => t('Recipient data'),
-				'weight' => 0.0004,
-			),
-		),
-		'display' => array(
-			'order_content' => array(
-				'label' => t('Content of order'),
-				'description' => t('Content of order'),
-				'weight' => -10,
-			),
-      'delivery' => array(
-				'label' => t('Delivery information'),
-        'label_display' => 'above',
-				'description' => t('Delivery information'),
-				'weight' => -9.99,
+  $extra['node']['order'] = array(
+    'form' => array(
+      'order_content' => array(
+        'label' => t('Content of order'),
+        'description' => t('Content of shop cart and delivery method'),
+        'weight' => 0.0001,
       ),
-			'recipient' => array(
-				'label' => t('Recipient data'),
+      'order_discount' => array(
+        'label' => t('Order discount'),
+        'description' => t('Order discount'),
+        'weight' => 0.0002,
+      ),
+      'customer' => array(
+        'label' => t('Customer'),
+        'description' => t('Customer'),
+        'weight' => 0.0003,
+      ),
+      'order_information' => array(
+        'label' => t('Recipient data'),
+        'description' => t('Recipient data'),
+        'weight' => 0.0004,
+      ),
+    ),
+    'display' => array(
+      'order_content' => array(
+        'label' => t('Content of order'),
+        'description' => t('Content of order'),
+        'weight' => -10,
+      ),
+      'delivery' => array(
+        'label' => t('Delivery information'),
+        'label_display' => 'above',
+        'description' => t('Delivery information'),
+        'weight' => -9.99,
+      ),
+      'recipient' => array(
+        'label' => t('Recipient data'),
         'label_display' => 'hidden',
-				'description' => t('Information about recipient'),
-				'weight' => 10,
-			),
+        'description' => t('Information about recipient'),
+        'weight' => 10,
+      ),
       'customer' => array(
         'label' => t('Customer'),
         'label_display' => 'inline',
         'description' => t('Customer'),
         'weight' => 10,
       ),
-			// ? 'invoice' => array(
-			// ? 	'label' => t('Invoice'),
-			// ? 	'description' => t('Invoice for payment'),
-			// ? 	'weight' => 19,
-			// ? ),
-			'payment_widget' => array(
-				'label' => t('Payment for order'),
-				'description' => t('Payment for order'),
+      // ? 'invoice' => array(
+      // ? 	'label' => t('Invoice'),
+      // ? 	'description' => t('Invoice for payment'),
+      // ? 	'weight' => 19,
+      // ? ),
+      'payment_widget' => array(
+        'label' => t('Payment for order'),
+        'description' => t('Payment for order'),
         'label_display' => 'hidden',
-				'weight' => 20,
-			),
-      'payment_status' => array(
-				'label' => t('Payment status'),
-				'description' => t('Payment status'),
-        'label_display' => 'inline',
-				'weight' => 20.000001,
+        'weight' => 20,
       ),
-		),
-	);
-	if (!module_invoke('status', 'get_settings', 'node', 'order')) { // @see status.module
-    $extra['node']['order']['display']['status_field'] = array(
-				'label' => t('Order status'),
+      'payment_status' => array(
+        'label' => t('Payment status'),
+        'description' => t('Payment status'),
         'label_display' => 'inline',
-				'description' => t('Current status of order'),
-				'weight' => 10,
+        'weight' => 20.000001,
+      ),
+    ),
+  );
+  if (!module_invoke('status', 'get_settings', 'node', 'order')) { // @see status.module
+    $extra['node']['order']['display']['status_field'] = array(
+      'label' => t('Order status'),
+      'label_display' => 'inline',
+      'description' => t('Current status of order'),
+      'weight' => 10,
     );
-	}
-	return $extra;
+  }
+  return $extra;
 }
 
 
 /**
-* Implements hook_extra_field_widget_settings_form()
-* @see addons.module -->> _addons_extra_field_widget_settings_form()
-*/
+ * Implements hook_extra_field_widget_settings_form()
+ * @see addons.module -->> _addons_extra_field_widget_settings_form()
+ */
 function order_extra_field_widget_settings_form($entity_type, $bundle, $field_name, $settings) {
   if ($entity_type === 'node' && $bundle === 'order' && $field_name === 'order_information') {
-      return array(
-        'required' => array(
-          '#type' => 'checkboxes',
-          '#title' => t('Required fields'),
-          '#default_value' => !empty($settings['required']) && array_filter($settings['required']) ? $settings['required'] : array('phone'),
-          '#options' => array(
-            'lfm' => t('L.F.M.'),
-            'phone' => t('Phone'),
-            'mail' => t('E-mail'),
-          ),
-          '#required' => TRUE,
+    return array(
+      'enabled' => array(
+        '#type' => 'container',
+        '#tree' => TRUE,
+        'title' => array('#type' => 'item', '#markup' => t('Enabled fields')),
+        'lfm' => array(
+          '#type' => 'checkbox',
+          '#title' => t('L.F.M.'),
+          '#default_value' => $settings['enabled']['lfm'] ?? TRUE,
         ),
-      );
+        'phone' => array(
+          '#type' => 'checkbox',
+          '#title' => t('Phone'),
+          '#default_value' => $settings['enabled']['phone'] ?? TRUE,
+        ),
+        'mail' => array(
+          '#type' => 'checkbox',
+          '#title' => t('E-mail'),
+          '#default_value' => $settings['enabled']['mail'] ?? TRUE,
+        ),
+      ),
+      'required' => array(
+        '#type' => 'container',
+        '#tree' => TRUE,
+        'title' => array('#type' => 'item', '#markup' => t('Required fields')),
+        'lfm' => array(
+          '#type' => 'checkbox',
+          '#title' => t('L.F.M.'),
+          '#default_value' => $settings['required']['lfm'] ?? FALSE,
+          '#states' => array('visible' => array('input[name="settings[enabled][lfm]"]' => array('checked' => TRUE))),
+        ),
+        'phone' => array(
+          '#type' => 'checkbox',
+          '#title' => t('Phone'),
+          '#default_value' => $settings['required']['phone'] ?? TRUE,
+          '#states' => array('visible' => array('input[name="settings[enabled][phone]"]' => array('checked' => TRUE))),
+        ),
+        'mail' => array(
+          '#type' => 'checkbox',
+          '#title' => t('E-mail'),
+          '#default_value' => $settings['required']['mail'] ?? FALSE,
+          '#states' => array('visible' => array('input[name="settings[enabled][mail]"]' => array('checked' => TRUE))),
+        ),
+      ),
+    );
   }
 }
 
 
 /**
-* Implements hook_extra_field_widget_settings_summary()
-* @see addons.module -->> addons_form_field_ui_field_overview_form_alter()
-*/
+ * Implements hook_extra_field_widget_settings_summary()
+ * @see addons.module -->> addons_form_field_ui_field_overview_form_alter()
+ */
 function order_extra_field_widget_settings_summary($entity_type, $bundle, $field_name, $settings) {
   if ($entity_type === 'node' && $bundle === 'order' && $field_name === 'order_information') {
+    $enabled = !empty($settings['enabled']) && array_filter($settings['enabled']) ? $settings['enabled'] : array('lfm', 'phone', 'mail');
     $required = !empty($settings['required']) && array_filter($settings['required']) ? $settings['required'] : array('phone');
+
     $summary = array();
-    if (in_array('lfm', $required, TRUE)) {
-      $summary[] = t('L.F.M.');
+    $marker = theme('form_required_marker');
+
+    if (!empty($enabled['lfm'])) {
+      $summary[] = t('L.F.M.') . (!empty($required['lfm']) ? $marker : '');
     }
-    if (in_array('phone', $required, TRUE)) {
-      $summary[] = t('Phone');
+    if (!empty($enabled['phone'])) {
+      $summary[] = t('Phone') . (!empty($required['phone']) ? $marker : '');
     }
-    if (in_array('mail', $required, TRUE)) {
-      $summary[] = t('E-mail');
+    if (!empty($enabled['mail'])) {
+      $summary[] = t('E-mail') . (!empty($required['mail']) ? $marker : '');
     }
-    return '<strong>' . t('Required') . ':</strong> ' . ($summary ? implode(', ', $summary) : t('none'));
+    return '<strong>' . t('Fields') . ':</strong> ' . ($summary ? implode(', ', $summary) : t('none'));
   }
 }
 
 
 function order_is_complete($order_node) {
-	if (!module_invoke('status', 'get_settings', 'node', 'order')) {
-		// @todo delete is_paid condition?
+  if (!module_invoke('status', 'get_settings', 'node', 'order')) {
+    // @todo delete is_paid condition?
     return !empty($order_node->nid) && !empty($order_node->order_status[ORDER_STATUS_DELIVERED]) && $order_node->is_paid;
-	}
+  }
   else {
     return !empty($order_node->status_field['is_last_status']);
   }
@@ -816,14 +892,14 @@ function order_is_complete($order_node) {
  * Returns TRUE if status <> first order status
  */
 function _order_in_process($order_node) {
-	if (!module_invoke('status', 'get_settings', 'node', 'order')) {
-		return !empty($order_node->nid) && array_filter($order_node->order_status);
-	}
-	else {
-		// @todo is_first_status
-		$first_status_id = status_get_first_status_id('node', 'order');
-		return $order_node->status_field['id'] != $first_status_id;
-	}
+  if (!module_invoke('status', 'get_settings', 'node', 'order')) {
+    return !empty($order_node->nid) && array_filter($order_node->order_status);
+  }
+  else {
+    // @todo is_first_status
+    $first_status_id = status_get_first_status_id('node', 'order');
+    return $order_node->status_field['id'] != $first_status_id;
+  }
 }
 
 
@@ -831,9 +907,9 @@ function _order_in_process($order_node) {
  * Returns TRUE if order was created $period days ago
  */
 function _order_is_recent($order_node) {
-	return ($period = shop_get_info('general', 'order_freeze'))
-		? ($order_node->created > REQUEST_TIME - $period * 24 * 60 * 60)
-		: FALSE;
+  return ($period = shop_get_info('general', 'order_freeze'))
+    ? ($order_node->created > REQUEST_TIME - $period * 24 * 60 * 60)
+    : FALSE;
 }
 
 
@@ -841,24 +917,24 @@ function _order_is_recent($order_node) {
  * Order is frozen if: paid OR in process OR recent
  */
 function order_is_frozen($order_node) {
-	return !empty($order_node->is_paid) || _order_in_process($order_node) || _order_is_recent($order_node);
+  return !empty($order_node->is_paid) || _order_in_process($order_node) || _order_is_recent($order_node);
 }
 
 
 /**
-* Implements hook_init()
-*/
+ * Implements hook_init()
+ */
 function order_init() {
 
 }
 
 
 /**
-* Implements hook_query_TAG_alter()
-*/
+ * Implements hook_query_TAG_alter()
+ */
 function order_query_node_access_alter(QueryAlterableInterface $query) {
   // Deny view orders in search results
-	if (($tables = $query->getTables()) && !empty($tables['i']['table']) && $tables['i']['table'] == 'search_index' && !empty($tables['n']['table']) && $tables['n']['table'] === 'node') {
+  if (($tables = $query->getTables()) && !empty($tables['i']['table']) && $tables['i']['table'] == 'search_index' && !empty($tables['n']['table']) && $tables['n']['table'] === 'node') {
     if (user_is_logged_in()) {
       if (!user_access('administer moneys')) {
         $query->condition(db_or()->condition('n.type', 'order', '<>')->condition('n.uid', $GLOBALS['user']->uid));
@@ -867,13 +943,13 @@ function order_query_node_access_alter(QueryAlterableInterface $query) {
     else {
       $query->condition('n.type', 'order', '<>');
     }
-	}
+  }
 }
 
 
 /**
-* Implements hook_entity_view_alter()
-*/
+ * Implements hook_entity_view_alter()
+ */
 function order_entity_view_alter(&$build, $type) {
   // IKW: Нужно чтобы покупатели имели доступ к информации в статусных комментариях  (https://itinity.ru/node/2191)
   // Revoke temporary granted perms (@see order_view())
@@ -891,11 +967,11 @@ function order_entity_view_alter(&$build, $type) {
 
 
 /**
-* Implements hook_view().
-*/
+ * Implements hook_view().
+ */
 function order_view($node, $view_mode) {
 
-   // IKW: Нужно чтобы покупатели имели доступ к информации в статусных комментариях  (https://itinity.ru/node/2191)
+  // IKW: Нужно чтобы покупатели имели доступ к информации в статусных комментариях  (https://itinity.ru/node/2191)
   if (module_exists('changelog')) {
     global $user;
     // Temporary grant 'view entity changelog' permission for order owner before rendering and revoke it in order_entity_view_alter() hook.
@@ -915,49 +991,41 @@ function order_view($node, $view_mode) {
     }
   }
 
-	global $user;
-	$title = _order_title($node);
-	if ($view_mode === 'full') {
-		if (arg(0) === 'node' && arg(1) == $node->nid ) {
-			if ($user->uid == $node->uid) {
-				$bread = drupal_get_breadcrumb();
-				$bread[] = theme('username', array('account' => $user));
-				$bread[] = l(t('Orders'), 'user/' . $user->uid . '/shop/orders');
-				drupal_set_breadcrumb($bread);
-			}
-		}
-		if ($node->title === drupal_get_title()) {
-			drupal_set_title($title);
-		}
-    $shop_cart = shop_cart(NULL, $node);
-
-    // CRUTCHES!
-    $shop_cart->no_commit = TRUE;
-    $o = $shop_cart->data('order');
-    $shop_cart->data('order',  $node);
-		$node->content['order_content']['shop_cart'] = array( // extra field
-			'#type' => 'item',
-			'#title' => t('Content of order'),
-			theme('shop_cart', array(
+  global $user;
+  $title = _order_title($node);
+  if ($view_mode === 'full') {
+    if (arg(0) === 'node' && arg(1) == $node->nid) {
+      if ($user->uid == $node->uid) {
+        $bread = drupal_get_breadcrumb();
+        $bread[] = theme('username', array('account' => $user));
+        $bread[] = l(t('Orders'), 'user/' . $user->uid . '/shop/orders');
+        drupal_set_breadcrumb($bread);
+      }
+    }
+    if ($node->title === drupal_get_title()) {
+      drupal_set_title($title);
+    }
+    $node->content['order_content']['shop_cart'] = array( // extra field
+      '#type' => 'item',
+      '#title' => t('Content of order'),
+      theme('shop_cart', array(
         'mode' => 'max',
-        'shop_cart' => $shop_cart,
+        'shop_cart' => shop_cart(NULL, NULL, $node),
       )),
-		);
-    $shop_cart->data('order', $o);
-    $shop_cart->no_commit = FALSE;
-	}
+    );
+  }
   else {
-		if ($view_mode == 'teaser') {
-			$node->content['order_content']['shop_cart'] = array(
-				'#type' => 'item',
-				'#title' => t('Content of order') . ':',
-				'#markup' => theme('shop_cart', array(
+    if ($view_mode == 'teaser') {
+      $node->content['order_content']['shop_cart'] = array(
+        '#type' => 'item',
+        '#title' => t('Content of order') . ':',
+        '#markup' => theme('shop_cart', array(
           'mode' => 'min',
-          'shop_cart' => shop_cart(NULL, $node),
+          'shop_cart' => shop_cart(NULL, NULL, $node),
         )),
-			);
-		}
-	}
+      );
+    }
+  }
 
   if (!empty($node->customer)) {
     $customer = user_load($node->customer);
@@ -967,30 +1035,36 @@ function order_view($node, $view_mode) {
 //    $customer = isset($node->customer) ? drupal_anonymous_user() : ($node->uid ? user_load($node->uid) : drupal_anonymous_user());
   }
 
+  $enabled = addons_extra_field_get_settings('node', 'order', 'form', NULL, 'order_information', 'enabled');
+  $enabled = $enabled ?? drupal_map_assoc(array('lfm', 'phone', 'mail'));
+
   if ($lfm = !empty($node->recipient_fields['lfm']) ? trim($node->recipient_fields['lfm']) : ($customer->uid ? (!empty($customer->lfm) ? $customer->lfm : $customer->name) : NULL)) {
-		$node->content['recipient']['recipient_lfm'] = array(
-			'#type' => 'item',
-			'#inline' => TRUE,
-			'#title' => t('Recipient'),
-			'#markup' => check_plain($lfm),
-		);
+    $node->content['recipient']['recipient_lfm'] = array(
+      '#type' => 'item',
+      '#inline' => TRUE,
+      '#title' => t('Recipient'),
+      '#markup' => check_plain($lfm),
+      '#access' => !empty($enabled['lfm']),
+    );
   }
-	if ($phone = !empty($node->recipient_fields['phone']) ? trim($node->recipient_fields['phone']) : ($customer->uid ? $customer->phone : NULL)) {
-		$node->content['recipient']['recipient_phone'] = array(
-			'#type' => 'item',
-			'#inline' => TRUE,
-			'#title' => t('Phone'),
-			'#markup' => theme('phone', array('phone' => $phone)),
-		);
-	}
-	if ($mail = !empty($node->recipient_fields['mail']) ? trim($node->recipient_fields['mail']) : ($customer->uid ? $customer->mail : NULL)) {
+  if ($phone = !empty($node->recipient_fields['phone']) ? trim($node->recipient_fields['phone']) : ($customer->uid ? $customer->phone : NULL)) {
+    $node->content['recipient']['recipient_phone'] = array(
+      '#type' => 'item',
+      '#inline' => TRUE,
+      '#title' => t('Phone'),
+      '#markup' => theme('phone', array('phone' => $phone)),
+      '#access' => !empty($enabled['phone']),
+    );
+  }
+  if ($mail = !empty($node->recipient_fields['mail']) ? trim($node->recipient_fields['mail']) : ($customer->uid ? $customer->mail : NULL)) {
     $node->content['recipient']['recipient_mail'] = array(
       '#type' => 'item',
       '#inline' => TRUE,
       '#title' => t('E-mail'),
       '#markup' => theme('email', array('email' => $mail,)),
+      '#access' => !empty($enabled['mail']),
     );
-	}
+  }
   if (!empty($node->content['recipient'])) {
     $node->content['recipient']['#type'] = 'item';
   }
@@ -1016,13 +1090,29 @@ function order_view($node, $view_mode) {
     '#inlne' => TRUE,
     '#title' => t('Payment status'),
   );
+
   if (!$node->is_paid) {
-    $node->content['payment_widget']['form'] = drupal_get_form('_order_payment_method_form', $node);
-    if (!empty($node->payment_method)) {
-      $node->content['payment_status']['#markup'] = t('Waits for payment');
+    if ($holded = money_get_holded(NULL, 'order', $node->nid)) {
+      $source = db_select('money_hold', 'mh')
+        ->fields('mh', array('source', 'source_key'))
+        ->condition('mh.operation', 'order')
+        ->condition('mh.operation_key', $node->nid)->execute()->fetchAssoc();
+
+      $source_info = money_sources_info($source['source'], $source['source_key']);
+
+      $node->content['payment_status'] = array(
+        '#type' => 'item',
+        '#markup' => t('Holded for payment with !source: !sum', array('!source' => $source_info['overview']['title'], '!sum' => theme('price', array('price' => $holded)))),
+      );
     }
     else {
-      $node->content['payment_status']['#access'] = FALSE;
+      $node->content['payment_widget']['form'] = drupal_get_form('_order_payment_method_form', $node);
+      if (!empty($node->payment_method)) {
+        $node->content['payment_status']['#markup'] = t('Waits for payment');
+      }
+      else {
+        $node->content['payment_status']['#access'] = FALSE;
+      }
     }
   }
   else {
@@ -1040,61 +1130,65 @@ function order_view($node, $view_mode) {
     }
   }
 
-	if (!module_invoke('status', 'get_settings', 'node', 'order')) { // @see status.module
+  if (!module_invoke('status', 'get_settings', 'node', 'order')) { // @see status.module
 
-		$statuses = array();
-		if (!$node->status) {
-			$statuses[] = t('Not accepted');
-		}
-		if ($node->is_complete) {
-			$statuses[] = t('Complete');
-		}
-		else {
-			$statuses[] = t('Issued');
-			foreach (_order_statuses() as $s => $t) {
-				if (!empty($node->order_status[$s])) {
-					$statuses[] = $t;
-				}
-			}
-			if ($node->is_paid) {
-				$statuses[] = t('Paid');
-			}
-		}
-		$node->content['status_field'] = array(
-			'#type' => 'item',
-			'#inline' => TRUE,
-			'#title' => t('Status'),
-			'value' => array(
-				'#markup' => drupal_ucfirst(drupal_strtolower(implode(', ', $statuses))) . '.',
-			),
-			'change' => array(
-				'#prefix' => ' ',
-				'#access' => user_access('administer moneys'),
-				'#type' => 'link',
-				'#popup' => TRUE,
-				'#title' => t('change'),
-				'#href' => 'node/' . $node->nid . '/order_status',
-				'#options' => array(
-					'query' => drupal_get_destination(),
-				),
-				'#attributes' => array(
-					'class' => array('form-submit',),
-				),
-			),
-		);
-	}
+    $statuses = array();
+    if (!$node->status) {
+      $statuses[] = t('Not accepted');
+    }
+    if ($node->is_complete) {
+      $statuses[] = t('Complete');
+    }
+    else {
+      $statuses[] = t('Issued');
+      foreach (_order_statuses() as $s => $t) {
+        if (!empty($node->order_status[$s])) {
+          $statuses[] = $t;
+        }
+      }
+      if ($node->is_paid) {
+        $statuses[] = t('Paid');
+      }
+    }
+    $node->content['status_field'] = array(
+      '#type' => 'item',
+      '#inline' => TRUE,
+      '#title' => t('Status'),
+      'value' => array(
+        '#markup' => drupal_ucfirst(drupal_strtolower(implode(', ', $statuses))) . '.',
+      ),
+      'change' => array(
+        '#prefix' => ' ',
+        '#access' => user_access('administer moneys'),
+        '#type' => 'link',
+        '#popup' => TRUE,
+        '#title' => t('change'),
+        '#href' => 'node/' . $node->nid . '/order_status',
+        '#options' => array(
+          'query' => drupal_get_destination(),
+        ),
+        '#attributes' => array(
+          'class' => array('form-submit',),
+        ),
+      ),
+    );
+  }
 
-	if (isset($node->delivery_method)) {
-    if ($summary = shop_delivery_summary($node->delivery_method, $node->delivery_params)) {
+  if (isset($node->delivery_method)) {
+    if ($summary = shop_delivery_user_summary($node, $node->delivery_method, $node->delivery_params)) {
       $node->content['delivery'] = array(
         '#type' => 'item',
         '#title' => t('Delivery information'),
-        '#markup' => shop_delivery_info($node->delivery_method, 'title') . '. ' . $summary,
+        'title' => array(
+          '#markup' => shop_delivery_info($node, $node->delivery_method, 'title') . '. ',
+        ),
+        'summary' => $summary,
+        //'#markup' => shop_delivery_info($node->delivery_method, 'title') . '. ' . $summary,
       );
     }
-	}
-	$node->title = $title;
-	return $node;
+  }
+  $node->title = $title;
+  return $node;
 }
 
 
@@ -1113,13 +1207,11 @@ function _order_payment_method_form($form, &$form_state, $node) {
   $opts = array();
   $actions = array('#type' => 'actions',);
   $enabled_sources = _money_available_sources('order', $node->nid, $sum_to_paid, FALSE);
-
-  $def_payment_method = !empty($form_state['values']['payment_method'])
-    ? $form_state['values']['payment_method']
-    : (!empty($node->payment_method) ? $node->payment_method : NULL);
+  $def_payment_method = $form_state['values']['payment_method'] ?? $node->payment_method ?? NULL;
+  $def_payment_method = !empty($enabled_sources[$def_payment_method]) ? $def_payment_method : NULL;
 
   if (!$def_payment_method) {
-    if ($default_source = shop_get_info('general', 'default_payment_method')) {
+    if (($default_source = shop_get_info('general', 'default_payment_method')) && !empty($enabled_sources[$default_source])) {
       $def_payment_method = $default_source;
     }
     if (count($enabled_sources) == 1) {
@@ -1129,16 +1221,25 @@ function _order_payment_method_form($form, &$form_state, $node) {
 
   foreach ($enabled_sources as $source => $info) {
     if ($info['enabled'] && money_execute_access('order', $node->nid, $sum_to_paid, $info, FALSE, $m)) {
-			$opts[$source] = $info['icon_url'] ? '<span class="payment-method-' . $source .'">' . theme_image(array('path' => $info['icon_url'], 'attributes' => array())) . '</span>' : '';
+      $opts[$source] = $info['icon_url'] ? '<span class="payment-method-' . $source . '">' . theme_image(array('path' => $info['icon_url'], 'attributes' => array())) . '</span>' : '';
       $opts[$source] .= '<span class="payment-method-title">' . $info['title'] . '</span>';
       $opts[$source] .= ($info['description'] ? '<span class="payment-method-description">' . $info['description'] . '</span>' : '');
-		}
+    }
   }
 
   if ($def_payment_method) {
-    if ($payment_widget = money_payment_widget('order', $node->nid, $sum_to_paid, $def_payment_method)) {
-      $payment_widget['#attributes']['class'][] = 'default-submit';
-      $actions['payment'] = $payment_widget;
+    // Cash account injection
+    if ($def_payment_method == 'user' && money_sources_info('user', NULL, 'settings', 'behavior') == 'hold') {
+      if ($payment_widget = money_hold_widget('order', $node->nid, $sum_to_paid, $enabled_sources[$def_payment_method])) {
+        $payment_widget['#attributes']['class'][] = 'default-submit';
+        $actions['payment'] = $payment_widget;
+      }
+    }
+    else {
+      if ($payment_widget = money_payment_widget('order', $node->nid, $sum_to_paid, $enabled_sources[$def_payment_method])) {
+        $payment_widget['#attributes']['class'][] = 'default-submit';
+        $actions['payment'] = $payment_widget;
+      }
     }
   }
 
@@ -1219,7 +1320,7 @@ function _order_payment_method_form_submit($form, &$form_state) {
       // bespolezno $form_state['rebuild'] = TRUE;
       $msg[] = 'Thanks for purchase!';
       if ($node->payment_method === 'cash') {
-       $msg[] = 'Please prepare moneys needed for purchase.';
+        $msg[] = 'Please prepare moneys needed for purchase.';
       }
       elseif ($node->payment_method === 'invoice') {
         $msg[] = 'Download or print invoice and pay it.';
@@ -1234,38 +1335,39 @@ function _order_payment_method_form_submit($form, &$form_state) {
 
 
 /**
-* Helper function - format order node title
-*/
+ * Helper function - format order node title
+ */
 function _order_title($node) {
-  return empty($node->ya_market_id) ? t('Order #@number', array('@number' => $node->order_num)) : t('Order #@number (order from Yandex.Market, ID = @ya_market_id)', array('@number' => $node->order_num,'@ya_market_id' => $node->ya_market_id));
+  return empty($node->ya_market_id) ? t('Order #@number', array('@number' => $node->order_num)) : t('Order #@number (order from Yandex.Market, ID = @ya_market_id)', array('@number' => $node->order_num, '@ya_market_id' => $node->ya_market_id));
 }
 
 
 /**
-* Helper function - bitwise conversion order_status database value into array of statuses
-*/
+ * Helper function - bitwise conversion order_status database value into array of statuses
+ */
 function _order_extract_status($node) {
-	$order_status = isset($node->order_status) ? $node->order_status : ORDER_STATUS_DELIVERY_ISSUED;
-	$node->order_status = array(ORDER_STATUS_DELIVERY_ISSUED => ORDER_STATUS_DELIVERY_ISSUED);
-	foreach (_order_statuses() as $status => $title) {
-		if ($order_status & $status) {
-			$node->order_status[$status] = $status;
-		}
-	}
+  $order_status = isset($node->order_status) ? $node->order_status : ORDER_STATUS_DELIVERY_ISSUED;
+  $node->order_status = array(ORDER_STATUS_DELIVERY_ISSUED => ORDER_STATUS_DELIVERY_ISSUED);
+  foreach (_order_statuses() as $status => $title) {
+    if ($order_status & $status) {
+      $node->order_status[$status] = $status;
+    }
+  }
 }
 
 
 /**
-* Implements hook_validate().
-*/
+ * Implements hook_validate().
+ */
 function order_validate($node, $form, &$form_state) {
-	$checkout_clicked = $form_state['triggering_element']['#value'] === $form['actions']['submit']['#value'];
-	if ($checkout_clicked && empty($node->nid) && shop_cart($node->uid)->is_empty(FALSE)) {
-		form_error($form['order_content']['shop_cart'], t('Cart is empty, You can not checkout order without goods.'));
-	}
+  $checkout_clicked = $form_state['triggering_element']['#value'] === $form['actions']['submit']['#value'];
+  $node->shop_id = $node->shop_cart['shop_id'];
+  if ($checkout_clicked && empty($node->nid) && shop_cart(NULL, NULL, $node)->is_empty(FALSE)) {
+    form_error($form['order_content']['shop_cart'], t('Cart is empty, You can not checkout order without goods.'));
+  }
 
-	$node->recipient_fields['mail'] = trim($node->recipient_fields['mail']);
-	$node->recipient_fields['phone'] = trim($node->recipient_fields['phone']);
+  $node->recipient_fields['mail'] = trim($node->recipient_fields['mail']);
+  $node->recipient_fields['phone'] = trim($node->recipient_fields['phone']);
   $node->recipient_fields['lfm'] = trim($node->recipient_fields['lfm']);
 
   if (empty($form_state['values']['shop_cart']['order_discount']['order_discount'])) {
@@ -1276,51 +1378,51 @@ function order_validate($node, $form, &$form_state) {
   $node->order_discount = $form_state['values']['shop_cart']['order_discount']['order_discount'];
   $node->order_discount_text = trim($form_state['values']['shop_cart']['order_discount']['order_discount_text']);
 
-	/*
-	if (!empty($node->customer) && ($acc = user_load($node->customer))) {
-		if ($node->recipient_fields['lfm'] && ($username = format_username($acc))) {
-			$lfm = preg_replace('/\s+/u', ' ', trim(drupal_strtolower($node->recipient_fields['lfm'])));
-			$username = preg_replace('/\s+/u', ' ', trim(drupal_strtolower($username)));
-			if ($lfm === $username) {
-				unset($form_state['values']['recipient_fields']['lfm'], $node->recipient_fields['lfm']);
-			}
-		}
-		if ($node->recipient_fields['phone'] && !empty($acc->phone)) {
-			if (addons_format_phone($node->recipient_fields['phone']) === addons_format_phone($acc->phone)) {
-				unset($form_state['values']['recipient_fields']['phone'], $node->recipient_fields['phone']);
-			}
-		}
-		if ($node->recipient_fields['mail']) {
-			if (drupal_strtolower($node->recipient_fields['mail']) === trim(drupal_strtolower($acc->mail))) {
-				unset($form_state['values']['recipient_fields']['mail'], $node->recipient_fields['mail']);
-			}
-		}
-	}
-	*/
+  /*
+  if (!empty($node->customer) && ($acc = user_load($node->customer))) {
+    if ($node->recipient_fields['lfm'] && ($username = format_username($acc))) {
+      $lfm = preg_replace('/\s+/u', ' ', trim(drupal_strtolower($node->recipient_fields['lfm'])));
+      $username = preg_replace('/\s+/u', ' ', trim(drupal_strtolower($username)));
+      if ($lfm === $username) {
+        unset($form_state['values']['recipient_fields']['lfm'], $node->recipient_fields['lfm']);
+      }
+    }
+    if ($node->recipient_fields['phone'] && !empty($acc->phone)) {
+      if (addons_format_phone($node->recipient_fields['phone']) === addons_format_phone($acc->phone)) {
+        unset($form_state['values']['recipient_fields']['phone'], $node->recipient_fields['phone']);
+      }
+    }
+    if ($node->recipient_fields['mail']) {
+      if (drupal_strtolower($node->recipient_fields['mail']) === trim(drupal_strtolower($acc->mail))) {
+        unset($form_state['values']['recipient_fields']['mail'], $node->recipient_fields['mail']);
+      }
+    }
+  }
+  */
 
-	global $user;
+  global $user;
   if (!empty($node->recipient_fields['mail']) && user_load_by_mail($node->recipient_fields['mail'])) {
     if (!$user->uid) {
       // IKW: no errors, display only warning message
       drupal_set_message(
-      t('This e-mail (@email) already used in user account on a site.', array(
-        '@email' => $node->recipient_fields['mail'],
-      )) .
-      ' ' .
-      t('Perhaps You already have an account here before. Please <a href="@url">log-in</a> on a site.', array(
-        '@url' => url('user', array('query' => array('destination' => $_GET['q']))),
-      )), 'warning');
+        t('This e-mail (@email) already used in user account on a site.', array(
+          '@email' => $node->recipient_fields['mail'],
+        )) .
+        ' ' .
+        t('Perhaps You already have an account here before. Please <a href="@url">log-in</a> on a site.', array(
+          '@url' => url('user', array('query' => array('destination' => $_GET['q']))),
+        )), 'warning');
     }
     // Do not allow registerd users attach orders to another registered email
     elseif ($checkout_clicked && drupal_strtolower($node->recipient_fields['mail']) !== drupal_strtolower($user->mail) && !user_access('administer moneys')) {
       form_error($form['order_information']['recipient_fields']['mail'],
-      t('This e-mail (@email) already used in another account on a site.', array(
-        '@email' => $node->recipient_fields['mail'],
-      )) .
-      ' ' .
-      t('If You have other account registered to @email, please log-in using this e-mail.', array(
-        '@email' => $node->recipient_fields['mail'],
-      )));
+        t('This e-mail (@email) already used in another account on a site.', array(
+          '@email' => $node->recipient_fields['mail'],
+        )) .
+        ' ' .
+        t('If You have other account registered to @email, please log-in using this e-mail.', array(
+          '@email' => $node->recipient_fields['mail'],
+        )));
     }
   }
 
@@ -1329,112 +1431,116 @@ function order_validate($node, $form, &$form_state) {
       ? $form['order_content']['shop_cart']['order_discount']['order_discount']
       : $form['order_content']['shop_cart']['order_discount']['order_discount_text'];
 
-      form_error($empty_field, t('The field %field is required.', array(
-        '%field' => $empty_field['#title'],
-      )));
+    form_error($empty_field, t('The field %field is required.', array(
+      '%field' => $empty_field['#title'],
+    )));
   }
 }
 
 
 /**
-* Implements hook_insert().
-*/
+ * Implements hook_insert().
+ */
 function order_insert($node) {
-	$node->order_status = !isset($node->order_status) ? array() : $node->order_status;
+  $node->order_status = !isset($node->order_status) ? array() : $node->order_status;
 
-	if (!is_array($node->order_status)) {
-		_order_extract_status($node);
-	}
-
-	//TODO: Currently Drupal does not allow to modify the node itself
-	//replace when module_invoke_all allow references in hook functions
-	//module_invoke_all('order_status_change', $node->order_status, $node);
-
-	$node->order_status = array_sum($node->order_status);
-
-	unset($node->order_num);
-
-  if (!empty($node->is_new)) {
-    $shop_cart = shop_cart($node->uid);
-    $shop_cart->order($node)->data((array)$node);
-  }
-  else {
-    $shop_cart = shop_cart(NULL, $node)->order($node)->data((array)$node);
+  if (!is_array($node->order_status)) {
+    _order_extract_status($node);
   }
 
-	$node->delivery_price = shop_build_price('order', $node, NULL, 'delivery') * 1;
+  //TODO: Currently Drupal does not allow to modify the node itself
+  //replace when module_invoke_all allow references in hook functions
+  //module_invoke_all('order_status_change', $node->order_status, $node);
+
+  $node->order_status = array_sum($node->order_status);
+
+  unset($node->order_num);
+
+  $clone = clone $node;
+  unset($clone->nid);
+  $shop_cart = shop_cart(NULL, NULL, $clone); // load shop_cart by order node but from {shop_cart_items} (NOT from {shop_cart_items_ordered})
+  $shop_cart->order($node);
+
+
+  $node->delivery_price = shop_build_price('order', $node, NULL, 'delivery');
+  $node->delivery_price = !$node->delivery_price && in_array($node->delivery_price, array('', FALSE), TRUE) ? NULL : $node->delivery_price;  // Crutch for PDOException: SQLSTATE[22007]: Invalid datetime format: 1366 Incorrect decimal value: '' for column 'delivery_price'
   $node->delivery_params = !empty($node->delivery_params) ? serialize($node->delivery_params) : NULL;
-  $node->tracking_id = anonymous_tracker_track_user();
-	drupal_write_record('shop_orders', $node);
+  $node->tracking_id = anonymous_tracker_track_user(NULL, 'id');
+  drupal_write_record('shop_orders', $node);
   $node->delivery_params = $node->delivery_params ? unserialize($node->delivery_params) : NULL;
-	_order_extract_status($node);
-	$node->title = _order_title($node);
-	db_query('UPDATE {node} SET title = :title WHERE nid = :nid', array(':nid' => $node->nid, ':title' => $node->title,));
-	db_query('UPDATE {node_revision} SET title = :title WHERE nid = :nid', array(':nid' => $node->nid, ':title' => $node->title,));
+  _order_extract_status($node);
+  $node->title = _order_title($node);
+  db_query('UPDATE {node} SET title = :title WHERE nid = :nid', array(':nid' => $node->nid, ':title' => $node->title,));
+  db_query('UPDATE {node_revision} SET title = :title WHERE nid = :nid', array(':nid' => $node->nid, ':title' => $node->title,));
 
-	$node->is_complete = order_is_complete($node);
+  $node->is_complete = order_is_complete($node);
 
   _order_track_balances($node);
 
-	if (!empty($node->is_new) && !$shop_cart->is_empty()) {
-		if ($node->uid && ($acc = user_load($node->uid))) {
-			$mail = $acc->mail;
-			$lang = user_preferred_language($acc);
-			$account = $acc;
-		}
-		elseif (!$node->uid && empty($node->customer)) {
-			$mail = !empty($node->recipient_fields['mail']) ? $node->recipient_fields['mail'] : variable_get('site_mail', ini_get('sendmail_from'));
-			$lang = $GLOBALS['language'];
-			$account = $GLOBALS['user'];
-		}
-		//if(isset($mail) && isset($lang) && isset($account)) {
-		$params = array(
-			'order'	=> $node,
-			'shop_cart'	=> $shop_cart,
-		);
-		if (isset($account)) {
-			$params['account'] = $account;
-		}
+  if (!empty($node->is_new) && !$shop_cart->is_empty()) {
+    if ($node->uid && ($acc = user_load($node->uid))) {
+      $mail = $acc->mail;
+      $lang = user_preferred_language($acc);
+      $account = $acc;
+    }
+    elseif (!$node->uid && empty($node->customer)) {
+      $mail = !empty($node->recipient_fields['mail']) ? $node->recipient_fields['mail'] : variable_get('site_mail', ini_get('sendmail_from'));
+      $lang = $GLOBALS['language'];
+      $account = $GLOBALS['user'];
+    }
+    //if(isset($mail) && isset($lang) && isset($account)) {
+    $params = array(
+      'order' => $node,
+      'shop_cart' => $shop_cart,
+    );
+    if (isset($account)) {
+      $params['account'] = $account;
+    }
 
-		drupal_mail('order', 'order_inserted', isset($mail) ? $mail : '', isset($lang) ? $lang : language_default(), $params);
+    drupal_mail('order', 'order_inserted', isset($mail) ? $mail : '', isset($lang) ? $lang : language_default(), $params);
 
     if ($node->order_discount) {
       order_changelog($node);
     }
-	}
+  }
 }
 
 
 /**
-* Implements hook_update().
-*/
+ * Implements hook_update().
+ */
 function order_update($node) {
-	$node->payment_method = isset($node->payment_method) ? $node->payment_method : NULL;
-	if (!is_array($node->order_status)) {
-		_order_extract_status($node);
-	}
+  $node->payment_method = isset($node->payment_method) ? $node->payment_method : NULL;
+  if (!is_array($node->order_status)) {
+    _order_extract_status($node);
+  }
 
-	$previous_state = $node->original;
-	unset($previous_state->previous_state);
-	$node->previous_state = serialize($previous_state);
-	$node->order_status = array_sum($node->order_status);
+  $previous_state = $node->original;
+  unset($previous_state->previous_state);
+  $node->previous_state = serialize($previous_state);
+  $node->order_status = array_sum($node->order_status);
 
-	$node->delivery_price = shop_build_price('order', $node, NULL, 'delivery') * 1;
+  $node->delivery_price = shop_build_price('order', $node, NULL, 'delivery');
+  $node->delivery_price = !$node->delivery_price && in_array($node->delivery_price, array('', FALSE), TRUE) ? NULL : $node->delivery_price; // Crutch for PDOException: SQLSTATE[22007]: Invalid datetime format: 1366 Incorrect decimal value: '' for column 'delivery_price'
   $node->delivery_params = $node->delivery_params ? serialize($node->delivery_params) : NULL;
-	drupal_write_record('shop_orders', $node, array('order_num'));
+  drupal_write_record('shop_orders', $node, array('order_num'));
   $node->delivery_params = $node->delivery_params ? unserialize($node->delivery_params) : NULL;
-	_order_extract_status($node);
-	$node->previous_state = $previous_state;
-	//spike for node title in status message
-	$node->title = t('#@number', array('@number' => $node->order_num));
+  _order_extract_status($node);
+  $node->previous_state = $previous_state;
+  //spike for node title in status message
+  $node->title = t('#@number', array('@number' => $node->order_num));
 
 
   $node->is_complete = order_is_complete($node);
 
   _order_track_balances($node);
 
+  $order_discount = $node->order_discount ?? NULL;
+  $order_discount_text = $node->order_discount_text ?? NULL;
+  $original_order_discount = $node->original->order_discount ?? NULL;
+  $original_order_discount_text = $node->original->order_discount_text ?? NULL;
 
-  if ($node->order_discount != $node->original->order_discount || $node->order_discount_text != $node->original->order_discount_text) {
+  if ($order_discount != $original_order_discount || $order_discount_text != $original_order_discount_text) {
     order_changelog($node);
   }
 }
@@ -1457,19 +1563,19 @@ function order_changelog($order) {
 
 
 /**
-* Reindex goods qty's in store by current updated/inserted/deleted order
-* @param $increment - boolean flag for increase or decrease qty
-*/
+ * Reindex goods qty's in store by current updated/inserted/deleted order
+ * @param $increment - boolean flag for increase or decrease qty
+ */
 function _order_update_products_qty($order, $increment) {
-  $shop_cart = shop_cart(NULL, $order->nid, NULL, TRUE);
-	foreach ($shop_cart->items as $item) {
-		if (function_exists($save_callback = $item->entity_type . '_save') && ($entities = entity_load($item->entity_type, array($item->entity_id))) && ($entity = reset($entities)) && isset($entity->qty)) { // qty is NULL - skip operation because qty already is infinity
-			if (isset($entity->status)) { // entity has standard status field?
+  $shop_cart = shop_cart(NULL, NULL, $order);
+  foreach ($shop_cart->items as $item) {
+    if (function_exists($save_callback = $item->entity_type . '_save') && ($entities = entity_load($item->entity_type, array($item->entity_id))) && ($entity = reset($entities)) && isset($entity->qty)) { // qty is NULL - skip operation because qty already is infinity
+      if (isset($entity->status)) { // entity has standard status field?
         $old_qty = $entity->qty;
         $new_qty = $increment ? $old_qty + $item->qty : $old_qty - $item->qty;
         $new_qty = max($new_qty, 0); // prevent negative qty
-				if ($old_qty != $new_qty) {
-				  $entity->qty = $new_qty;
+        if ($old_qty != $new_qty) {
+          $entity->qty = $new_qty;
           $save_callback($entity); // call node_save(), user_save(), etc
           if (arg(0) . '/' . arg(1) === 'node/' . $order->nid) {
             // Display messages only if current order concides with current URL (non-programmatic operation)
@@ -1489,14 +1595,14 @@ function _order_update_products_qty($order, $increment) {
 
 
 /**
-* Implements hook_delete().
-*/
+ * Implements hook_delete().
+ */
 function order_delete($node) {
   $node->order_delete = TRUE; // flag used in _order_track_balances()
   _order_track_balances($node);
 
-	db_query('DELETE FROM {shop_cart_items_ordered} WHERE oid = :oid', array(':oid' => $node->nid));
-	db_query('DELETE FROM {shop_orders} WHERE nid = :nid', array(':nid' => $node->nid));
+  db_query('DELETE FROM {shop_cart_items_ordered} WHERE oid = :oid', array(':oid' => $node->nid));
+  db_query('DELETE FROM {shop_orders} WHERE nid = :nid', array(':nid' => $node->nid));
 }
 
 
@@ -1506,32 +1612,32 @@ function order_delete($node) {
  * send email for user
  */
 function order_node_update($node) {
-	if ($node->type === 'order' && $node->created != $node->changed && !module_invoke('status', 'get_settings', 'node', 'order')) { // @see status.module
-		if (array_sum($node->order_status) != array_sum($node->original->order_status) || $node->status != $node->original->status) {
+  if ($node->type === 'order' && $node->created != $node->changed && !module_invoke('status', 'get_settings', 'node', 'order')) { // @see status.module
+    if (array_sum($node->order_status) != array_sum($node->original->order_status) || $node->status != $node->original->status) {
 
-			$account = user_load($node->uid);
-			$to = array(format_username($account) . ' <' . $account->mail . '>');
+      $account = user_load($node->uid);
+      $to = array(format_username($account) . ' <' . $account->mail . '>');
 
-			$language = user_preferred_language($account);
-			$options = array(
-				'order'	=> $node,
-			);
-			drupal_mail('order', 'order_status_changed', implode(',', $to), $language, $options);
-		}
-	}
+      $language = user_preferred_language($account);
+      $options = array(
+        'order' => $node,
+      );
+      drupal_mail('order', 'order_status_changed', implode(',', $to), $language, $options);
+    }
+  }
 }
 
 
 /**
-* Implements hook_drupal_goto_alter()
-*/
+ * Implements hook_drupal_goto_alter()
+ */
 function order_drupal_goto_alter(&$path, &$options, &$http_response_code) {
-	if ($_GET['q'] === 'user/password' && strpos($path, 'shop/cart/checkout') === 0 && arg(3, $path) && !empty($_GET['destination']) && $_GET['destination'] === $path) {
-		if (arg(3, $path) === drupal_hmac_base64('shop-cart-checkout', shop_cart()->cart_id . drupal_get_private_key() . drupal_get_hash_salt())) {
-			$path = $_GET['q'];
-			$options['query']['destination'] = $_GET['destination'];
-		}
-	}
+  if ($_GET['q'] === 'user/password' && arg(0, $path) . '/' . arg(1, $path) . '/' . arg(3, $path) === 'shop/cart/checkout' && arg(4, $path) && !empty($_GET['destination']) && $_GET['destination'] === $path) {
+    if (arg(4, $path) === drupal_hmac_base64('shop-cart-checkout', shop_cart(arg(2, $path))->currentKey() . drupal_get_private_key() . drupal_get_hash_salt())) {
+      $path = $_GET['q'];
+      $options['query']['destination'] = $_GET['destination'];
+    }
+  }
 }
 
 //////// Money API
@@ -1551,8 +1657,12 @@ function order_money_operations_info($operation = NULL, $operation_key = NULL) {
     if (($node = node_load($operation_key)) && ($node->type === 'order')) {
       $customer = shop_get_customer($node);
       $order_price = array_sum(shop_build_price('order', $node, $customer));
-      $result['order']['title'] = t('Payment for order #@num', array('@num' => $node->order_num));
+
+      $title = t('Payment for order #@num', array('@num' => $node->order_num));
+      $result['order']['title'] = $title;
       $result['order']['price'] = $order_price;
+
+      $result['order']['overview']['title'] = node_access('view', $node) ? l($title, "node/{$node->nid}") : $title;
     }
   }
 
@@ -1561,8 +1671,8 @@ function order_money_operations_info($operation = NULL, $operation_key = NULL) {
 
 
 /**
-* Implements hook_money_operation_get_recipient()
-*/
+ * Implements hook_money_operation_get_recipient()
+ */
 function order_money_operation_get_recipient($operation, $operation_key) {
   if ($operation === 'order') {
     return 'site';
@@ -1586,6 +1696,7 @@ function order_money_operation_get_customer($operation, $operation_key) {
  * Imlements hook_money_execute_access()
  */
 function order_money_execute_access($operation, $operation_key, $sum = NULL, $source_info = NULL, $before_insert = FALSE, &$error_messages = NULL) {
+
   if ($operation === 'order') {
     if (!$operation_key) {
       return TRUE;
@@ -1625,9 +1736,9 @@ function order_money_execute_access($operation, $operation_key, $sum = NULL, $so
     elseif ($source_info && !module_exists('cash_account')) {
       if (empty($node->delivery_method)) {
         // Check what current money source is allowed in all enabled delivery methods
-        foreach (shop_delivery_info() as $m => $info) {
+        foreach (shop_delivery_info($node) as $m => $info) {
           if ($info['enabled']) {
-            $payment_allow = shop_delivery_info($m, 'payment_allow');
+            $payment_allow = shop_delivery_info($node, $m, 'payment_allow');
             $payment_allow = $payment_allow ? array_filter($payment_allow) : NULL;
             if ($payment_allow && !in_array($source_info['source'], $payment_allow, TRUE)) {
               $error_messages[] = t('Delivery method must be specified first.');
@@ -1636,7 +1747,7 @@ function order_money_execute_access($operation, $operation_key, $sum = NULL, $so
           }
         }
       }
-      elseif (($payment_allow = shop_delivery_info($node->delivery_method, 'payment_allow')) && ($payment_allow = array_filter($payment_allow)) && !in_array($source_info['source'], array_filter($payment_allow), TRUE)) {
+      elseif (($payment_allow = shop_delivery_info($node, $node->delivery_method, 'payment_allow')) && ($payment_allow = array_filter($payment_allow)) && !in_array($source_info['source'], array_filter($payment_allow), TRUE)) {
         $error_messages[] = t('Payment method is denied for selected delivery method.');
         return FALSE;
       }
@@ -1647,29 +1758,36 @@ function order_money_execute_access($operation, $operation_key, $sum = NULL, $so
 
 
 /**
-* Implements hook_money_transaction_prepare()
-*/
+ * Implements hook_money_transaction_prepare()
+ */
 function order_money_transaction_prepare($money_transaction) {
   if ($money_transaction->operation === 'order') {
     if ($order = node_load($money_transaction->operation_key)) {
-      foreach (shop_cart(NULL, $order)->items as $item) {
+      foreach (shop_cart(NULL, NULL, $order)->items as $item) {
         $money_transaction->items[] = array(
           'title' => $item->title,
           'qty' => $item->qty,
           'qty_type' => $item->qty_type,
           'price' => array_sum(shop_build_price('shop_cart_item', $item)),
-					'real_price' => $item->si_price,
+          'real_price' => $item->si_price,
         );
       }
       $summary = shop_build_price('order', $order);
-			$money_transaction->order_summary = $summary;
+      $money_transaction->order_summary = $summary;
       if (!empty($summary['delivery'])) {
         $money_transaction->items[] = array(
-          'title' => t('Delivery') . ' ('. shop_delivery_info($order->delivery_method, 'title') . ')',
+          'title' => t('Delivery') . ' (' . shop_delivery_info($order, $order->delivery_method, 'title') . ')',
           'qty' => 1,
           'price' => $summary['delivery'],
         );
       }
+      // Fiscal information
+      // Needed for KKT (fiscal module) @see fiscal_receipt_by_money_transaction()
+      $money_transaction->fiscal_info = array(
+        'positions' => $money_transaction->items,
+        'payer_phone' => $order->recipient_fields['phone'],
+        'payer_mail' => $order->recipient_fields['mail'],
+      );      
     }
   }
 }
@@ -1687,20 +1805,21 @@ function order_money_transaction_presave($money_transaction) {
 
 
 /**
-* Implements hook_money_transaction_insert()
-*/
-function order_money_transaction_insert($money_transaction, $result) {
+ * Implements hook_money_transaction_insert()
+ */
+function order_money_transaction_insert($money_transaction) {
   if ($money_transaction->operation === 'order') {
     if (($order = node_load($money_transaction->operation_key)) && $order->type === 'order' && !$order->is_paid) {
       $order->is_paid = TRUE;
       $order->payment_method = $money_transaction->source;
       $order->payment_timestamp = $money_transaction->timestamp;
       node_save($order);
+      _order_trigger($order, 'order_paid');
       if (module_exists('changelog')) {
-				changelog_add(
-					$order,
-					'node',
-					'order',
+        changelog_add(
+          $order,
+          'node',
+          'order',
           'Order was paid',
           array(),
           'payment',
@@ -1708,18 +1827,18 @@ function order_money_transaction_insert($money_transaction, $result) {
           $money_transaction->uid
         );
       }
-			drupal_mail('order', 'payment_accepted', isset($mail) ? $mail : '', isset($lang) ? $lang : language_default(), array(
-				'order' => $order,
-				'shop_cart' => shop_cart($order->uid)
-			));
+      drupal_mail('order', 'payment_accepted', isset($mail) ? $mail : '', isset($lang) ? $lang : language_default(), array(
+        'order' => $order,
+        'shop_cart' => shop_cart(NULL, NULL, $order),
+      ));
     }
   }
 }
 
 
 /**
-* Implements hook_form_FORM_ID_alter()
-*/
+ * Implements hook_form_FORM_ID_alter()
+ */
 function order_form_money_payment_form_alter(&$form, &$form_state, $form_id) {
   if ($form['operation']['#value'] === 'order' && ($nid = $form['operation_key']['#value'])) {
     // Set preferred payment method for orders that already have payment_method property.
@@ -1727,7 +1846,7 @@ function order_form_money_payment_form_alter(&$form, &$form_state, $form_id) {
       if (($node = node_load($nid)) && $node->payment_method && isset($form['source']['#options'][$node->payment_method])) {
         $form['source']['#default_value'] = $node->payment_method;
         // Move default option to top
-        $form['source']['#options'] = array($node->payment_method=> $form['source']['#options'][$node->payment_method]) + $form['source']['#options'];
+        $form['source']['#options'] = array($node->payment_method => $form['source']['#options'][$node->payment_method]) + $form['source']['#options'];
       }
     }
   }
@@ -1735,11 +1854,11 @@ function order_form_money_payment_form_alter(&$form, &$form_state, $form_id) {
 
 
 /**
-* Implements hook_user_delete()
-*/
+ * Implements hook_user_delete()
+ */
 function order_user_delete($account) {
-   // IKW: An customer field can be guest (0) or NULL if not specified, or any user uid
-   // Implementation: set guest because uid of customer was specified
+  // IKW: An customer field can be guest (0) or NULL if not specified, or any user uid
+  // Implementation: set guest because uid of customer was specified
   db_query('UPDATE {shop_orders} SET customer = 0 WHERE customer = :uid', array(':uid' => $account->uid,));
 }
 
@@ -1785,14 +1904,14 @@ function order_microwidgets_info() {
   elseif (count($node) == 1) {
     $node = reset($node);
 
-		$content['order_link'] = array(
-			'#type' => 'link',
-			'#title' => module_exists('pictogram') ? theme('pictogram', array('icon' => 'gift')) . ' <span>' . t('#') . $node->order_num . '</span>' : $node->title,
-			'#href' => 'node/' . $node->nid,
-			'#options' => array(
-				'html' => TRUE,
-			),
-		);
+    $content['order_link'] = array(
+      '#type' => 'link',
+      '#title' => module_exists('pictogram') ? theme('pictogram', array('icon' => 'gift')) . ' <span>' . t('#') . $node->order_num . '</span>' : $node->title,
+      '#href' => 'node/' . $node->nid,
+      '#options' => array(
+        'html' => TRUE,
+      ),
+    );
 
     if (module_invoke('status', 'get_settings', 'node', 'order')) {
       $status_view = status_view_status_field($node);
@@ -1806,14 +1925,12 @@ function order_microwidgets_info() {
     }
   }
 
-  if ($content) {
-    $info = array(
-      'title' => t("Order's microwidget"),
-      'content' => $content,
-    );
+  $info = array(
+    'title' => t("Order's microwidget"),
+    'content' => $content ?? array(),
+  );
 
-    return $info;
-  }
+  return $info;
 }
 
 
@@ -1870,15 +1987,39 @@ function order_status_change_node_status($node) {
      * WORKAROUND
      * because status changing does not updates node object
      */
-    $is_complete = !empty($node->status_field['original']['is_last_status']); // @see order_is_complete()
-
     $node = node_load($node->nid, NULL, TRUE);
     $node->original = new stdClass();
-    $node->original->is_complete = $is_complete;
+    $node->original->is_complete = !empty($node->status_field['original']['is_last_status']); // @see order_is_complete();
     _order_track_balances($node);
-    
+
+
+    // Proceed holded order operation if exists
+    if (!empty($node->status_field['is_last_status']) && !$node->is_paid) {
+      if ($holded = money_get_holded(NULL, 'order', $node->nid)) {
+        $data = db_select('money_hold', 'mh')
+          ->fields('mh', array('source', 'source_key', 'sum'))
+          ->condition('mh.operation', 'order')
+          ->condition('mh.operation_key', $node->nid)->execute()->fetchAssoc();
+
+        $source_info = money_sources_info($data['source'], $data['source_key']);
+
+        money_transaction_begin();
+        $money_transaction = money_new_transaction(array(
+          'operation' => 'order',
+          'operation_key' => $node->nid,
+          'sum' => $data['sum'],
+          'source' => $source_info['source'],
+          'source_key' => $source_info['key'],
+        ));
+        money_transaction_save($money_transaction);
+        money_transaction_finish();
+      }
+    }
+
+
     if (!$node->frozen) {
-      $node->delivery_price = shop_build_price('order', $node, NULL, 'delivery') * 1;
+      $node->delivery_price = shop_build_price('order', $node, NULL, 'delivery');
+      $node->delivery_price = !$node->delivery_price && in_array($node->delivery_price, array('', FALSE), TRUE) ? NULL : $node->delivery_price; // Crutch for PDOException: SQLSTATE[22007]: Invalid datetime format: 1366 Incorrect decimal value: '' for column 'delivery_price'
       db_query('UPDATE {shop_orders} SET delivery_price = :p WHERE nid = :n', array(
         ':p' => $node->delivery_price,
         ':n' => $node->nid,
@@ -1889,32 +2030,129 @@ function order_status_change_node_status($node) {
 }
 
 
-function _order_track_balances($node) {
+function _order_track_balances($order) {
   if (shop_get_info('balances', 'settings', 'track')) {
     $product_debit_condition = shop_get_info('balances', 'settings', 'product_debit_condition');
 
     $prev_state = FALSE;
     $curr_state = FALSE;
-    $del_flag = !empty($node->order_delete);
+    $del_flag = !empty($order->order_delete); // Custom context indicates that order deletion is called  @see order_delete()
 
     if ($product_debit_condition === 'created') {
-      $curr_state = !empty($node->is_new);
+      $curr_state = !empty($order->is_new);
       $prev_state = !$curr_state;
     }
     elseif ($product_debit_condition === 'completed') {
-      $prev_state = !empty($node->original->is_complete);
-      $curr_state = !empty($node->is_complete);
+      $prev_state = !empty($order->original->is_complete);
+      $curr_state = !empty($order->is_complete);
     }
     elseif ($product_debit_condition === 'paid') {
-      $prev_state = !empty($node->original->is_paid);
-      $curr_state = !empty($node->is_paid);
+      $prev_state = !empty($order->original->is_paid);
+      $curr_state = !empty($order->is_paid);
     }
 
     if ($curr_state && $del_flag) {
-      _order_update_products_qty($node, TRUE);
+      _order_update_products_qty($order, TRUE);
     }
     elseif ($curr_state != $prev_state) {
-      _order_update_products_qty($node, !$curr_state);
+      _order_update_products_qty($order, !$curr_state);
     }
+  }
+}
+
+/**
+ * Implements hook_trigger_info().
+ */
+function order_trigger_info() {
+  return array(
+    'node' => array(
+      'order_paid' => array(
+        'label' => t('Order is paid'),
+      ),
+    ),
+  );
+}
+
+
+function _order_trigger($entity, $hook, $a3 = NULL, $a4 = NULL) {
+  if (!module_exists('trigger')) {
+    return; // do nothing
+  }
+
+  // Keep objects for reuse so that changes actions make to objects can persist.
+  static $objects;
+  // Prevent recursion by tracking which operations have already been called.
+  static $recursion;
+
+  $aids = trigger_get_assigned_actions($hook);
+
+  if (!$aids) {
+    return;
+  }
+
+  if (isset($recursion[$hook])) {
+    return;
+  }
+
+  $recursion[$hook] = TRUE;
+
+  $context = array(
+    'group' => 'node',
+    'hook' => $hook,
+    'nid' => $entity->nid,
+    'order' => $entity->order_num,
+  );
+
+  // We need to get the expected object if the action's type is not 'money_transaction'.
+  // We keep the object in $objects so we can reuse it if we have multiple actions
+  // that make changes to an object.
+  foreach ($aids as $aid => $info) {
+//    $type = $info['type'];
+//    if ($type != 'node') {
+//      if (!isset($objects[$type])) {
+//        $objects[$type] = _order_trigger_normalize_context($type, $money_transaction);
+//      }
+//      // Since we know about the money_transaction, we pass that info along to the action.
+//      $context['money_transaction'] = $money_transaction;
+//      $result = actions_do($aid, $objects[$type], $context, $a3, $a4);
+//    }
+//    else {
+      actions_do($aid, $entity, $context, $a3, $a4);
+//    }
+  }
+
+  unset($recursion[$hook]);
+}
+
+
+/**
+ * @todo
+ */
+function _order_trigger_normalize_context($type, $entity) {
+
+}
+
+
+/**
+ * Implements hook_action_info().
+ */
+function order_action_info() {
+  return array(
+    'order_unhold_money' => array(
+      'type' => 'node',
+      'label' => t('Unhold money'),
+      'configurable' => FALSE,
+      'triggers' => array('any'),
+    ),
+  );
+}
+
+
+/**
+ * Unhold order money
+ */
+function order_unhold_money($node, $context = array()) {
+  if ($node->type == 'order') {
+    money_unhold('order', $node->nid);
   }
 }

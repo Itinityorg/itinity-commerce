@@ -119,32 +119,47 @@ function theme_catalog_list_entities($variables) {
       foreach (element_children($variables['entities']) as $idx) {
         $row = array();
         $last_key = NULL;
-        foreach ($header as $key => $data) {
-          $row[$key]['data'] = array();
-          if (!empty($variables['entities'][$idx][$key])) {
-            $variables['entities'][$idx][$key]['#title_display'] = 'invisible';
-            $row[$key]['data'][] = $variables['entities'][$idx][$key];
-            $last_key = $key;
-          }
-          $row[$key]['class'][] = 'catalog-cell ' . drupal_html_class('td-' . $key);
+        if ($variables['entities'][$idx]['#bundle'] !== $catalog_object->bundle) {
+          // Entity forced injected by another module and inconsistent with listed entities bundle name - render all entity into single table cell because fields struct may not compatible with #header.
+          $last_key = 'outside_item';
+          $row[$last_key]['data'] = $variables['entities'][$idx];
+          $row[$last_key]['class'][] = 'catalog-cell ' . drupal_html_class('td-' . $last_key);
+          $row[$last_key]['colspan'] = count($header) - 1;
+        }
+        else {
+          foreach ($header as $key => $data) {
+            $row[$key]['data'] = array();
+            if (!empty($variables['entities'][$idx][$key])) {
+              $variables['entities'][$idx][$key]['#title_display'] = 'invisible';
+              $row[$key]['data'][] = $variables['entities'][$idx][$key];
+              $last_key = $key;
+            }
+            $row[$key]['class'][] = 'catalog-cell ' . drupal_html_class('td-' . $key);
+          }          
         }
 
         //add row classes and row id
         $row_classes = array('catalog-row', 'content',);
+        if ($last_key === 'outside_item') {
+          $row_classes[] = drupal_html_class($last_key);
+        }
         //add contextual links
         if ($last_key && $contextual_access && !empty($variables['entities'][$idx]['#contextual_links'])) {
           $row_classes[] = 'contextual-links-region';
-          $row[$last_key]['data']['contextual_links_td'] = array(
-            '#type' => 'container',
-            '#weight' => 0,
-            '#attributes' => array(
-              'class' => array('contextual-links-td',),
-            ),
-          );
-          $row[$last_key]['data']['contextual_links_td']['contextual_links'] = array(
-            '#type' => 'contextual_links',
-            '#contextual_links' => $variables['entities'][$idx]['#contextual_links'],
-          );
+          if ($last_key !== 'outside_item') {
+            $row[$last_key]['data']['contextual_links_td'] = array(
+              '#type' => 'container',
+              '#weight' => 0,
+              '#attributes' => array(
+                'class' => array('contextual-links-td',),
+              ),
+            );
+            $row[$last_key]['data']['contextual_links_td']['contextual_links'] = array(
+              '#type' => 'contextual_links',
+              '#contextual_links' => $variables['entities'][$idx]['#contextual_links'],
+            );            
+          }
+
         }
 
         $row_id = '';
@@ -157,10 +172,9 @@ function theme_catalog_list_entities($variables) {
         }
 
         //add classes form other's module preprocess function
-        if (!empty($variables['entities'][$idx]['#tabe_row_classes'])) {
-          $row_classes = array_merge($row_classes, $variables['entities'][$idx]['#tabe_row_classes']);
+        if (!empty($variables['entities'][$idx]['#table_row_classes'])) {
+          $row_classes = array_merge($row_classes, $variables['entities'][$idx]['#table_row_classes']);
         }
-
         $rows[] = array(
           'data' => $row,
           'class' => $row_classes,
@@ -223,11 +237,10 @@ function theme_catalog_list_entities($variables) {
     $i = 0;
       //if (!$variables['catalog_object']->is_block) m(count($variables['entities']));
     $col_wrapper = !empty($variables['catalog_object']->materials_settings['modes']['list']['settings']['colwrap']);
-        $count_entities = $variables['entities'];
-        if ($col_wrapper) {
-          $current_col = 0;
-          $ColArray = array();
-        }
+    if ($col_wrapper) {
+      $current_col = 0;
+      $ColArray = array();
+    }
     $cols = !empty($variables['catalog_object']->materials_settings['modes']['list']['settings']['cols']) ? $variables['catalog_object']->materials_settings['modes']['list']['settings']['cols'] : 1;
 
     foreach ($variables['entities'] as $idx => $entity) {
@@ -245,6 +258,9 @@ function theme_catalog_list_entities($variables) {
       if ($i == count($variables['entities'])) {
         $classes[] = 'last';
       }
+      if ($entity['#bundle'] !== $variables['catalog_object']->bundle) {
+        $classes[] = 'outside-item';
+      }
       $variables['entities'][$idx]['#prefix'] = '<div class="' . implode(' ', $classes) . '"><div class="catalog-cell">' . $variables['entities'][$idx]['#prefix'];
       $variables['entities'][$idx]['#suffix'] .= '</div></div>';
       // partition by column
@@ -260,16 +276,18 @@ function theme_catalog_list_entities($variables) {
       }
     }
     // now wrapper partition by column
-    if ($col_wrapper) foreach ($ColArray as $current_col => $entities) {
-      $variables['entities']['col'][$current_col]['#prefix'] ='<div class="catalog-col-wrapper">';
-      $variables['entities']['col'][$current_col]['#suffix'] = '</div>';
-      foreach ($entities as $idx => $entity) {
-        $variables['entities']['col'][$current_col]['entities'][$idx] = $entity;
+    if ($col_wrapper) {
+      foreach ($ColArray as $current_col => $entities) {
+        $variables['entities']['col'][$current_col]['#prefix'] ='<div class="catalog-col-wrapper">';
+        $variables['entities']['col'][$current_col]['#suffix'] = '</div>';
+        foreach ($entities as $idx => $entity) {
+          $variables['entities']['col'][$current_col]['entities'][$idx] = $entity;
+        }
       }
     }
     $classes = array(
       'catalog-table',  // old legacy
-      'cols-' . min($cols, $count_entities),//$variables['catalog_object']->cols,
+      'cols-' . $cols, //$variables['catalog_object']->cols,
       $variables['catalog_object']->entity_type . 's',   // 'users', 'nodes' ...
       preg_replace('/([^s])$/', '$1s', $variables['catalog_object']->bundle) // 'page' -->> 'pages', 'news' -->> 'news'
     );
@@ -384,18 +402,21 @@ function theme_catalog_list_terms($variables) {
       if ($variables['colwrap']) {
         if ($current_col < $variables['cols'])  { $current_col++; } else { $current_col = 1; }
         $ColArray[$current_col][$tid] = $view;
-      } else {
+      }
+      else {
         $build['terms'][] = $view;
       }
 
     }
 
     // now wrapper partition by column
-    if ($variables['colwrap']) foreach ($ColArray as $current_col => $col_views) {
-      $build['terms'][$current_col]['#prefix'] ='<div class="catalog-col-wrapper">';
-      $build['terms'][$current_col]['#suffix'] = '</div>';
-      foreach ($col_views as $tid => $view) {
-        $build['terms'][$current_col]['it'][$tid] = $view;
+    if ($variables['colwrap']) {
+        foreach ($ColArray as $current_col => $col_views) {
+        $build['terms'][$current_col]['#prefix'] ='<div class="catalog-col-wrapper">';
+        $build['terms'][$current_col]['#suffix'] = '</div>';
+        foreach ($col_views as $tid => $view) {
+          $build['terms'][$current_col]['it'][$tid] = $view;
+        }
       }
     }
 

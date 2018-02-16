@@ -181,10 +181,15 @@ function contacts_form($form, &$form_state, $recipient = NULL) {
       '#value' => $recipient,
     );
   }
-  $form['submit'] = array(
-    '#type' => 'submit',
-    '#value' => t('Submit'),
+  $form['actions'] = array(
+    '#type' => 'actions',
+    'submit' => array(
+      '#type' => 'submit',
+      '#value' => t('Submit'),
+    ),
   );
+  $form['#personal_data_agreement'] = array('group_name' => 'actions', 'button_name' => 'submit');
+
   return $form;
 }
 

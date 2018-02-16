@@ -64,13 +64,16 @@ function node_specifications_form($form, &$form_state, $specification = NULL) {
 
 // rsi ---- >
 // m($specification);
-	$node_type = '';
-	if (isset($form_state['values']['filters']['node_type'])) { // <- from ajax
-		$node_type = $form_state['values']['filters']['node_type'];
-	}
-	elseif (!empty($specification->node_type)) {
-		$node_type = $specification->node_type;
-	}
+  $node_type = '';
+  if (isset($form_state['values']['filters']['node_type'])) { // <- from ajax
+    $node_type = $form_state['values']['filters']['node_type'];
+  }
+  elseif (!empty($specification->node_type)) {
+    $node_type = $specification->node_type;
+  }
+  elseif (isset($form_state['input']['filters']['node_type'])) {
+    $node_type = $form_state['input']['filters']['node_type'];
+  }
 
 	$form['filters']['node_type'] = array(
 		'#type' => 'select',
@@ -111,7 +114,9 @@ function node_specifications_form($form, &$form_state, $specification = NULL) {
   elseif (isset($specification->vid))  {
     $default_vid = $specification->vid;
   }
-  else {
+  elseif (isset($form_state['input']['filters']['vocabulary']['vid'])) {
+    $default_vid = $form_state['input']['filters']['vocabulary']['vid'];
+  } else {
     $default_vid = NULL;
   }
  //else {
@@ -119,7 +124,6 @@ function node_specifications_form($form, &$form_state, $specification = NULL) {
  //    $default_vid = $specification->vid;
  //  }
  //}
-
 	if ($vocabularies) {
     $form['filters']['vocabulary'] += array(
   			'#type' => 'item'
@@ -168,7 +172,7 @@ function node_specifications_form($form, &$form_state, $specification = NULL) {
   			'#title' => t('Terms'),
         '#title_display' => 'invisible',
   			'#options' => $term_lists[$default_vid],
-  			'#default_value' =>  isset($specification->tids) ? $specification->tids : array(),
+  			'#default_value' =>  isset($specification->tids) ? $specification->tids : $form_state['input']['filters']['vocabulary']['terms']['tids'] ?? array(),
   		);
     }
 	}
@@ -642,12 +646,14 @@ function node_specifications_overview_form($form, &$form_state) {
       '#delta' => 10,
       '#default_value' => $weight,
     );
-    $weights[$weight] = $nsid; // для сортирвоки по весу ПЕРЕД выводом формы
+    $weights[$nsid] = $weight; // для сортирвоки по весу ПЕРЕД выводом формы
   }
   // отсортируем окончательный список строк формы по весу
-  ksort($weights);
+  asort($weights);
   //m($weights);
-  foreach ($weights as $nsid) $form[$nsid] = $form1[$nsid];
+  foreach ($weights as $nsid => $weight) {
+    $form[$nsid] = $form1[$nsid];
+  }
   // Only make this form include a submit button and weight if more than one
   // vocabulary exists.
   if (count(node_specifications_load_multiple(FALSE)) > 0) {
@@ -881,36 +887,42 @@ function node_specifications_filter_preset_form($form, &$form_state, $preset = N
   }
 	$form['preset']['#tree'] = TRUE;
 
-	$form['preset']['id'] = array(
-		'#type' => 'value',
-		'#value' => isset($preset['id']) ? $preset['id'] : NULL,
-	);
+  $form['preset']['id'] = array(
+    '#type' => 'value',
+    '#value' => $preset['id'] ?? NULL,
+  );
 
-	$form['preset']['weight'] = array(
-		'#type' => 'value',
-		'#value' => isset($preset['weight']) ? $preset['weight'] : NULL,
-	);
+  $form['preset']['weight'] = array(
+    '#type' => 'value',
+    '#value' => $preset['weight'] ?? NULL,
+  );
 
-	$form['preset']['title'] = array(
-		'#type' => 'textfield',
-		'#title' => t('Title'),
-		'#default_value' => !empty($preset['title']) ? $preset['title'] : '',
-		'#required' => TRUE,
-	);
+  $form['preset']['title'] = array(
+    '#type' => 'textfield',
+    '#title' => t('Title'),
+    '#default_value' => $preset['title'] ?? '',
+    '#required' => TRUE,
+  );
 
-	$form['preset']['base_uri'] = array(
-		'#type' => 'textfield',
-		'#title' => t('Base uri'),
-		'#default_value' => !empty($preset['base_uri']) ? $preset['base_uri'] : '',
-		'#required' => TRUE,
-	);
+  $form['preset']['content'] = array(
+    '#type' => 'text_format',
+    '#title' => t('Content'),
+    '#default_value' => $preset['content'] ?? '',
+  );
 
-	$form['preset']['query_params'] = array(
-		'#type' => 'textfield',
-		'#title' => t('Query params'),
-		'#default_value' => !empty($preset['query_params']) ? $preset['query_params'] : '',
-		'#required' => TRUE,
-	);
+  $form['preset']['base_uri'] = array(
+    '#type' => 'textfield',
+    '#title' => t('Base uri'),
+    '#default_value' => $preset['base_uri'] ?? '',
+    '#required' => TRUE,
+  );
+
+  $form['preset']['query_params'] = array(
+    '#type' => 'textfield',
+    '#title' => t('Query params'),
+    '#default_value' => $preset['query_params'] ?? '',
+    '#required' => TRUE,
+  );
 
 	//seo stuff
 	if (module_exists('seo')) {
@@ -920,7 +932,7 @@ function node_specifications_filter_preset_form($form, &$form_state, $preset = N
 			->condition('id', $preset['id']);
 		$seo_meta = $q->execute()->fetchAssoc();
 
-		$form['seo'] = _seo_subform($seo_meta ? $seo_meta : array());
+		$form['seo'] = _seo_subform($seo_meta ?: array());
 		$form['seo']['entry_num'] = array('#type' => 'value', '#value' => !empty($seo_meta['entry_num']) ? $seo_meta['entry_num'] : NULL);
 	}
 	//

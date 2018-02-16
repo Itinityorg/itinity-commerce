@@ -527,6 +527,9 @@ msgstr "Ганский седи"
 msgid "Icelandic kr&oacute;na"
 msgstr "Исландская крона"
 
+msgctxt "currency"
+msgid "RUB"
+msgstr "руб."
 
 msgctxt "currency"
 msgid "rub"

@@ -1,26 +1,25 @@
 <?php //$Id: money.install, v 1.0 2015/05/07 17:44:52 itinity Exp $
 
 
-
 /**
-* Implements hook_install()
-*/
+ * Implements hook_install()
+ */
 function money_install() {
-  
+
 }
 
 
 /**
-* Implements hook_uninstall()
-*/
+ * Implements hook_uninstall()
+ */
 function money_uninstall() {
   variable_del('money_payment_systems_settings');
 }
 
 
 /**
-* Implements hook_schema()
-*/
+ * Implements hook_schema()
+ */
 function money_schema() {
   $schema = array();
   $schema['money_transactions'] = array(
@@ -101,6 +100,12 @@ function money_schema() {
         'not null' => TRUE,
         'precision' => '10',
         'scale' => '2',
+      ),
+      'currency' => array(
+        'description' => 'Currency of transaction in ISO format',
+        'type' => 'varchar',
+        'length' => '8',
+        'not null' => FALSE,
       ),
       'status' => array(
         'description' => 'Complete/incomplete flag',
@@ -230,8 +235,8 @@ function money_schema() {
 
 
 /**
-* Update {money_transactions} and {money_hold} tables
-*/
+ * Update {money_transactions} and {money_hold} tables
+ */
 function money_update_7001() {
   db_add_field('money_hold', 'source_key', array(
     'description' => 'TODO: please describe this field!',
@@ -282,8 +287,8 @@ function money_update_7001() {
 }
 
 /**
-* Update {money_transactions} and {money_hold} tables
-*/
+ * Update {money_transactions} and {money_hold} tables
+ */
 function money_update_7002() {
   db_query('UPDATE {money_transactions} SET source_key = \'\' WHERE (source_key IS NULL)');
   db_query('UPDATE {money_transactions} SET recipient_key = \'\' WHERE (recipient_key IS NULL)');
@@ -313,8 +318,8 @@ function money_update_7002() {
 
 
 /**
-* Drop unnecessary indexes
-*/
+ * Drop unnecessary indexes
+ */
 function money_update_7003() {
   db_drop_index('money_hold', 'operation');
   db_drop_index('money_hold', 'operation_key');
@@ -324,8 +329,8 @@ function money_update_7003() {
 
 
 /**
-* Add internal_document_id column in {money_transactions}
-*/
+ * Add internal_document_id column in {money_transactions}
+ */
 function money_update_7004() {
   db_add_field('money_transactions', 'internal_document_id', array(
     'description' => 'Store and index additional identifier used in any payment systems. Can be need for avoid duplicated transactions',
@@ -337,11 +342,48 @@ function money_update_7004() {
 }
 
 
+/**
+ * Add currency column in {money_transactions}
+ */
+function money_update_7005() {
+  db_add_field('money_transactions', 'currency', array(
+    'description' => 'Currency of transaction in ISO format',
+    'type' => 'varchar',
+    'length' => '8',
+    'not null' => FALSE,
+  ));
+}
 
 
+/**
+ * Fill {money_transactions}.currency with default values
+ */
+function money_update_7006() {
+//  if (module_exists('shop')) {
+//    $shop_currency = shop_get_info('currency', 'default');
+//
+//    db_update('money_transactions')
+//      ->fields(array('currency' => $shop_currency))
+//      ->condition('operation', array('order'))
+//      ->execute();
+//  }
+//
+//  if (module_exists('bonus_account')) {
+//    $bonus_currency = bonus_account_get_settings('settings', 'currency') ?? variable_get('money_default_currency', 'RUB');
+//
+//    db_update('money_transactions')
+//      ->fields(array('currency' => $bonus_currency))
+//      ->condition('operation', array('take_bonus', 'give_bonus'))
+//      ->execute();
+//  }
 
+  $money_default_currency = variable_get('money_default_currency', 'RUB');
 
-
+  db_update('money_transactions')
+    ->fields(array('currency' => $money_default_currency))
+    ->isNull('currency')
+    ->execute();
+}
 
 
 

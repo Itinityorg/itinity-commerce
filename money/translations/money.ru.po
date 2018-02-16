@@ -38,8 +38,8 @@ msgstr "Дата и время"
 msgid "Sum"
 msgstr "Сумма"
 
-msgid "Payment method: %name"
-msgstr "Способ оплаты: %name"
+msgid "Payment method: !name"
+msgstr "Способ оплаты: !name"
 
 msgid "Operation name"
 msgstr "Наименование операции"
@@ -56,8 +56,9 @@ msgstr "Доступные средства"
 msgid "Source"
 msgstr "Источник"
 
+msgctxt "accounting"
 msgid "Balance"
-msgstr "Баланс"
+msgstr "Остаток"
 
 msgid "Refuel personal balance"
 msgstr "Пополнение личного счёта"
@@ -101,16 +102,26 @@ msgstr "Денежная транзакция не выполнена. <br />Т�
 msgid "Operation <strong>\"!op\"</strong> for the sum <strong>!sum</strong> successfully completed."
 msgstr "Операция <strong>\"!op\"</strong> на сумму <strong>!sum</strong> успешно выполнена."
 
+msgid "Source balance before operation"
+msgstr "Баланс источника до"
+
 msgid "Source balance after operation"
-msgstr "Баланс источника после операции"
+msgstr "Баланс источника после"
+
+msgid "Recipient balance before operation"
+msgstr "Баланс получателя до"
 
 msgid "Recipient balance after operation"
-msgstr "Баланс получателя после операции"
-
+msgstr "Баланс получателя после"
 
 msgid "Service data"
 msgstr "Служебная информация"
 
+msgid "Money transaction №@n"
+msgstr "Денежная транзакция №@n"
+
+msgid "Transaction"
+msgstr "Транзакция"
 
 msgid "Internal document ID"
 msgstr "Внутренний идентификатор документа"
@@ -136,5 +147,40 @@ msgstr "Сбросить фильтр"
 msgid "#, date, time"
 msgstr "№, дата, время"
 
+msgid "#"
+msgstr "№"
+
+msgid "date/time"
+msgstr "дата/время"
+
 msgid 'Source "%source" is not allowed for this operation'
 msgstr 'Источник "%source" не допускается для этой операции'
+
+msgid "Additional data"
+msgstr "Расширенная информация"
+
+msgctxt 'date-interval'
+msgid 'from'
+msgstr 'с'
+
+msgctxt 'date-interval'
+msgid 'to'
+msgstr 'по'
+
+msgid 'Site'
+msgstr 'Сайт'
+
+msgid "Proceeded by"
+msgstr "Провел транзакцию"
+
+msgid "Automatically"
+msgstr "Автоматически"
+
+msgid "Payment system"
+msgstr "Платежная система"
+
+msgid "Payment systems"
+msgstr "Платежные системы"
+
+msgid "Period profit"
+msgstr "Выручка за период"

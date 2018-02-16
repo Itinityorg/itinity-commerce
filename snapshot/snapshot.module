@@ -241,7 +241,14 @@ function snapshot_delete_multiple($sids) {
   $transaction = db_transaction();
 
   if (!empty($sids)) {
+    $snapshots = snapshot_load_multiple($sids, array());
+
     try {
+      foreach ($snapshots as $sid => $snapshot) {
+        module_invoke_all('entity_delete', $snapshot, 'snapshot');
+        field_attach_delete('snapshot', $snapshot);
+      }
+
       db_delete('snapshot')->condition('sid', $sids)->execute();
     } catch (Exception $e) {
       $transaction->rollback();
@@ -315,16 +322,18 @@ function snapshot_view($snapshot, $view_mode = 'full') {
   return $build;
 }
 
-interface SnapshotControllerInterface extends DrupalEntityControllerInterface {
+interface SnapshotControllerInterface extends DrupalEntityControllerInterface
+{
   public function create($bundle, $type, $id, $lifetime = 0, $frozen = 0, $context = array());
 
   public function commit();
 }
 
 
-class SnapshotController extends DrupalDefaultEntityController implements SnapshotControllerInterface {
-  private $sid;
-  private $bundle;
+class SnapshotController extends DrupalDefaultEntityController implements SnapshotControllerInterface
+{
+  public $sid;
+  public $bundle;
   private $type;
   private $id;
   private $data;
@@ -364,7 +373,7 @@ class SnapshotController extends DrupalDefaultEntityController implements Snapsh
 
 
   public function __get($name) {
-    return isset($this->{$name}) ? $this->{$name} : NULL;
+    return $this->{$name} ?? NULL;
   }
 
 
@@ -374,6 +383,11 @@ class SnapshotController extends DrupalDefaultEntityController implements Snapsh
     }
   }
 
+  public function __isset($name) {
+    return isset($this->{$name});
+  }
+
+
   private function getMarkup() {
     $markup = module_invoke_all('snapshot_render', $this->bundle, $this->type, $this->id, $this->context);
     return implode('', $markup);
@@ -381,11 +395,18 @@ class SnapshotController extends DrupalDefaultEntityController implements Snapsh
 
 
   public function commit() {
+    field_attach_presave('snapshot', $this);
+    module_invoke_all('entity_presave', $this, 'snapshot');
+
     if ($this->sid) {
       $this->update();
+      field_attach_update('snapshot', $this);
+      module_invoke_all('entity_update', $this, 'snapshot');
     }
     else {
       $this->insert();
+      field_attach_insert('snapshot', $this);
+      module_invoke_all('entity_insert', $this, 'snapshot');
     }
 
     return $this;

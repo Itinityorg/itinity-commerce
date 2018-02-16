@@ -27,12 +27,15 @@ function shop_build_price($context, $context_object, $account = NULL, $required_
     // call hook_shop_build_price()
     if ($p = $fn($context, $context_object, $account)) {
       foreach ($p as $idx => $v) {
-        $summary += array($idx => 0);
-        $summary[$idx] += $v;
+        $summary += array($idx => NULL);
+        if (!is_null($v)) {
+          $summary[$idx] += $v;
+        }
+       
       }
     }
   }
-
+  
   // call shop_build_price_alter()
   drupal_alter('shop_build_price', $summary, $context, $context_object, $account);
 
@@ -49,20 +52,20 @@ function shop_build_price($context, $context_object, $account = NULL, $required_
   if ($rounding = shop_get_info('general', 'rounding')) {
     foreach ($summary as $key => $value) {
       switch ($rounding) {
-        case "ceil":
+        case 'ceil':
           $summary[$key] = ceil($value);
           break;
-        case "floor":
+        case 'floor':
           $summary[$key] = floor($value);
           break;
-        case "round":
+        case 'round':
           $summary[$key] = round($value);
           break;
       }
     }
   }
 
-  return $required_key ? (isset($summary[$required_key]) ? $summary[$required_key] : FALSE) : $summary;
+  return $required_key ? ($summary[$required_key] ?? FALSE) : $summary;
 }
 
 
@@ -92,29 +95,40 @@ function order_shop_build_price($context, $context_object, $account = NULL) {
   }
   elseif ($context === 'shop_cart') {
     $result['total_sum'] = $context_object->total_sum;
-    if ($context_object->order && ($order = node_load($context_object->order))) {
-      $account = $account ? $account : shop_get_customer($context_object);
-      $result = order_shop_build_price('order', $order, $account);
+    if (!empty($context_object->order_node->nid)) {
+      $account = $account ?: shop_get_customer($context_object);
+      $result = order_shop_build_price('order', $context_object->order_node, $account);
     }
     else {
       if ($method = $context_object->data('delivery_method')) {
         $params = $context_object->data('delivery_params');
-        $params = isset($params[$method]) ? $params[$method] : NULL;
+        $params = $params[$method] ?? NULL;
 
         if ($context_object->frozen) {
           $result['delivery'] = $context_object->delivery_price; // get frozen delivery cost
         }
         else {
-          $result['delivery'] = shop_delivery_cost($method, $params, isset($result['total_sum']) ? $result['total_sum'] : NULL);
+
+          $node = NULL;
+          if (!empty($context_object->shop_id) && module_exists('organisations_shop') && ($org = organisation_from_shop_id($context_object->shop_id, TRUE))) {
+              $node = $org;
+          }
+
+          $result['delivery'] = shop_delivery_cost(
+            $node,
+            $method,
+            $params,
+            $result['total_sum'] ?? NULL
+          );
         }
       }
-      if($order_discount = $context_object->data('order_discount')) {
+      if ($order_discount = $context_object->data('order_discount')) {
         $result['order_discount'] = -$context_object->data('order_discount');
       }
     }
   }
   elseif ($context === 'order') {
-    $shop_cart = shop_cart(NULL, $context_object, NULL, TRUE);
+    $shop_cart = shop_cart(NULL, NULL, $context_object);
     $currency = shop_get_info('currency', 'default');
     $precision = money_currency_info($currency, 'decimals');
     $result['total_sum'] = round($shop_cart->total_sum, $precision);
@@ -122,7 +136,7 @@ function order_shop_build_price($context, $context_object, $account = NULL) {
       $result['delivery'] = $context_object->delivery_price; // get frozen delivery cost
     }
     elseif (!empty($context_object->delivery_method)) {
-      $result['delivery'] = shop_delivery_cost($context_object->delivery_method, isset($context_object->delivery_params) ? $context_object->delivery_params : array(), isset($result['total_sum']) ? $result['total_sum'] : NULL);
+      $result['delivery'] = shop_delivery_cost($context_object, $context_object->delivery_method, isset($context_object->delivery_params) ? $context_object->delivery_params : array(), isset($result['total_sum']) ? $result['total_sum'] : NULL);
     }
   }
   return $result;
@@ -227,7 +241,7 @@ function personal_discounts_shop_discount($summary, $context, $context_object, $
  */
 function order_shop_build_price_alter(&$summary, $context, $context_object, $account) {
   if ($context == 'shop_cart' || $context == 'order') {
-    $order = ($context == 'shop_cart' && !empty($context_object->order)) ? node_load($context_object->order) : $context_object;
+    $order = ($context == 'shop_cart' && !empty($context_object->order_node->nid)) ? $context_object->order_node : $context_object;
 
     if (!empty($order->order_discount)) {
       $summary['order_discount'] = -$order->order_discount;

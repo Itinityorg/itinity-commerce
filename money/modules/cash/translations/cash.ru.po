@@ -18,6 +18,9 @@ msgstr ""
 msgid "Cash on receipt"
 msgstr "Оплата при получении"
 
+msgid "Cash"
+msgstr "Наличные"
+
 msgid "Payment at pickup or courier"
 msgstr "Оплата курьеру при получении"
 

@@ -165,7 +165,7 @@ function multifield_wrapper_process_element($element, &$form_state, &$complete_f
 	// Move chidren elements into template
 	foreach (element_children($element) as $key) {
 		if ($element[$key]) {
-			if (element_properties($element[$key])) {
+			if (element_properties($element[$key]) || element_children($element[$key])) {
 				$sub_elements_group[$key] = $element[$key];
 			}
 		} 
@@ -173,7 +173,7 @@ function multifield_wrapper_process_element($element, &$form_state, &$complete_f
 	}
   
   // multifield #value can be passed as simple array( 0 => 1, 2 => 5, ) and sub-groups haves one childrens:
-  if (count(element_children($sub_elements_group)) == 1) {
+  if (count(element_children($sub_elements_group, TRUE)) == 1) {
     $key = key($sub_elements_group);
     foreach ($element['#value'] as $delta => $data) {
       if (is_scalar($data) || !isset($data[$key])) {
@@ -184,6 +184,8 @@ function multifield_wrapper_process_element($element, &$form_state, &$complete_f
   
   
   $sub_elements_group['#_is_multifield_childgroup'] = TRUE;
+
+
 	// Detect clicked button and operate with element value
 
 	// Init internal storage array for information about last user action
@@ -205,6 +207,9 @@ function multifield_wrapper_process_element($element, &$form_state, &$complete_f
 		$element['#value'][] = $element['#value'][$element['#_clicked_info']['clone']];
 	}
 
+  
+  
+  
 	// Remove internal artefacts from value
 	unset($element['#value']['_multifield_op_add'], $element['#value']['_multifield_op_update']);
 
@@ -213,16 +218,14 @@ function multifield_wrapper_process_element($element, &$form_state, &$complete_f
 	
 	// Expand children group with element value keys and fill all generated sub-items values
 	$expanded = array();
-	//m(drupal_array_get_nested_value(), $form_state['input']['courier']['variants'], $form_state['values']['courier']['variants'], $element['#value']);
 
 	foreach ($element['#value'] as $delta => &$v_data) {
 		$expanded[$delta] = $sub_elements_group;
-		
 		foreach (element_children($expanded[$delta]) as $key) {
 			if (isset($expanded[$delta][$key]['#type']) && $expanded[$delta][$key]['#type'] == 'machine_name') {
 				$expanded[$delta][$key] += array('#machine_name' => array());
 				$expanded[$delta][$key]['#machine_name'] += array('source' => array(end($element['#parents']), $key_prev = 'name'),);
-				
+
 				if (($sk = array_search(end($element['#parents']), $expanded[$delta][$key]['#machine_name']['source'])) !== FALSE) {
 					$new_parents = $element['#parents'];
 					$new_parents[] = $delta;
@@ -233,9 +236,18 @@ function multifield_wrapper_process_element($element, &$form_state, &$complete_f
 					}
 					$expanded[$delta][$key]['#machine_name']['source'] = $new_parents;
 				}
-			} else {
+			}
+      else {
 				$key_prev = $key;
 			}
+
+
+
+
+
+
+
+    /* OLD (see new code below):
 			// Process #states. Replace '%' token to $delta
 			if (!empty($expanded[$delta][$key]['#states'])) {
 				foreach ($expanded[$delta][$key]['#states'] as $state => $actions) {
@@ -245,8 +257,32 @@ function multifield_wrapper_process_element($element, &$form_state, &$complete_f
 					}
 					$expanded[$delta][$key]['#states'][$state] = $new_actions;
 				}
-			}
+			}*/
 		}
+
+    
+    
+    // Recursive process #states. Find '[..][multifield_name][%][..]' selector and replace '%' wildcard to multifield delta.
+    // Only first occurence of % after multifield name will replaced.
+    // For example if #states visible selector equals to 'input[name="multifield_name][%][settings][enabled]"]' then will replaced to 'input[name="multifield_name][123][settings][enabled]"]'
+    // Note that this feature will works only for [name="..."] selectors
+
+    ($f = function(&$e) use (&$f, $element, $delta) {
+      if (is_array($e)) {
+        if (!empty($e['#states'])) {
+          foreach ($e['#states'] as $state => $selectors) {
+            foreach ($selectors as $selector => $conds) {
+              unset($e['#states'][$state][$selector]);
+              $e['#states'][$state][str_replace($element['#name'] . '[%]', $element['#name'] . '[' . $delta . ']', $selector)] = $conds;
+            }
+          }
+        }
+        array_walk($e, $f);
+      }
+      
+    })($expanded[$delta]);
+    
+    
 
 		if (is_array($v_data)) {
 			// Remove internal artefacts values
@@ -310,7 +346,7 @@ function multifield_wrapper_process_element($element, &$form_state, &$complete_f
 					'#ajax' => $ajax,
 					'#attributes' => array(
 						'title' => t('Delete this field'),
-						'class' => array('pictogram',),
+						'class' => array('pictogram', 'multifield-op-delete',),
 					),
 					// Locked elements not deletable:
 					'#access' => !$group['#locked'],
@@ -332,6 +368,7 @@ function multifield_wrapper_process_element($element, &$form_state, &$complete_f
 					'#ajax' => $ajax,
 					'#attributes' => array(
 						'title' => t('Make copy of this field'),
+            'class' => array('multifield-op-clone'),
 					),
 					'#prefix' => '<div class="container-inline">',
 					'#suffix' => '</div>',
@@ -356,6 +393,7 @@ function multifield_wrapper_process_element($element, &$form_state, &$complete_f
 			
 			'#attributes' => array(
 				'title' => t('Add new field in this group'),
+        'class' => array('multifield-op-add'),
 			),
 		);
 	}
@@ -385,6 +423,7 @@ function multifield_wrapper_process_element($element, &$form_state, &$complete_f
 				'#weight' => PHP_INT_MAX,
 				'#attributes' => array(
 					'title' => t('Apply changed values to form current state'),
+					 'class' => array('multifield-op-update'),
 				),
 			);
 		}
@@ -519,7 +558,7 @@ function theme_multifield_wrapper($variables) {
 		// Each children groups
 		if (!empty($element[$key]['#_is_multifield_childgroup'])) {
 			if ($element['#elements_to_cells']) {
-				$header['0_dragger'] = array('data' => ($element['#elements_to_cells'] && $element['#group_title'] ? $element['#group_title'] : ''/*'&nbsp;'*/));
+				$header['0_dragger'] = array('class' => array('multifield-dragger'),'data' => ($element['#elements_to_cells'] && $element['#group_title'] ? $element['#group_title'] : ''/*'&nbsp;'*/));
 			}
 
 			$row = array(
@@ -573,7 +612,8 @@ function theme_multifield_wrapper($variables) {
 						}
 						$row[$k]['data'] .= $element_access ? drupal_render($element[$key][$key2]) : '&nbsp;';
 						$row[$k]['class'] = array(drupal_html_class('col-' . $key2));
-					} else {
+					} 
+          else {
 						if ($key2 == '_multifield_op_weight') {
 							//$element[$key][$key2]['#attributes']['class'][] = $table_drag_relationship;
 							if ($element['#elements_to_cells']) {
